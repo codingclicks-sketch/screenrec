@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import styles from './Watch.module.css';
 import API from '../api';
@@ -31,11 +31,27 @@ export default function Watch() {
   const [copied, setCopied] = useState('');
 
   const [views, setViews] = useState(0);
-  const [reactions, setReactions] = useState({});
+  const [reactions, setReactions] = useState([]);   // [{emoji, t, at}]
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [commentName, setCommentName] = useState('');
   const [atTime, setAtTime] = useState(true);
+  const [dur, setDur] = useState(0);                // real video duration (s)
+
+  // reaction tallies for the bar
+  const reactionCounts = useMemo(() => {
+    const c = {};
+    (reactions || []).forEach(r => { c[r.emoji] = (c[r.emoji] || 0) + 1; });
+    return c;
+  }, [reactions]);
+
+  // markers on the timeline: comments + reactions that have a timestamp
+  const markers = useMemo(() => {
+    const m = [];
+    (comments || []).forEach(c => { if (c.t != null) m.push({ kind: 'comment', t: c.t, label: c.name + ': ' + c.text }); });
+    (reactions || []).forEach(r => { if (r.t != null) m.push({ kind: 'react', t: r.t, label: r.emoji, emoji: r.emoji }); });
+    return m.sort((a, b) => a.t - b.t);
+  }, [comments, reactions]);
 
   function loadVideo() {
     fetch(`${API}/api/watch/${id}`, { headers: authHeaders() })
@@ -79,9 +95,10 @@ export default function Watch() {
   }
 
   async function react(emoji) {
+    const t = videoRef.current ? Math.floor(videoRef.current.currentTime) : null;
     const res = await fetch(`${API}/api/watch/${id}/react`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emoji }),
+      body: JSON.stringify({ emoji, t }),
     });
     const d = await res.json();
     if (res.ok) setReactions(d.reactions);
@@ -161,11 +178,33 @@ export default function Watch() {
               const v = e.target;
               if (v.duration === Infinity || isNaN(v.duration)) {
                 v.currentTime = 1e101;
-                v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; };
+                v.ontimeupdate = () => {
+                  v.ontimeupdate = null; v.currentTime = 0;
+                  if (Number.isFinite(v.duration)) setDur(v.duration);
+                };
+              } else {
+                setDur(v.duration);
               }
             }}
           />
         </div>
+
+        {/* Timeline markers (comments + reactions) */}
+        {markers.length > 0 && (dur || rec.duration) > 0 && (
+          <div className={styles.timeline} title="Comments & reactions">
+            {markers.map((m, i) => (
+              <button
+                key={i}
+                className={m.kind === 'comment' ? styles.markerComment : styles.markerReact}
+                style={{ left: `${Math.min(99, (m.t / (dur || rec.duration)) * 100)}%` }}
+                title={m.label}
+                onClick={() => seekTo(m.t)}
+              >
+                {m.kind === 'comment' ? '💬' : m.emoji}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* CTA */}
         {rec.cta && rec.cta.url && (
@@ -185,9 +224,9 @@ export default function Watch() {
         {/* Reactions */}
         <div className={styles.reactions}>
           {REACTIONS.map(e => (
-            <button key={e} className={styles.reactBtn} onClick={() => react(e)}>
+            <button key={e} className={styles.reactBtn} onClick={() => react(e)} title="React at the current moment">
               <span className={styles.emoji}>{e}</span>
-              {reactions[e] ? <span className={styles.reactCount}>{reactions[e]}</span> : null}
+              {reactionCounts[e] ? <span className={styles.reactCount}>{reactionCounts[e]}</span> : null}
             </button>
           ))}
         </div>

@@ -18,7 +18,7 @@ function defaults() {
   return {
     views: 0,
     viewers: [],          // [{ name, at }]
-    reactions: {},        // { "👍": 3 }
+    reactions: [],        // [{ emoji, t, at }]  — t = seconds into the video
     comments: [],         // [{ id, name, text, at, t }]
     cta: null,            // { label, url }
     description: '',

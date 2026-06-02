@@ -378,8 +378,11 @@ app.get('/api/watch/:id/engagement', (req, res) => {
 app.post('/api/watch/:id/react', (req, res) => {
   const emoji = String(req.body.emoji || '').slice(0, 8);
   if (!emoji) return res.status(400).json({ error: 'emoji required' });
+  const t = Number(req.body.t);
   const updated = meta.update(req.params.id, m => {
-    m.reactions[emoji] = (m.reactions[emoji] || 0) + 1; return m;
+    if (!Array.isArray(m.reactions)) m.reactions = [];
+    m.reactions.push({ emoji, t: Number.isFinite(t) ? Math.floor(t) : null, at: Date.now() });
+    return m;
   });
   res.json({ reactions: updated.reactions });
 });

@@ -86,11 +86,15 @@ ScreenRec lets users record their screen, camera and microphone and share the
 recording via a link. The extension's single purpose is screen recording and sharing.
 ```
 
-### Permission justification — "storage"
+### Permission justifications
 ```
-The storage permission is used only to keep the user's login token and the
-current recording state on their own device, so they stay signed in between
-sessions. No browsing data is collected.
+storage   — keeps the user's login token and recording state on their own
+            device so they stay signed in between sessions.
+activeTab — lets the user place a floating webcam bubble on the tab they are
+            recording, only on the tab they explicitly invoke the extension on.
+scripting — injects that webcam-bubble overlay element into the active tab when
+            the user starts a "screen + camera" recording.
+No browsing data is collected or transmitted.
 ```
 
 ### Are you using remote code?

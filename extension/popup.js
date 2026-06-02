@@ -149,21 +149,38 @@ mainBtn.addEventListener('click', async () => {
   // Carry the chosen options to the recorder page so they aren't re-selected.
   const cameraSelect = document.getElementById('cameraSelect');
   const countdownCheck = document.getElementById('countdownCheck');
+  const camera = cameraSelect ? cameraSelect.value : 'off';
+
+  let bubbleTabId = null;
+  // For "screen + camera bubble", inject a floating camera overlay onto the
+  // current tab so it's captured natively (records fine even when minimized).
+  if (camera === 'bubble') {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.id && /^https?:/.test(tab.url || '')) {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['bubble.js'] });
+        bubbleTabId = tab.id;
+      }
+    } catch (e) { /* injection not allowed on this page — bubble just won't show */ }
+  }
+
   await chrome.storage.local.set({
     recOptions: {
       audio: audioCheck.checked,
       quality: qualitySelect.value,
-      camera: cameraSelect ? cameraSelect.value : 'off',
+      camera,
       countdown: countdownCheck ? countdownCheck.checked : true,
+      bubbleTabId,
     },
   });
-  // Open the recorder in a small popup window. A visible window keeps canvas
-  // compositing (camera bubble) alive — a background tab would freeze it.
+
+  // Recorder lives in a small control window. It records the screen track
+  // directly now, so it's safe to minimize — recording continues.
   chrome.windows.create({
     url: chrome.runtime.getURL('recorder.html'),
     type: 'popup',
-    width: 440,
-    height: 640,
+    width: 420,
+    height: 560,
   });
   window.close();
 });

@@ -277,12 +277,12 @@ function Analytics({ rec, authFetch, onClose }) {
             <div className={styles.statRow}>
               <div className={styles.stat}><div className={styles.statNum}>{data.views || 0}</div><div className={styles.statLbl}>Views</div></div>
               <div className={styles.stat}><div className={styles.statNum}>{(data.comments || []).length}</div><div className={styles.statLbl}>Comments</div></div>
-              <div className={styles.stat}><div className={styles.statNum}>{Object.values(data.reactions || {}).reduce((a, b) => a + b, 0)}</div><div className={styles.statLbl}>Reactions</div></div>
+              <div className={styles.stat}><div className={styles.statNum}>{(data.reactions || []).length}</div><div className={styles.statLbl}>Reactions</div></div>
             </div>
 
-            {data.reactions && Object.keys(data.reactions).length > 0 && (
+            {(data.reactions || []).length > 0 && (
               <div className={styles.reactSummary}>
-                {Object.entries(data.reactions).map(([e, n]) => <span key={e}>{e} {n}</span>)}
+                {Object.entries((data.reactions || []).reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {})).map(([e, n]) => <span key={e}>{e} {n}</span>)}
               </div>
             )}
 

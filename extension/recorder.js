@@ -97,6 +97,9 @@ async function beginRecording() {
   let screenStream = null, camStream = null, micStream = null;
 
   // ── Acquire sources ──────────────────────────────────────────────────────
+  // For 'off' and 'bubble' we capture the SCREEN. (In 'bubble' the camera is a
+  // floating DOM overlay already injected onto the page, so it's captured as
+  // part of the screen — no canvas, which means recording survives minimize.)
   if (cam !== 'only') {
     screenStream = await navigator.mediaDevices.getDisplayMedia({
       video: { width: { ideal: maxW }, height: { ideal: maxH }, frameRate: { ideal: 30 } },
@@ -104,9 +107,9 @@ async function beginRecording() {
     });
     activeStreams.push(screenStream);
   }
-  if (cam === 'bubble' || cam === 'only') {
+  if (cam === 'only') {
     camStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false,
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false,
     });
     activeStreams.push(camStream);
   }
@@ -124,57 +127,21 @@ async function beginRecording() {
     });
   }
 
-  // ── Build the video track ────────────────────────────────────────────────
+  // ── Build the video track — always a DIRECT track (no canvas) ─────────────
   let videoTrack;
-  if (cam === 'off') {
+  if (cam === 'only') {
+    videoTrack = camStream.getVideoTracks()[0];
+    // optional live preview (not recorded — throttling here is harmless)
+    const camVideo = await playStreamInVideo(camStream);
+    canvas.width = camVideo.videoWidth || 1280;
+    canvas.height = camVideo.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    previewWrap.classList.add('show');
+    const draw = () => { ctx.drawImage(camVideo, 0, 0, canvas.width, canvas.height); rafId = requestAnimationFrame(draw); };
+    draw();
+  } else {
     videoTrack = screenStream.getVideoTracks()[0];
     previewWrap.classList.remove('show');
-  } else {
-    // Composite to a canvas (bubble = screen + cam circle, only = cam fullscreen)
-    const screenVideo = screenStream ? await playStreamInVideo(screenStream) : null;
-    const camVideo = await playStreamInVideo(camStream);
-
-    if (cam === 'only') {
-      // Record the camera track DIRECTLY (native capture never throttles in the
-      // background). The canvas is used only for an on-screen preview.
-      videoTrack = camStream.getVideoTracks()[0];
-      canvas.width = camVideo.videoWidth || 640;
-      canvas.height = camVideo.videoHeight || 480;
-      const ctx = canvas.getContext('2d');
-      previewWrap.classList.add('show');
-      const draw = () => { ctx.drawImage(camVideo, 0, 0, canvas.width, canvas.height); rafId = requestAnimationFrame(draw); };
-      draw();
-    } else {
-      // Bubble: composite screen + circular camera onto a canvas and record it.
-      canvas.width = screenVideo.videoWidth || maxW;
-      canvas.height = screenVideo.videoHeight || maxH;
-      const ctx = canvas.getContext('2d');
-      previewWrap.classList.add('show');
-      const draw = () => {
-        ctx.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
-        const r = Math.round(Math.min(canvas.width, canvas.height) * 0.16);
-        const margin = Math.round(r * 0.4);
-        const cx = margin + r, cy = canvas.height - margin - r;
-        const cw = camVideo.videoWidth, ch = camVideo.videoHeight;
-        const side = Math.min(cw, ch);            // center-crop to square
-        const sx = (cw - side) / 2, sy = (ch - side) / 2;
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        ctx.drawImage(camVideo, sx, sy, side, side, cx - r, cy - r, r * 2, r * 2);
-        ctx.restore();
-        ctx.strokeStyle = '#7c5cfc';
-        ctx.lineWidth = Math.max(2, r * 0.05);
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.stroke();
-        rafId = requestAnimationFrame(draw);
-      };
-      draw();
-      videoTrack = canvas.captureStream(30).getVideoTracks()[0];
-    }
   }
 
   // ── Mix audio (screen audio + mic) ────────────────────────────────────────
@@ -214,7 +181,7 @@ async function beginRecording() {
   timerEl.classList.add('show');
   updateTimer();
   timerInterval = setInterval(updateTimer, 500);
-  setStatus(cam === 'bubble' ? '● Recording… keep this window visible' : '● Recording…', 'recording');
+  setStatus(cam === 'bubble' ? '● Recording… (camera bubble is on your tab)' : '● Recording…', 'recording');
 
   chrome.storage.local.set({ recording: true, startTime });
   chrome.runtime.sendMessage({ type: 'RECORDER_STARTED', startTime });
@@ -246,6 +213,7 @@ function showStartButton(message) {
 
 function onStartError(e) {
   cleanupStreams();
+  closeBubble();
   if (e && (e.name === 'NotAllowedError' || (e.message && e.message.includes('cancel')))) {
     showStartButton('Click “Start Recording”, then choose what to share.');
   } else {
@@ -260,6 +228,14 @@ function cleanupStreams() {
   if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; }
 }
 
+// Remove the floating camera bubble from the recorded tab.
+function closeBubble() {
+  const tabId = opts.bubbleTabId;
+  if (tabId != null && chrome.tabs && chrome.tabs.sendMessage) {
+    try { chrome.tabs.sendMessage(tabId, { type: 'SR_STOP_BUBBLE' }); } catch (e) {}
+  }
+}
+
 mainBtn.addEventListener('click', () => beginRecording().catch(onStartError));
 pauseBtn.addEventListener('click', togglePause);
 stopBtn.addEventListener('click', stopRecording);
@@ -268,6 +244,7 @@ function stopRecording() {
   clearInterval(timerInterval);
   if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   cleanupStreams();
+  closeBubble();
   controls.style.display = 'none';
   previewWrap.classList.remove('show');
   setStatus('Uploading…', 'uploading');

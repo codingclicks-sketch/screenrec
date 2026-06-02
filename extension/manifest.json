@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "description": "Record your screen, camera and mic, then get an instant shareable link. Free, fast, no watermark — a simple Loom alternative.",
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "scripting"
   ],
   "action": {
     "default_popup": "popup.html",
