@@ -7,7 +7,8 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const users = require('./users');
-const { signToken, requireAuth } = require('./auth');
+const { meta, folders } = require('./meta');
+const { signToken, requireAuth, verifyToken } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -201,16 +202,26 @@ if (!USE_CLOUDINARY) {
 
       const rows = result.resources.map(r => {
         const ctx = r.context?.custom || {};
+        const id = ctx.rec_id || r.public_id.split('/').pop();
+        const m = meta.get(id);
         return {
-          id: ctx.rec_id || r.public_id.split('/').pop(),
+          id,
           title: ctx.title || 'Untitled Recording',
           filename: r.secure_url,
+          // Cloudinary-generated poster image (fast thumbnail, no full video load)
+          thumbnail: r.secure_url.replace(/\.webm$/, '.jpg').replace('/upload/', '/upload/so_0/'),
           size: r.bytes,
           // Prefer Cloudinary's own measured duration (reliable) over our stored value
           duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
           created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
           cloudinary: true,
           public_id: r.public_id,
+          views: m.views,
+          description: m.description,
+          privacy: m.privacy,
+          cta: m.cta,
+          folder: m.folder,
+          commentCount: m.comments.length,
         };
       });
       res.json(rows);
@@ -249,6 +260,7 @@ if (!USE_CLOUDINARY) {
   app.delete('/api/recordings/:id', requireAuth, async (req, res) => {
     try {
       await cloudinary.uploader.destroy(`screenrec/${req.userId}/${req.params.id}`, { resource_type: 'video' });
+      meta.remove(req.params.id);
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -269,47 +281,155 @@ if (!USE_CLOUDINARY) {
   });
 }
 
-// ── Watch route: public (anyone with the link can view) ──────────────────────
-// The video URL itself requires no auth — only the API listing does
-app.get('/api/watch/:id', async (req, res) => {
-  // Return video info publicly (for the shared watch page)
+// ── Helpers ───────────────────────────────────────────────────────────────────
+async function findVideo(id) {
   if (USE_CLOUDINARY) {
-    try {
-      // Match by the rec_id context field (exact) — works for both old
-      // flat paths (screenrec/<id>) and new per-user paths (screenrec/<userId>/<id>).
-      let result = await cloudinary.search
-        .expression(`resource_type:video AND context.rec_id=${req.params.id}`)
-        .with_field('context')
-        .max_results(1)
-        .execute();
-      // Fallback: legacy recordings stored with public_id == id, no rec_id context
-      if (!result.resources.length) {
-        result = await cloudinary.search
-          .expression(`resource_type:video AND public_id=screenrec/${req.params.id}`)
-          .with_field('context')
-          .max_results(1)
-          .execute();
-      }
-      if (!result.resources.length) return res.status(404).json({ error: 'Not found' });
-      const r = result.resources[0];
-      const ctx = r.context?.custom || {};
-      res.json({
-        id: req.params.id,
-        title: ctx.title || 'Untitled Recording',
-        filename: r.secure_url,
-        size: r.bytes,
-        duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
-        created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
-        cloudinary: true,
-      });
-    } catch (e) {
-      res.status(404).json({ error: 'Not found' });
+    let result = await cloudinary.search
+      .expression(`resource_type:video AND context.rec_id=${id}`)
+      .with_field('context').max_results(1).execute();
+    if (!result.resources.length) {
+      result = await cloudinary.search
+        .expression(`resource_type:video AND public_id=screenrec/${id}`)
+        .with_field('context').max_results(1).execute();
     }
-  } else {
-    const row = db.get(req.params.id);
-    if (!row) return res.status(404).json({ error: 'Not found' });
-    res.json(row);
+    if (!result.resources.length) return null;
+    const r = result.resources[0];
+    const ctx = r.context?.custom || {};
+    return {
+      id,
+      title: ctx.title || 'Untitled Recording',
+      filename: r.secure_url,
+      thumbnail: r.secure_url.replace(/\.webm$/, '.jpg').replace('/upload/', '/upload/so_0/'),
+      duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
+      created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
+      cloudinary: true,
+    };
   }
+  return db.get(id) || null;
+}
+
+async function userOwns(userId, id) {
+  if (!USE_CLOUDINARY) { const row = db.get(id); return !!(row && row.userId === userId); }
+  const r = await cloudinary.search
+    .expression(`resource_type:video AND public_id=screenrec/${userId}/${id}`)
+    .max_results(1).execute();
+  return r.resources.length > 0;
+}
+
+function viewerFromAuth(req) {
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith('Bearer ')) {
+    try { const { userId } = verifyToken(auth.slice(7)); return users.findById(userId); } catch {}
+  }
+  return null;
+}
+
+// ── Watch route (public, privacy-aware) ──────────────────────────────────────
+app.get('/api/watch/:id', async (req, res) => {
+  try {
+    const video = await findVideo(req.params.id);
+    if (!video) return res.status(404).json({ error: 'Not found' });
+    const m = meta.get(req.params.id);
+
+    if (m.privacy === 'login' && !viewerFromAuth(req)) {
+      return res.status(401).json({ error: 'login_required', title: video.title });
+    }
+    if (m.privacy === 'password' && m.passwordHash) {
+      return res.json({ id: video.id, title: video.title, requiresPassword: true });
+    }
+    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy });
+  } catch {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+
+// Unlock a password-protected video
+app.post('/api/watch/:id/unlock', async (req, res) => {
+  try {
+    const m = meta.get(req.params.id);
+    const video = await findVideo(req.params.id);
+    if (!video) return res.status(404).json({ error: 'Not found' });
+    if (m.privacy === 'password' && m.passwordHash) {
+      const ok = await bcrypt.compare(req.body.password || '', m.passwordHash);
+      if (!ok) return res.status(401).json({ error: 'Incorrect password' });
+    }
+    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy });
+  } catch {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+
+// ── Engagement (public) ───────────────────────────────────────────────────────
+app.post('/api/watch/:id/view', (req, res) => {
+  const viewer = viewerFromAuth(req);
+  const updated = meta.update(req.params.id, m => {
+    m.views = (m.views || 0) + 1;
+    if (viewer) m.viewers = [{ name: viewer.name, email: viewer.email, at: Date.now() }, ...(m.viewers || []).slice(0, 199)];
+    return m;
+  });
+  res.json({ views: updated.views });
+});
+
+app.get('/api/watch/:id/engagement', (req, res) => {
+  const m = meta.get(req.params.id);
+  res.json({ views: m.views, reactions: m.reactions, comments: m.comments });
+});
+
+app.post('/api/watch/:id/react', (req, res) => {
+  const emoji = String(req.body.emoji || '').slice(0, 8);
+  if (!emoji) return res.status(400).json({ error: 'emoji required' });
+  const updated = meta.update(req.params.id, m => {
+    m.reactions[emoji] = (m.reactions[emoji] || 0) + 1; return m;
+  });
+  res.json({ reactions: updated.reactions });
+});
+
+app.post('/api/watch/:id/comment', (req, res) => {
+  const text = String(req.body.text || '').trim().slice(0, 2000);
+  if (!text) return res.status(400).json({ error: 'Comment text required' });
+  let name = String(req.body.name || '').trim().slice(0, 80) || 'Anonymous';
+  const viewer = viewerFromAuth(req);
+  if (viewer) name = viewer.name;
+  const comment = { id: uuidv4(), name, text, t: Number(req.body.t) || null, at: Date.now() };
+  meta.update(req.params.id, m => { m.comments.push(comment); return m; });
+  res.json(comment);
+});
+
+// ── Owner: analytics + share settings ────────────────────────────────────────
+app.get('/api/recordings/:id/analytics', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const m = meta.get(req.params.id);
+  res.json({ views: m.views, viewers: m.viewers, reactions: m.reactions, comments: m.comments });
+});
+
+app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const { description, cta, privacy, password, folder } = req.body;
+  const fields = {};
+  if (typeof description === 'string') fields.description = description.slice(0, 5000);
+  if (cta === null) fields.cta = null;
+  else if (cta && typeof cta.url === 'string' && cta.url) fields.cta = { label: String(cta.label || 'Learn more').slice(0, 60), url: cta.url.slice(0, 500) };
+  if (['public', 'login', 'password'].includes(privacy)) fields.privacy = privacy;
+  if (typeof password === 'string' && password) fields.passwordHash = await bcrypt.hash(password, 10);
+  if (privacy && privacy !== 'password') fields.passwordHash = null;
+  if (folder === null || typeof folder === 'string') fields.folder = folder;
+  const updated = meta.set(req.params.id, fields);
+  res.json({
+    description: updated.description, cta: updated.cta, privacy: updated.privacy,
+    folder: updated.folder, hasPassword: !!updated.passwordHash,
+  });
+});
+
+// ── Folders (owner) ───────────────────────────────────────────────────────────
+app.get('/api/folders', requireAuth, (req, res) => res.json(folders.listByUser(req.userId)));
+app.post('/api/folders', requireAuth, (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Folder name required' });
+  res.json(folders.create({ id: uuidv4(), userId: req.userId, name, created_at: Date.now() }));
+});
+app.delete('/api/folders/:id', requireAuth, (req, res) => {
+  folders.remove(req.params.id, req.userId);
+  res.json({ success: true });
 });
 
 // ── Serve client build ────────────────────────────────────────────────────────

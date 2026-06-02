@@ -114,6 +114,104 @@
   font-weight: 500;
 }
 
+.lock {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0,0,0,.7);
+  font-size: 12px;
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+
+/* toolbar */
+.toolbar {
+  padding: 16px 40px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.search {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 9px 14px;
+  font-size: 14px;
+  outline: none;
+}
+.search:focus { border-color: var(--accent); }
+.folders { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.folder, .folderActive {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.folder:hover { border-color: var(--accent); color: var(--text); }
+.folderActive { background: var(--accent); color: #fff; border-color: var(--accent); }
+.folderWrap { display: inline-flex; align-items: center; }
+.folderDel { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 16px; padding: 0 4px; }
+.folderDel:hover { color: var(--danger); }
+
+/* modal */
+.modalBg {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.modalTitle { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.fieldLabel { display: block; font-size: 12px; color: var(--text2); margin: 14px 0 5px; font-weight: 500; }
+.select, .input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  margin-bottom: 6px;
+}
+.select:focus, .input:focus { border-color: var(--accent); }
+.embedCode {
+  display: block;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px;
+  font-size: 11px;
+  color: #c8c8d4;
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+.modalActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* analytics */
+.statRow { display: flex; gap: 12px; margin-bottom: 14px; }
+.stat { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+.statNum { font-size: 26px; font-weight: 800; color: var(--accent); }
+.statLbl { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.reactSummary { display: flex; gap: 14px; font-size: 15px; margin-bottom: 6px; }
+.viewerList { list-style: none; margin: 4px 0 0; padding: 0; font-size: 13px; color: #d8d8e0; }
+.viewerList li { padding: 4px 0; border-bottom: 1px solid var(--border); }
+.dim { color: var(--text2); font-size: 13px; }
+
 .cardBody {
   padding: 14px 16px;
 }

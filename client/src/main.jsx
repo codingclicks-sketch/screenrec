@@ -9,6 +9,7 @@ import Signup from './pages/Signup';
 import Privacy from './pages/Privacy';
 import Account from './pages/Account';
 import Pricing from './pages/Pricing';
+import Embed from './pages/Embed';
 import './index.css';
 
 function PrivateRoute({ children }) {
@@ -29,6 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <Routes>
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/watch/:id" element={<Watch />} />
+        <Route path="/embed/:id" element={<Embed />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
