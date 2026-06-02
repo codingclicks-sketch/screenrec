@@ -110,6 +110,14 @@
       <p class="status" id="status">Ready to record</p>
       <div class="options" id="optionsPanel">
         <div class="option-row">
+          <span>Camera</span>
+          <select id="cameraSelect">
+            <option value="off" selected>No camera</option>
+            <option value="bubble">Screen + camera bubble</option>
+            <option value="only">Camera only</option>
+          </select>
+        </div>
+        <div class="option-row">
           <span>Audio</span>
           <label><input type="checkbox" id="audioCheck" checked /> Microphone</label>
         </div>
@@ -120,6 +128,10 @@
             <option value="medium" selected>Medium (720p)</option>
             <option value="low">Low (480p)</option>
           </select>
+        </div>
+        <div class="option-row">
+          <span>Countdown</span>
+          <label><input type="checkbox" id="countdownCheck" checked /> 3-2-1</label>
         </div>
       </div>
       <div class="timer" id="timer" style="display:none">00:00</div>

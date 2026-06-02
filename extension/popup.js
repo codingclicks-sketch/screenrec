@@ -147,10 +147,24 @@ mainBtn.addEventListener('click', async () => {
     return;
   }
   // Carry the chosen options to the recorder page so they aren't re-selected.
+  const cameraSelect = document.getElementById('cameraSelect');
+  const countdownCheck = document.getElementById('countdownCheck');
   await chrome.storage.local.set({
-    recOptions: { audio: audioCheck.checked, quality: qualitySelect.value },
+    recOptions: {
+      audio: audioCheck.checked,
+      quality: qualitySelect.value,
+      camera: cameraSelect ? cameraSelect.value : 'off',
+      countdown: countdownCheck ? countdownCheck.checked : true,
+    },
   });
-  chrome.tabs.create({ url: chrome.runtime.getURL('recorder.html') });
+  // Open the recorder in a small popup window. A visible window keeps canvas
+  // compositing (camera bubble) alive — a background tab would freeze it.
+  chrome.windows.create({
+    url: chrome.runtime.getURL('recorder.html'),
+    type: 'popup',
+    width: 440,
+    height: 640,
+  });
   window.close();
 });
 
