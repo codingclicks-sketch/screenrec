@@ -138,25 +138,10 @@
   <div class="card">
     <div class="logo"><span class="dot"></span> ScreenRec</div>
 
-    <p class="status" id="status">Choose your recording options, then click Start.</p>
+    <p class="status" id="status">Preparing your recording…</p>
     <div class="timer" id="timer">00:00</div>
 
-    <div class="options" id="optionsPanel">
-      <div class="option-row">
-        <span>Microphone</span>
-        <label><input type="checkbox" id="audioCheck" checked /> On</label>
-      </div>
-      <div class="option-row">
-        <span>Quality</span>
-        <select id="qualitySelect">
-          <option value="high">High (1080p)</option>
-          <option value="medium" selected>Medium (720p)</option>
-          <option value="low">Low (480p)</option>
-        </select>
-      </div>
-    </div>
-
-    <button class="btn btn-start" id="mainBtn">Start Recording</button>
+    <button class="btn btn-start" id="mainBtn" style="display:none">▶ Start Recording</button>
 
     <div class="link-box" id="linkBox">
       <div class="link-url" id="linkUrl"></div>

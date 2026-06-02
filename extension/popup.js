@@ -146,6 +146,10 @@ mainBtn.addEventListener('click', async () => {
     animateProgress();
     return;
   }
+  // Carry the chosen options to the recorder page so they aren't re-selected.
+  await chrome.storage.local.set({
+    recOptions: { audio: audioCheck.checked, quality: qualitySelect.value },
+  });
   chrome.tabs.create({ url: chrome.runtime.getURL('recorder.html') });
   window.close();
 });
