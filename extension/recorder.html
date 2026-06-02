@@ -5,169 +5,65 @@
   <title>ScreenRec — Recording</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --accent:#5b5bf6; --record:#ff4b4b; --record-h:#ec3a3a;
+      --bg:#ffffff; --soft:#f4f5f7; --border:#e6e8eb; --border2:#d3d6db;
+      --text:#1c1c28; --text2:#6b7280; --text3:#9aa1ac; --green:#22a06b;
+    }
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0f0f11;
-      color: #f0f0f4;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
+      font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+      background:var(--bg); color:var(--text);
+      display:flex; align-items:center; justify-content:center; min-height:100vh;
+      -webkit-font-smoothing:antialiased;
     }
+    .card { width:100%; max-width:380px; padding:32px 28px; text-align:center; }
+    .logo { display:flex; align-items:center; justify-content:center; gap:10px; font-size:18px; font-weight:800; letter-spacing:-.02em; margin-bottom:24px; }
+    .dot { width:22px; height:22px; border-radius:7px; background:linear-gradient(135deg,#7c7cff,#5b5bf6); box-shadow:0 2px 8px rgba(91,91,246,.4); }
 
-    .card {
-      background: #1a1a1f;
-      border: 1px solid #2e2e36;
-      border-radius: 16px;
-      padding: 40px 48px;
-      text-align: center;
-      max-width: 420px;
-      width: 100%;
-    }
+    .status { font-size:13px; color:var(--text2); margin-bottom:20px; min-height:18px; }
+    .status.recording { color:var(--record); font-weight:600; }
+    .status.uploading { color:#d9820a; font-weight:600; }
+    .status.done { color:var(--green); font-weight:600; }
 
-    .logo {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 32px;
-    }
-    .dot { width: 12px; height: 12px; border-radius: 50%; background: #7c5cfc; }
+    .timer { font-size:54px; font-weight:800; letter-spacing:2px; font-variant-numeric:tabular-nums; margin-bottom:24px; display:none; }
+    .timer.show { display:block; }
 
-    .status {
-      font-size: 14px;
-      color: #9090a0;
-      margin-bottom: 24px;
-      min-height: 20px;
-    }
-    .status.recording { color: #ef4444; }
-    .status.uploading { color: #f59e0b; }
-    .status.done { color: #22c55e; }
+    .preview-wrap { margin:0 0 18px; display:none; }
+    .preview-wrap.show { display:block; }
+    #previewCanvas { width:100%; border-radius:14px; background:#0b0b14; max-height:240px; object-fit:contain; }
 
-    .timer {
-      font-size: 56px;
-      font-weight: 700;
-      letter-spacing: 4px;
-      font-variant-numeric: tabular-nums;
-      margin-bottom: 32px;
-      display: none;
-    }
-    .timer.show { display: block; }
+    .btn { width:100%; padding:14px; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer; border:none; transition:background .15s; }
+    .btn-start { background:var(--record); color:#fff; display:inline-flex; align-items:center; justify-content:center; gap:9px; box-shadow:0 6px 18px rgba(255,75,75,.3); }
+    .btn-start:hover { background:var(--record-h); }
+    .btn-start .rdot { width:9px; height:9px; border-radius:50%; background:#fff; }
 
-    .pulse {
-      width: 16px; height: 16px;
-      border-radius: 50%;
-      background: #ef4444;
-      display: inline-block;
-      margin-right: 6px;
-      animation: pulse 1s infinite;
-    }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .controls { display:none; gap:10px; }
+    .controls .btn { flex:1; }
+    .btn-pause { background:var(--soft); color:var(--text); border:1px solid var(--border2); }
+    .btn-pause:hover { background:#e9eb0e; background:#e9ebee; }
+    .btn-stop { background:#1c1c28; color:#fff; }
+    .btn-stop:hover { background:#000; }
 
-    .btn {
-      width: 100%;
-      padding: 14px;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: opacity .15s;
-    }
-    .btn:hover { opacity: .88; }
-    .btn-start { background: #7c5cfc; color: #fff; }
-    .btn-stop { background: #ef4444; color: #fff; }
-    .btn-disabled { background: #2e2e36; color: #9090a0; cursor: not-allowed; }
+    .link-box { margin-top:22px; padding:16px; background:var(--soft); border-radius:14px; display:none; text-align:left; }
+    .link-box.show { display:block; }
+    .link-url { font-size:12px; color:var(--text2); word-break:break-all; margin-bottom:12px; }
+    .btn-open { display:block; width:100%; padding:11px; border-radius:10px; font-size:14px; font-weight:700; background:var(--accent); color:#fff; border:none; cursor:pointer; text-align:center; text-decoration:none; margin-bottom:8px; }
+    .btn-open:hover { background:#4b4be0; }
+    .btn-copy { width:100%; padding:10px; border-radius:10px; font-size:13px; font-weight:600; background:#fff; color:var(--text2); border:1px solid var(--border2); cursor:pointer; }
+    .btn-copy:hover { background:#fff; color:var(--text); border-color:var(--accent); }
 
-    .link-box {
-      margin-top: 20px;
-      padding: 14px;
-      background: #242429;
-      border: 1px solid #2e2e36;
-      border-radius: 10px;
-      display: none;
+    /* big Loom-style countdown */
+    .countdown { position:fixed; inset:0; background:rgba(255,255,255,.96); display:none; align-items:center; justify-content:center; z-index:10; }
+    .countdown.show { display:flex; }
+    .countdown-num {
+      width:160px; height:160px; border-radius:50%;
+      background:linear-gradient(135deg,#7c7cff,#5b5bf6); color:#fff;
+      display:flex; align-items:center; justify-content:center;
+      font-size:80px; font-weight:800;
+      box-shadow:0 20px 50px rgba(91,91,246,.45);
+      animation:pop .9s ease-out;
     }
-    .link-box.show { display: block; }
-    .link-url {
-      font-size: 12px;
-      color: #9090a0;
-      word-break: break-all;
-      margin-bottom: 10px;
-    }
-    .btn-open {
-      display: block;
-      width: 100%;
-      padding: 11px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      background: #7c5cfc;
-      color: #fff;
-      border: none;
-      cursor: pointer;
-      text-align: center;
-      text-decoration: none;
-      margin-bottom: 8px;
-    }
-    .btn-open:hover { opacity: .88; }
-    .btn-copy {
-      width: 100%;
-      padding: 9px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      background: transparent;
-      color: #c0c0cc;
-      border: 1px solid #3a3a44;
-      cursor: pointer;
-    }
-    .btn-copy:hover { background: #2e2e36; color: #f0f0f4; }
-
-    .options {
-      margin-bottom: 24px;
-      text-align: left;
-    }
-    .option-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
-      font-size: 14px;
-      color: #c0c0cc;
-    }
-    select {
-      background: #242429;
-      border: 1px solid #2e2e36;
-      border-radius: 6px;
-      color: #f0f0f4;
-      padding: 5px 10px;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-    input[type=checkbox] { cursor: pointer; accent-color: #7c5cfc; width: 15px; height: 15px; }
-
-    /* recording control row */
-    .controls { display: flex; gap: 8px; }
-    .controls .btn { flex: 1; }
-    .btn-pause { background: #242429; color: #f0f0f4; border: 1px solid #3a3a44; }
-    .btn-pause:hover { background: #2e2e36; }
-
-    /* live preview (camera-only / bubble) */
-    .preview-wrap { margin: 0 0 18px; display: none; }
-    .preview-wrap.show { display: block; }
-    #previewCanvas { width: 100%; border-radius: 10px; background: #000; max-height: 280px; object-fit: contain; }
-
-    /* full-screen countdown overlay */
-    .countdown {
-      position: fixed; inset: 0; background: rgba(15,15,17,.94);
-      display: none; align-items: center; justify-content: center; z-index: 10;
-    }
-    .countdown.show { display: flex; }
-    .countdown-num { font-size: 140px; font-weight: 800; color: #7c5cfc; animation: pop .9s ease-out; }
-    @keyframes pop { 0% { transform: scale(.4); opacity: 0; } 40% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: .9; } }
+    @keyframes pop { 0%{transform:scale(.5);opacity:0;} 45%{transform:scale(1.08);opacity:1;} 100%{transform:scale(1);} }
   </style>
 </head>
 <body>
@@ -177,13 +73,11 @@
     <p class="status" id="status">Preparing your recording…</p>
     <div class="timer" id="timer">00:00</div>
 
-    <div class="preview-wrap" id="previewWrap">
-      <canvas id="previewCanvas"></canvas>
-    </div>
+    <div class="preview-wrap" id="previewWrap"><canvas id="previewCanvas"></canvas></div>
 
-    <button class="btn btn-start" id="mainBtn" style="display:none">▶ Start Recording</button>
+    <button class="btn btn-start" id="mainBtn" style="display:none"><span class="rdot"></span> Start Recording</button>
 
-    <div class="controls" id="controls" style="display:none">
+    <div class="controls" id="controls">
       <button class="btn btn-pause" id="pauseBtn">⏸ Pause</button>
       <button class="btn btn-stop" id="stopBtn">⏹ Stop</button>
     </div>

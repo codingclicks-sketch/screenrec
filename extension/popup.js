@@ -12,7 +12,7 @@ const nameInput     = document.getElementById('nameInput');
 const emailInput    = document.getElementById('emailInput');
 const passwordInput = document.getElementById('passwordInput');
 const toggleAuth    = document.getElementById('toggleAuth');
-const headerUser    = document.getElementById('headerUser');
+const headerUser    = document.getElementById('userChip');
 const signOutBtn    = document.getElementById('signOutBtn');
 
 const mainBtn       = document.getElementById('mainBtn');
@@ -86,14 +86,17 @@ function signOut() {
 function showAuth() {
   authPanel.style.display = 'block';
   recorderPanel.style.display = 'none';
-  headerUser.textContent = '';
+  headerUser.innerHTML = '';
   signOutBtn.style.display = 'none';
 }
 
 function showRecorder(user) {
   authPanel.style.display = 'none';
   recorderPanel.style.display = 'block';
-  headerUser.textContent = user?.name || user?.email || '';
+  const name = user?.name || user?.email || '';
+  const initial = (name || '?').charAt(0).toUpperCase();
+  headerUser.innerHTML = `<span class="av">${initial}</span>`;
+  headerUser.title = name;
   signOutBtn.style.display = 'block';
 }
 

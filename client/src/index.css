@@ -1,24 +1,42 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0f0f11;
-  --surface: #1a1a1f;
-  --surface2: #242429;
-  --border: #2e2e36;
-  --accent: #7c5cfc;
-  --accent-hover: #9b7dff;
-  --danger: #ef4444;
-  --text: #f0f0f4;
-  --text2: #9090a0;
-  --radius: 10px;
+  /* Light, Loom-inspired design system */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface2: #f1f2f4;
+  --border: #e6e8eb;
+  --border-strong: #d3d6db;
+
+  --accent: #5b5bf6;          /* indigo primary */
+  --accent-hover: #4b4be0;
+  --accent-soft: #eeeefe;
+  --record: #ff4b4b;          /* record red */
+  --record-hover: #ec3a3a;
+  --danger: #e5484d;
+  --success: #22a06b;
+
+  --text: #1c1c28;
+  --text2: #6b7280;
+  --text3: #9aa1ac;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --shadow: 0 4px 16px rgba(16,24,40,.08);
+  --shadow-lg: 0 16px 40px rgba(16,24,40,.16);
 }
 
+html, body { height: 100%; }
+
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -28,46 +46,56 @@ button {
   cursor: pointer;
   border: none;
   outline: none;
-  transition: opacity .15s, background .15s;
+  transition: background .15s, box-shadow .15s, transform .05s, color .15s, border-color .15s;
 }
-button:hover { opacity: .88; }
+button:active { transform: translateY(0.5px); }
 
-input {
+input, textarea, select {
   font-family: inherit;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   color: var(--text);
-  padding: 6px 10px;
+  padding: 9px 12px;
   font-size: 14px;
   outline: none;
+  transition: border-color .15s, box-shadow .15s;
 }
-input:focus { border-color: var(--accent); }
+input::placeholder, textarea::placeholder { color: var(--text3); }
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 
 .btn-primary {
   background: var(--accent);
   color: #fff;
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
 }
-.btn-primary:hover { background: var(--accent-hover); opacity: 1; }
+.btn-primary:hover { background: var(--accent-hover); }
 
 .btn-ghost {
   background: transparent;
   color: var(--text2);
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
+  font-weight: 500;
 }
-.btn-ghost:hover { background: var(--surface2); opacity: 1; color: var(--text); }
+.btn-ghost:hover { background: var(--surface2); color: var(--text); }
 
 .btn-danger {
   background: transparent;
   color: var(--danger);
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
+  font-weight: 500;
 }
-.btn-danger:hover { background: #ef444420; opacity: 1; }
+.btn-danger:hover { background: #fdecec; }
+
+::selection { background: var(--accent-soft); }

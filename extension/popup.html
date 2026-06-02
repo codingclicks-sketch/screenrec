@@ -4,83 +4,112 @@
   <meta charset="UTF-8" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --accent: #5b5bf6; --record: #ff4b4b; --record-h: #ec3a3a;
+      --bg: #ffffff; --soft: #f4f5f7; --border: #e6e8eb; --border2:#d3d6db;
+      --text: #1c1c28; --text2: #6b7280; --text3:#9aa1ac; --green:#22a06b;
+    }
     body {
-      width: 280px;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0f0f11;
-      color: #f0f0f4;
+      width: 320px;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
     }
     .header {
-      padding: 14px 16px;
-      border-bottom: 1px solid #2e2e36;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      display: flex; align-items: center; gap: 9px;
+      padding: 16px 18px 12px;
     }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: #7c5cfc; }
-    .logo { font-size: 15px; font-weight: 700; flex: 1; }
-    .user-name { font-size: 11px; color: #9090a0; }
-    .sign-out { font-size: 11px; color: #9090a0; cursor: pointer; background: none; border: none; padding: 2px 6px; border-radius: 4px; }
-    .sign-out:hover { background: #2e2e36; color: #f0f0f4; }
+    .logo-dot { width: 22px; height: 22px; border-radius: 7px;
+      background: linear-gradient(135deg,#7c7cff,#5b5bf6); box-shadow:0 2px 8px rgba(91,91,246,.4); }
+    .logo { font-size: 16px; font-weight: 800; letter-spacing:-.02em; flex:1; }
+    .user-chip { font-size: 11px; color: var(--text2); display:flex; align-items:center; gap:6px; }
+    .user-chip .av { width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px; }
+    .sign-out { font-size: 16px; color: var(--text3); cursor:pointer; background:none;border:none;padding:4px 6px;border-radius:7px; }
+    .sign-out:hover { background: var(--soft); color: var(--text); }
+    .body { padding: 6px 18px 18px; }
 
-    .body { padding: 16px; }
-
-    /* ── Auth panel ── */
-    .auth-panel {}
-    .auth-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-    .auth-sub { font-size: 12px; color: #9090a0; margin-bottom: 14px; }
-    .field { margin-bottom: 10px; }
-    .field label { display: block; font-size: 11px; color: #9090a0; margin-bottom: 4px; }
+    /* ── Auth ── */
+    .auth-title { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+    .auth-sub { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+    .field { margin-bottom: 11px; }
+    .field label { display:block; font-size: 11px; color: var(--text2); margin-bottom: 5px; font-weight:600; }
     .field input {
-      width: 100%; padding: 7px 10px;
-      background: #1a1a1f; border: 1px solid #2e2e36; border-radius: 6px;
-      color: #f0f0f4; font-size: 13px; outline: none;
+      width: 100%; padding: 10px 12px; background:#fff; border: 1px solid var(--border2);
+      border-radius: 9px; color: var(--text); font-size: 13px; outline: none;
     }
-    .field input:focus { border-color: #7c5cfc; }
+    .field input:focus { border-color: var(--accent); box-shadow:0 0 0 3px #eeeefe; }
     .btn-auth {
-      width: 100%; padding: 9px; border-radius: 7px; font-size: 13px; font-weight: 600;
-      cursor: pointer; border: none; background: #7c5cfc; color: #fff; margin-top: 4px;
+      width: 100%; padding: 11px; border-radius: 10px; font-size: 14px; font-weight: 700;
+      cursor: pointer; border: none; background: var(--accent); color: #fff; margin-top: 6px;
     }
-    .btn-auth:hover { opacity: .88; }
-    .btn-auth:disabled { opacity: .5; cursor: not-allowed; }
-    .toggle { font-size: 12px; color: #9090a0; text-align: center; margin-top: 10px; cursor: pointer; }
-    .toggle span { color: #7c5cfc; text-decoration: underline; cursor: pointer; }
-    .auth-error { font-size: 12px; color: #ef4444; margin-bottom: 8px; min-height: 16px; }
+    .btn-auth:hover { background:#4b4be0; }
+    .btn-auth:disabled { opacity:.55; cursor: not-allowed; }
+    .toggle { font-size: 12px; color: var(--text2); text-align: center; margin-top: 12px; }
+    .toggle span { color: var(--accent); font-weight:600; cursor: pointer; }
+    .auth-error { font-size: 12px; color: var(--record); margin-bottom: 8px; min-height: 15px; }
 
-    /* ── Recorder panel ── */
-    .status { font-size: 12px; color: #9090a0; margin-bottom: 14px; min-height: 16px; }
-    .status.recording { color: #ef4444; }
-    .status.uploading { color: #f59e0b; }
-    .status.done { color: #22c55e; }
-    .timer { font-size: 32px; font-weight: 700; text-align: center; letter-spacing: 2px; margin: 8px 0 16px; font-variant-numeric: tabular-nums; }
-    .btn { width: 100%; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: opacity .15s; }
-    .btn:hover { opacity: .88; }
-    .btn-record { background: #7c5cfc; color: #fff; }
-    .btn-stop { background: #ef4444; color: #fff; }
-    .btn-disabled { background: #2e2e36; color: #9090a0; cursor: not-allowed; }
-    .options { margin-bottom: 14px; }
-    .option-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #c0c0cc; }
-    select { background: #1a1a1f; border: 1px solid #2e2e36; border-radius: 6px; color: #f0f0f4; padding: 4px 8px; font-size: 12px; cursor: pointer; }
-    label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-    input[type=checkbox] { cursor: pointer; accent-color: #7c5cfc; }
-    .link-box { margin-top: 12px; padding: 10px; background: #1a1a1f; border: 1px solid #2e2e36; border-radius: 8px; display: none; }
-    .link-box.show { display: block; }
-    .link-url { font-size: 11px; color: #9090a0; word-break: break-all; margin-bottom: 8px; }
-    .btn-open { display:block; width: 100%; padding: 8px; border-radius: 6px; font-size: 13px; font-weight: 600; background: #7c5cfc; color: #fff; border: none; cursor: pointer; text-align:center; text-decoration:none; margin-bottom: 6px; }
-    .btn-open:hover { opacity: .88; }
-    .btn-copy { width: 100%; padding: 7px; border-radius: 6px; font-size: 12px; font-weight: 600; background: transparent; color: #c0c0cc; border: 1px solid #3a3a44; cursor: pointer; }
-    .btn-copy:hover { background: #2e2e36; color: #f0f0f4; }
-    .progress { height: 3px; background: #2e2e36; border-radius: 2px; margin-top: 10px; overflow: hidden; display: none; }
-    .progress.show { display: block; }
-    .progress-bar { height: 100%; background: #7c5cfc; border-radius: 2px; transition: width .3s; }
+    /* ── Recorder options (Loom-style rows) ── */
+    .status { font-size: 12px; color: var(--text2); margin: 2px 0 12px; min-height: 14px; }
+    .status.recording { color: var(--record); font-weight:600; }
+    .status.uploading { color: #d9820a; }
+    .status.done { color: var(--green); font-weight:600; }
+
+    .opt-row {
+      display:flex; align-items:center; gap:11px;
+      background: var(--soft); border:1px solid transparent;
+      border-radius: 11px; padding: 11px 13px; margin-bottom: 9px;
+      cursor: pointer;
+    }
+    .opt-row:hover { border-color: var(--border2); }
+    .opt-ic { font-size:17px; width:20px; text-align:center; }
+    .opt-main { flex:1; }
+    .opt-label { font-size: 13px; font-weight: 600; }
+    .opt-sub { font-size: 11px; color: var(--text3); }
+    .opt-row select {
+      border:none; background:transparent; font-size:13px; font-weight:600; color:var(--text);
+      cursor:pointer; outline:none; text-align:right;
+    }
+    /* toggle switch */
+    .switch { position:relative; width:38px; height:22px; flex-shrink:0; }
+    .switch input { opacity:0; width:0; height:0; }
+    .slider { position:absolute; inset:0; background:#cfd3da; border-radius:22px; transition:.18s; }
+    .slider:before { content:''; position:absolute; height:16px; width:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.18s; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+    .switch input:checked + .slider { background: var(--green); }
+    .switch input:checked + .slider:before { transform: translateX(16px); }
+
+    .timer { font-size: 34px; font-weight: 800; text-align:center; letter-spacing:1px; margin: 6px 0 14px; font-variant-numeric: tabular-nums; }
+
+    .btn-record {
+      width: 100%; padding: 13px; border-radius: 12px; font-size: 15px; font-weight: 700;
+      cursor: pointer; border: none; background: var(--record); color: #fff;
+      display:flex; align-items:center; justify-content:center; gap:9px;
+      box-shadow: 0 6px 18px rgba(255,75,75,.32);
+    }
+    .btn-record:hover { background: var(--record-h); }
+    .btn-record .rdot { width:9px;height:9px;border-radius:50%;background:#fff; }
+    .btn-stop { background:#1c1c28; box-shadow:none; }
+    .btn-disabled { background:#cfd3da; color:#fff; cursor:not-allowed; box-shadow:none; }
+    .limit-note { text-align:center; font-size:11px; color: var(--text3); margin-top: 9px; }
+
+    .link-box { margin-top: 14px; padding: 12px; background: var(--soft); border-radius: 11px; display:none; }
+    .link-box.show { display:block; }
+    .link-url { font-size: 11px; color: var(--text2); word-break: break-all; margin-bottom: 9px; }
+    .btn-open { display:block; width:100%; padding:9px; border-radius:9px; font-size:13px; font-weight:700; background:var(--accent); color:#fff; border:none; cursor:pointer; text-align:center; text-decoration:none; margin-bottom:7px; }
+    .btn-open:hover { background:#4b4be0; }
+    .btn-copy { width:100%; padding:8px; border-radius:9px; font-size:12px; font-weight:600; background:#fff; color:var(--text2); border:1px solid var(--border2); cursor:pointer; }
+    .btn-copy:hover { background:var(--soft); color:var(--text); }
+    .progress { height:4px; background:var(--soft); border-radius:3px; margin-top:11px; overflow:hidden; display:none; }
+    .progress.show { display:block; }
+    .progress-bar { height:100%; background:var(--accent); border-radius:3px; transition:width .3s; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="dot"></div>
+    <div class="logo-dot"></div>
     <span class="logo">ScreenRec</span>
-    <span class="user-name" id="headerUser"></span>
-    <button class="sign-out" id="signOutBtn" style="display:none" onclick="signOut()">Sign out</button>
+    <span class="user-chip" id="userChip"></span>
+    <button class="sign-out" id="signOutBtn" style="display:none" onclick="signOut()" title="Sign out">⏻</button>
   </div>
   <div class="body">
 
@@ -108,37 +137,60 @@
     <!-- Recorder panel -->
     <div id="recorderPanel" style="display:none">
       <p class="status" id="status">Ready to record</p>
-      <div class="options" id="optionsPanel">
-        <div class="option-row">
-          <span>Camera</span>
+
+      <div id="optionsPanel">
+        <label class="opt-row">
+          <span class="opt-ic">🎥</span>
+          <span class="opt-main">
+            <div class="opt-label">Camera</div>
+            <div class="opt-sub">Add your webcam</div>
+          </span>
           <select id="cameraSelect">
-            <option value="off" selected>No camera</option>
-            <option value="bubble">Screen + camera bubble</option>
+            <option value="off" selected>Off</option>
+            <option value="bubble">Bubble</option>
             <option value="only">Camera only</option>
           </select>
-        </div>
-        <div class="option-row">
-          <span>Audio</span>
-          <label><input type="checkbox" id="audioCheck" checked /> Microphone</label>
-        </div>
-        <div class="option-row">
-          <span>Quality</span>
+        </label>
+
+        <label class="opt-row">
+          <span class="opt-ic">🎙️</span>
+          <span class="opt-main">
+            <div class="opt-label">Microphone</div>
+            <div class="opt-sub">Record your voice</div>
+          </span>
+          <span class="switch"><input type="checkbox" id="audioCheck" checked /><span class="slider"></span></span>
+        </label>
+
+        <label class="opt-row">
+          <span class="opt-ic">⚙️</span>
+          <span class="opt-main">
+            <div class="opt-label">Quality</div>
+            <div class="opt-sub">Video resolution</div>
+          </span>
           <select id="qualitySelect">
-            <option value="high">High (1080p)</option>
-            <option value="medium" selected>Medium (720p)</option>
-            <option value="low">Low (480p)</option>
+            <option value="high">1080p</option>
+            <option value="medium" selected>720p</option>
+            <option value="low">480p</option>
           </select>
-        </div>
-        <div class="option-row">
-          <span>Countdown</span>
-          <label><input type="checkbox" id="countdownCheck" checked /> 3-2-1</label>
-        </div>
+        </label>
+
+        <label class="opt-row">
+          <span class="opt-ic">⏱️</span>
+          <span class="opt-main">
+            <div class="opt-label">Countdown</div>
+            <div class="opt-sub">3-2-1 before start</div>
+          </span>
+          <span class="switch"><input type="checkbox" id="countdownCheck" checked /><span class="slider"></span></span>
+        </label>
       </div>
+
       <div class="timer" id="timer" style="display:none">00:00</div>
-      <button class="btn btn-record" id="mainBtn">Start Recording</button>
-      <div class="progress" id="progressWrap">
-        <div class="progress-bar" id="progressBar" style="width:0%"></div>
-      </div>
+
+      <button class="btn-record" id="mainBtn"><span class="rdot"></span> Start Recording</button>
+      <div class="limit-note" id="limitNote">Free · unlimited recordings</div>
+
+      <div class="progress" id="progressWrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+
       <div class="link-box" id="linkBox">
         <div class="link-url" id="linkUrl"></div>
         <a class="btn-open" id="openBtn" href="#" target="_blank" rel="noopener">▶ Open Video</a>

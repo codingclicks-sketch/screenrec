@@ -49,7 +49,7 @@
 .container p {
   font-size: 15px;
   line-height: 1.7;
-  color: #c8c8d4;
+  color: var(--text2);
   margin-bottom: 12px;
 }
 
@@ -60,7 +60,7 @@
 .container li {
   font-size: 15px;
   line-height: 1.7;
-  color: #c8c8d4;
+  color: var(--text2);
   margin-bottom: 8px;
 }
 

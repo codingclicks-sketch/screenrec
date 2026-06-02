@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [activeFolder, setActiveFolder] = useState('all');
   const [settingsRec, setSettingsRec] = useState(null);   // recording being configured
   const [analyticsRec, setAnalyticsRec] = useState(null); // recording showing analytics
+  const [showRecordHint, setShowRecordHint] = useState(false);
 
   async function load() {
     try {
@@ -81,91 +82,137 @@ export default function Dashboard() {
     return true;
   });
 
+  const folderName = activeFolder === 'all' ? 'Library' : (folders.find(f => f.id === activeFolder)?.name || 'Folder');
+
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.logo}><span className={styles.dot} />ScreenRec</div>
-        <div className={styles.headerRight}>
-          <Link to="/account" className={styles.userName}>👤 {user?.name}</Link>
-          <Link to="/account" className="btn-ghost" style={{ fontSize: 13 }}>Account</Link>
-          <button className="btn-ghost" onClick={logout} style={{ fontSize: 13 }}>Sign out</button>
-        </div>
-      </header>
+    <div className={styles.shell}>
+      {/* ── Sidebar ── */}
+      <aside className={styles.sidebar}>
+        <div className={styles.brand}><span className={styles.brandDot} />ScreenRec</div>
 
-      <div className={styles.toolbar}>
-        <input className={styles.search} value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="🔍 Search recordings…" />
-        <div className={styles.folders}>
-          <button className={activeFolder === 'all' ? styles.folderActive : styles.folder}
-            onClick={() => setActiveFolder('all')}>All</button>
+        <button className={styles.recordBtn} onClick={() => setShowRecordHint(true)}>
+          <span className={styles.recDot} /> Record a video
+        </button>
+
+        <nav className={styles.nav}>
+          <button className={activeFolder === 'all' ? styles.navActive : styles.navItem} onClick={() => setActiveFolder('all')}>
+            <span className={styles.navIcon}>🎬</span> Library
+          </button>
+        </nav>
+
+        <div className={styles.navLabel}>Folders</div>
+        <nav className={styles.nav}>
           {folders.map(f => (
-            <span key={f.id} className={styles.folderWrap}>
-              <button className={activeFolder === f.id ? styles.folderActive : styles.folder}
-                onClick={() => setActiveFolder(f.id)}>📁 {f.name}</button>
+            <div key={f.id} className={styles.folderRow}>
+              <button className={activeFolder === f.id ? styles.navActive : styles.navItem} onClick={() => setActiveFolder(f.id)}>
+                <span className={styles.navIcon}>📁</span> {f.name}
+              </button>
               <button className={styles.folderDel} title="Delete folder" onClick={() => deleteFolder(f.id)}>×</button>
-            </span>
-          ))}
-          <button className={styles.folder} onClick={createFolder}>+ New folder</button>
-        </div>
-      </div>
-
-      <main className={styles.main}>
-        {loading && <p className={styles.empty}>Loading…</p>}
-        {!loading && recordings.length === 0 && (
-          <div className={styles.empty}>
-            <div className={styles.emptyIcon}>🎬</div>
-            <h2>No recordings yet</h2>
-            <p>Use the Chrome extension to record your screen, then your videos will appear here.</p>
-          </div>
-        )}
-        {!loading && recordings.length > 0 && filtered.length === 0 && (
-          <p className={styles.empty}>No recordings match your filter.</p>
-        )}
-
-        <div className={styles.grid}>
-          {filtered.map(r => (
-            <div key={r.id} className={styles.card}>
-              <Link to={`/watch/${r.id}`} className={styles.thumb}>
-                {r.thumbnail
-                  ? <img src={r.thumbnail} className={styles.preview} alt={r.title} loading="lazy" />
-                  : <div className={styles.preview} style={{ background: '#000' }} />}
-                <div className={styles.duration}>{fmtDur(r.duration)}</div>
-                {r.privacy && r.privacy !== 'public' && (
-                  <div className={styles.lock}>{r.privacy === 'password' ? '🔒' : '👤'}</div>
-                )}
-              </Link>
-
-              <div className={styles.cardBody}>
-                {editingId === r.id ? (
-                  <div className={styles.editRow}>
-                    <input value={editTitle} onChange={e => setEditTitle(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && saveTitle(r.id)} autoFocus />
-                    <button className="btn-primary" onClick={() => saveTitle(r.id)}>Save</button>
-                    <button className="btn-ghost" onClick={() => setEditingId(null)}>×</button>
-                  </div>
-                ) : (
-                  <h3 className={styles.title} onClick={() => { setEditingId(r.id); setEditTitle(r.title); }}
-                    title="Click to rename">{r.title}</h3>
-                )}
-
-                <p className={styles.meta}>
-                  👁 {r.views || 0} · 💬 {r.commentCount || 0} · {fmtDate(r.created_at)}
-                </p>
-
-                <div className={styles.actions}>
-                  <button className="btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
-                    onClick={() => copyLink(r.id)}>
-                    {copied === r.id ? '✓ Copied!' : '🔗 Copy Link'}
-                  </button>
-                  <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setSettingsRec(r)}>⚙ Share</button>
-                  <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setAnalyticsRec(r)}>📊 Stats</button>
-                  <button className="btn-danger" style={{ fontSize: 12 }} onClick={() => deleteRec(r.id)}>Delete</button>
-                </div>
-              </div>
             </div>
           ))}
+          <button className={styles.navItem} onClick={createFolder}><span className={styles.navIcon}>＋</span> New folder</button>
+        </nav>
+
+        <div className={styles.sidebarFoot}>
+          {user?.plan !== 'pro' && <Link to="/pricing" className={styles.upgrade}>✨ Upgrade to Pro</Link>}
+          <div className={styles.userRow}>
+            <Link to="/account" className={styles.userLink}>
+              <span className={styles.avatar}>{(user?.name || '?').charAt(0).toUpperCase()}</span>
+              <span className={styles.userMeta}><strong>{user?.name}</strong><small>{user?.email}</small></span>
+            </Link>
+            <button className={styles.signout} onClick={logout} title="Sign out">⏻</button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <main className={styles.content}>
+        <header className={styles.topbar}>
+          <input className={styles.search} value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search recordings…" />
+          <button className={styles.newVideo} onClick={() => setShowRecordHint(true)}>
+            <span className={styles.recDot} /> New video
+          </button>
+        </header>
+
+        <div className={styles.contentInner}>
+          <div className={styles.pageHead}>
+            <h1 className={styles.pageTitle}>{folderName}</h1>
+            <span className={styles.count}>{filtered.length} video{filtered.length === 1 ? '' : 's'}</span>
+          </div>
+
+          {loading && <p className={styles.empty}>Loading…</p>}
+          {!loading && recordings.length === 0 && (
+            <div className={styles.empty}>
+              <div className={styles.emptyIcon}>🎬</div>
+              <h2>No recordings yet</h2>
+              <p>Click <strong>Record a video</strong> and the ScreenRec extension will capture your screen. Your videos show up here.</p>
+            </div>
+          )}
+          {!loading && recordings.length > 0 && filtered.length === 0 && (
+            <p className={styles.empty}>No recordings match your filter.</p>
+          )}
+
+          <div className={styles.grid}>
+            {filtered.map(r => (
+              <div key={r.id} className={styles.card}>
+                <Link to={`/watch/${r.id}`} className={styles.thumb}>
+                  {r.thumbnail
+                    ? <img src={r.thumbnail} className={styles.preview} alt={r.title} loading="lazy" />
+                    : <div className={styles.preview} style={{ background: '#000' }} />}
+                  <div className={styles.duration}>{fmtDur(r.duration)}</div>
+                  {r.privacy && r.privacy !== 'public' && (
+                    <div className={styles.lock}>{r.privacy === 'password' ? '🔒' : '👤'}</div>
+                  )}
+                  <span className={styles.playOverlay}>▶</span>
+                </Link>
+
+                <div className={styles.cardBody}>
+                  {editingId === r.id ? (
+                    <div className={styles.editRow}>
+                      <input value={editTitle} onChange={e => setEditTitle(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && saveTitle(r.id)} autoFocus />
+                      <button className="btn-primary" onClick={() => saveTitle(r.id)}>Save</button>
+                      <button className="btn-ghost" onClick={() => setEditingId(null)}>×</button>
+                    </div>
+                  ) : (
+                    <h3 className={styles.title} onClick={() => { setEditingId(r.id); setEditTitle(r.title); }}
+                      title="Click to rename">{r.title}</h3>
+                  )}
+
+                  <p className={styles.meta}>
+                    {r.views || 0} views · {r.commentCount || 0} comments · {fmtDate(r.created_at)}
+                  </p>
+
+                  <div className={styles.actions}>
+                    <button className="btn-primary" style={{ fontSize: 12, padding: '6px 12px' }}
+                      onClick={() => copyLink(r.id)}>
+                      {copied === r.id ? '✓ Copied!' : 'Copy link'}
+                    </button>
+                    <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setSettingsRec(r)}>Share</button>
+                    <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setAnalyticsRec(r)}>Stats</button>
+                    <button className="btn-danger" style={{ fontSize: 12 }} onClick={() => deleteRec(r.id)}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </main>
+
+      {showRecordHint && (
+        <div className={styles.modalBg} onClick={() => setShowRecordHint(false)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🎬</div>
+            <h2 className={styles.modalTitle} style={{ textAlign: 'center' }}>Record a video</h2>
+            <p style={{ color: 'var(--text2)', fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>
+              Click the <strong>ScreenRec</strong> icon in your browser toolbar, choose your options,
+              and hit record. Your video will appear here automatically when you finish.
+            </p>
+            <button className="btn-primary" style={{ width: '100%' }} onClick={() => setShowRecordHint(false)}>Got it</button>
+          </div>
+        </div>
+      )}
 
       {settingsRec && (
         <ShareSettings rec={settingsRec} folders={folders} authFetch={authFetch}
