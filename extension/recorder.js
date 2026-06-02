@@ -144,7 +144,7 @@ async function handleStop() {
 
     const res = await fetch(`${SERVER}/api/upload`, { method: 'POST', body: form });
     const data = await res.json();
-    const shareUrl = `${SERVER}/watch/${data.id}`;
+    const shareUrl = `https://screenrec-plum.vercel.app/watch/${data.id}`;
 
     // Save to session so popup also sees it
     await chrome.storage.session.set({ shareLink: shareUrl, recording: false });
