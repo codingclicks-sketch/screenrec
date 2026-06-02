@@ -4,7 +4,8 @@ import styles from './Dashboard.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
 
-const CLIENT_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+// Share links should use the site's own domain (not the API host).
+const CLIENT_BASE = typeof window !== 'undefined' ? window.location.origin : '';
 
 function fmtDur(s) {
   const m = Math.floor(s / 60);

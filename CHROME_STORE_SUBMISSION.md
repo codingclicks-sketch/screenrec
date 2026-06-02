@@ -63,7 +63,7 @@ Your privacy matters: the extension only uses local storage to keep you signed
 in. It never reads your browsing history or the content of the sites you visit.
 Recording starts only when you explicitly click record and pick a screen.
 
-Privacy policy: https://screenrec.codingclicks.com/privacy
+Privacy policy: https://veorec.com/privacy
 ```
 
 ### Category
@@ -115,7 +115,7 @@ Then certify:
 
 ### Privacy policy URL (required)
 ```
-https://screenrec.codingclicks.com/privacy
+https://veorec.com/privacy
 ```
 
 ---
@@ -145,7 +145,7 @@ Tip: take them at 1280×800 for the crispest listing.
 - [x] 16 / 48 / 128 px PNG icons included
 - [x] Minimal permissions (only `storage` — no scary install warnings)
 - [x] No remote code, no dead files
-- [x] Privacy policy live at https://screenrec.codingclicks.com/privacy
+- [x] Privacy policy live at https://veorec.com/privacy
 - [x] Backend (Railway) + dashboard (Vercel) live and working
 - [ ] Developer account registered ($5) — **your step**
 - [ ] Screenshots uploaded — **your step**

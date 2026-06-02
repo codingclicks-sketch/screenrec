@@ -278,7 +278,7 @@ async function handleStop() {
         : 'Upload failed: ' + (data.error || res.status));
       return;
     }
-    const shareUrl = `https://screenrec.codingclicks.com/watch/${data.id}`;
+    const shareUrl = `https://veorec.com/watch/${data.id}`;
 
     await chrome.storage.local.set({ shareLink: shareUrl, recording: false });
     chrome.runtime.sendMessage({ type: 'UPLOAD_DONE', url: shareUrl });
