@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "ScreenRec",
+  "version": "1.0.0",
+  "description": "Record your screen and share instantly with clients",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:3001/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

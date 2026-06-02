@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: screenrec-api
+    env: node
+    region: oregon
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: PUBLIC_URL
+        sync: false

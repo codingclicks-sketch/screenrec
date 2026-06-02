@@ -1,0 +1,8 @@
+node_modules/
+server/uploads/
+server/recordings.json
+server/recordings.db
+client/dist/
+.env
+*.env
+.DS_Store
