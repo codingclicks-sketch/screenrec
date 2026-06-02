@@ -1,4 +1,4 @@
-const SERVER = 'http://localhost:3001';
+const SERVER = 'https://screenrec-api-production.up.railway.app';
 
 const mainBtn = document.getElementById('mainBtn');
 const statusEl = document.getElementById('status');
