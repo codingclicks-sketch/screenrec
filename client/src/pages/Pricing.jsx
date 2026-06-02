@@ -20,51 +20,61 @@ const PLANS = [
 export default function Pricing() {
   const { user, token, updateUser } = useAuth();
   const currentPlan = user?.plan || (user ? 'free' : null);
-  const [cfg, setCfg] = useState(null);          // billing config
-  const [status, setStatus] = useState('');      // 'success' | 'error' | ''
-  const ppRef = useRef(null);
-  const renderedRef = useRef(false);
+  const [cfg, setCfg] = useState(null);
+  const [status, setStatus] = useState('');   // '' | 'processing' | 'success' | 'error'
+  const paddleRef = useRef(null);
 
   useEffect(() => {
     fetch(`${API}/api/billing/config`).then(r => r.json()).then(setCfg).catch(() => setCfg({ enabled: false }));
   }, []);
 
-  // Load PayPal SDK + render the button once we know billing is enabled
+  // Load + initialise Paddle.js once we know billing is enabled
   useEffect(() => {
-    if (!cfg || !cfg.enabled || !user || currentPlan === 'pro' || renderedRef.current) return;
-    renderedRef.current = true;
+    if (!cfg || !cfg.enabled || paddleRef.current) return;
 
-    function renderButton() {
-      if (!window.paypal || !ppRef.current) return;
-      window.paypal.Buttons({
-        style: { color: 'blue', shape: 'pill', label: 'pay', height: 44 },
-        createOrder: async () => {
-          const r = await fetch(`${API}/api/billing/paypal/create-order`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          });
-          const d = await r.json();
-          if (!r.ok) throw new Error(d.error || 'create order failed');
-          return d.id;
+    function init() {
+      if (!window.Paddle) return;
+      window.Paddle.Environment.set(cfg.env === 'production' ? 'production' : 'sandbox');
+      window.Paddle.Initialize({
+        token: cfg.clientToken,
+        eventCallback: (e) => {
+          if (e.name === 'checkout.completed') {
+            setStatus('processing');
+            // The webhook flips the account to Pro server-side; poll /me to reflect it.
+            pollForPro();
+          }
         },
-        onApprove: async (data) => {
-          const r = await fetch(`${API}/api/billing/paypal/capture`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ orderID: data.orderID }),
-          });
-          const d = await r.json();
-          if (r.ok) { updateUser(d); setStatus('success'); }
-          else setStatus('error');
-        },
-        onError: () => setStatus('error'),
-      }).render(ppRef.current);
+      });
+      paddleRef.current = true;
     }
 
-    if (window.paypal) { renderButton(); return; }
+    if (window.Paddle) { init(); return; }
     const s = document.createElement('script');
-    s.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(cfg.clientId)}&currency=USD`;
-    s.onload = renderButton;
+    s.src = 'https://cdn.paddle.com/paddle/v2/paddle.js';
+    s.onload = init;
     document.body.appendChild(s);
-  }, [cfg, user, currentPlan, token, updateUser]);
+  }, [cfg]);
+
+  function pollForPro(tries = 0) {
+    fetch(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(u => {
+        if (u.plan === 'pro') { updateUser(u); setStatus('success'); }
+        else if (tries < 8) setTimeout(() => pollForPro(tries + 1), 1500);
+        else setStatus('success'); // payment captured; plan will sync shortly
+      })
+      .catch(() => setStatus('error'));
+  }
+
+  function upgrade() {
+    if (!window.Paddle || !cfg?.priceId) return;
+    window.Paddle.Checkout.open({
+      items: [{ priceId: cfg.priceId, quantity: 1 }],
+      customer: user?.email ? { email: user.email } : undefined,
+      customData: { userId: user?.id },
+      settings: { displayMode: 'overlay', theme: 'light' },
+    });
+  }
 
   return (
     <div className={styles.page}>
@@ -81,8 +91,9 @@ export default function Pricing() {
         <h1 className={styles.title}>Simple, honest pricing</h1>
         <p className={styles.sub}>Start free. Upgrade when you need more.</p>
 
+        {status === 'processing' && <div className={styles.banner}>⏳ Confirming your payment…</div>}
         {status === 'success' && <div className={styles.banner}>🎉 You’re on Pro now — thank you! Enjoy unlimited HD recording.</div>}
-        {status === 'error' && <div className={styles.bannerErr}>Payment didn’t complete. Please try again.</div>}
+        {status === 'error' && <div className={styles.bannerErr}>Something went wrong confirming the payment. If you were charged, refresh in a moment.</div>}
 
         <div className={styles.grid}>
           {PLANS.map(plan => {
@@ -105,7 +116,9 @@ export default function Pricing() {
                 ) : plan.id === 'pro' ? (
                   <>
                     {!user && <Link to="/login" className={styles.upgradeBtn}>Sign in to upgrade</Link>}
-                    {user && cfg && cfg.enabled && <div ref={ppRef} className={styles.paypal} />}
+                    {user && cfg && cfg.enabled && (
+                      <button className={styles.upgradeBtn} onClick={upgrade}>Upgrade to Pro</button>
+                    )}
                     {user && cfg && !cfg.enabled && (
                       <button className={styles.upgradeBtn} disabled title="Billing is being set up">Coming soon</button>
                     )}
@@ -120,7 +133,7 @@ export default function Pricing() {
         </div>
 
         {cfg && cfg.env === 'sandbox' && cfg.enabled && (
-          <p className={styles.note}>⚠️ Test mode — use a PayPal sandbox account to try checkout.</p>
+          <p className={styles.note}>⚠️ Test mode — use Paddle’s sandbox test card to try checkout.</p>
         )}
       </main>
     </div>

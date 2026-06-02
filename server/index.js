@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const users = require('./users');
@@ -27,7 +28,8 @@ if (USE_CLOUDINARY) {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({ origin: '*' }));
-app.use(express.json());
+// Capture the raw body so we can verify Paddle webhook signatures.
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 
 // ── Auth Routes (public) ─────────────────────────────────────────────────────
 // Serialize a user for client responses — never includes the password hash.
@@ -435,68 +437,54 @@ app.delete('/api/folders/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// ── Billing (PayPal) ──────────────────────────────────────────────────────────
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
-const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
-const PAYPAL_BASE = process.env.PAYPAL_ENV === 'live'
-  ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
-const PRO_PRICE = process.env.PRO_PRICE || '9.00';
+// ── Billing (Paddle — Merchant of Record) ────────────────────────────────────
+// Frontend opens Paddle.js checkout with our price + customData{userId}.
+// Paddle then calls our webhook on payment, where we flip the user to Pro.
+const PADDLE_CLIENT_TOKEN = process.env.PADDLE_CLIENT_TOKEN;   // public, used by Paddle.js
+const PADDLE_PRICE_ID = process.env.PADDLE_PRICE_ID;          // e.g. pri_xxx
+const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
+const PADDLE_ENV = process.env.PADDLE_ENV === 'production' ? 'production' : 'sandbox';
 
-async function paypalToken() {
-  const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString('base64');
-  const r = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
-    method: 'POST',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials',
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error_description || 'PayPal auth failed');
-  return d.access_token;
-}
-
-// Frontend asks whether billing is live + gets the public client id
+// Frontend asks whether billing is live + gets the public token + price id
 app.get('/api/billing/config', (req, res) => {
   res.json({
-    enabled: !!(PAYPAL_CLIENT_ID && PAYPAL_SECRET),
-    clientId: PAYPAL_CLIENT_ID || null,
-    price: PRO_PRICE,
-    env: process.env.PAYPAL_ENV === 'live' ? 'live' : 'sandbox',
+    provider: 'paddle',
+    enabled: !!(PADDLE_CLIENT_TOKEN && PADDLE_PRICE_ID),
+    clientToken: PADDLE_CLIENT_TOKEN || null,
+    priceId: PADDLE_PRICE_ID || null,
+    env: PADDLE_ENV,
   });
 });
 
-app.post('/api/billing/paypal/create-order', requireAuth, async (req, res) => {
-  if (!PAYPAL_CLIENT_ID || !PAYPAL_SECRET) return res.status(400).json({ error: 'Billing not configured' });
-  try {
-    const token = await paypalToken();
-    const r = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        intent: 'CAPTURE',
-        purchase_units: [{ amount: { currency_code: 'USD', value: PRO_PRICE }, description: 'ScreenRec Pro' }],
-      }),
-    });
-    const d = await r.json();
-    if (!r.ok) return res.status(400).json({ error: 'Could not create order' });
-    res.json({ id: d.id });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// Verify Paddle webhook signature: header "ts=...;h1=<hmac sha256 of `ts:rawBody`>"
+function paddleSignatureValid(req) {
+  if (!PADDLE_WEBHOOK_SECRET) return false;
+  const header = req.headers['paddle-signature'];
+  if (!header) return false;
+  const parts = Object.fromEntries(header.split(';').map(kv => kv.split('=')));
+  if (!parts.ts || !parts.h1) return false;
+  const signed = `${parts.ts}:${req.rawBody}`;
+  const expected = crypto.createHmac('sha256', PADDLE_WEBHOOK_SECRET).update(signed).digest('hex');
+  try { return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.h1)); }
+  catch { return false; }
+}
 
-app.post('/api/billing/paypal/capture', requireAuth, async (req, res) => {
-  if (!PAYPAL_CLIENT_ID || !PAYPAL_SECRET) return res.status(400).json({ error: 'Billing not configured' });
-  const { orderID } = req.body;
-  if (!orderID) return res.status(400).json({ error: 'orderID required' });
-  try {
-    const token = await paypalToken();
-    const r = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${orderID}/capture`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    });
-    const d = await r.json();
-    if (!r.ok || d.status !== 'COMPLETED') return res.status(400).json({ error: 'Payment not completed' });
-    const updated = users.update(req.userId, { plan: 'pro', plan_since: Date.now() });
-    res.json(publicUser(updated));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+app.post('/api/billing/paddle/webhook', (req, res) => {
+  if (!paddleSignatureValid(req)) return res.status(401).json({ error: 'bad signature' });
+  const event = req.body;
+  const type = event.event_type;
+  // A completed transaction or an active subscription grants Pro.
+  if (type === 'transaction.completed' || type === 'subscription.activated' || type === 'subscription.created') {
+    const userId = event.data?.custom_data?.userId;
+    if (userId && users.findById(userId)) {
+      users.update(userId, { plan: 'pro', plan_since: Date.now() });
+    }
+  }
+  if (type === 'subscription.canceled') {
+    const userId = event.data?.custom_data?.userId;
+    if (userId && users.findById(userId)) users.update(userId, { plan: 'free' });
+  }
+  res.json({ ok: true });
 });
 
 // ── Serve client build ────────────────────────────────────────────────────────
