@@ -1,4 +1,4 @@
-# ScreenRec — Chrome Web Store Submission Guide
+# VeoRec — Chrome Web Store Submission Guide
 
 Everything you need to publish the extension. The packaged upload file is:
 
@@ -23,7 +23,7 @@ I can't create accounts or enter payment on your behalf — you'll do these step
 
 ### Item name
 ```
-ScreenRec — Screen Recorder & Share
+VeoRec — Screen Recorder & Share
 ```
 
 ### Summary (short description, max 132 chars)
@@ -33,7 +33,7 @@ Record your screen, camera & mic, then get an instant shareable link. Free, fast
 
 ### Detailed description
 ```
-ScreenRec is the fastest way to record your screen and share it with anyone.
+VeoRec is the fastest way to record your screen and share it with anyone.
 
 Click record, pick a screen or window, talk through what you're showing, and
 the moment you stop you get a shareable link — copied and ready to send to
@@ -82,7 +82,7 @@ English
 
 ### Single purpose (required)
 ```
-ScreenRec lets users record their screen, camera and microphone and share the
+VeoRec lets users record their screen, camera and microphone and share the
 recording via a link. The extension's single purpose is screen recording and sharing.
 ```
 

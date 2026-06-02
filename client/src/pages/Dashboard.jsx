@@ -108,7 +108,7 @@ export default function Dashboard() {
     <div className={styles.shell}>
       {/* ── Sidebar ── */}
       <aside className={styles.sidebar}>
-        <div className={styles.brand}><img src="/logo.png" className={styles.brandImg} alt="" />ScreenRec</div>
+        <div className={styles.brand}><img src="/logo.png" className={styles.brandImg} alt="" />VeoRec</div>
 
         <button className={styles.recordBtn} onClick={() => setShowRecordHint(true)}>
           <span className={styles.recDot} /> Record a video
@@ -166,7 +166,7 @@ export default function Dashboard() {
             <div className={styles.empty}>
               <div className={styles.emptyIcon}>🎬</div>
               <h2>No recordings yet</h2>
-              <p>Click <strong>Record a video</strong> and the ScreenRec extension will capture your screen. Your videos show up here.</p>
+              <p>Click <strong>Record a video</strong> and the VeoRec extension will capture your screen. Your videos show up here.</p>
             </div>
           )}
           {!loading && recordings.length > 0 && filtered.length === 0 && (
@@ -226,7 +226,7 @@ export default function Dashboard() {
             <div style={{ fontSize: 40, marginBottom: 8 }}>🎬</div>
             <h2 className={styles.modalTitle} style={{ textAlign: 'center' }}>Record a video</h2>
             <p style={{ color: 'var(--text2)', fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>
-              Click the <strong>ScreenRec</strong> icon in your browser toolbar, choose your options,
+              Click the <strong>VeoRec</strong> icon in your browser toolbar, choose your options,
               and hit record. Your video will appear here automatically when you finish.
             </p>
             <button className="btn-primary" style={{ width: '100%' }} onClick={() => setShowRecordHint(false)}>Got it</button>

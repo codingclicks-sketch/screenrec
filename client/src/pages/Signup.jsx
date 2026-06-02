@@ -34,7 +34,7 @@ export default function Signup() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.logo}><span className={styles.dot} />ScreenRec</div>
+        <div className={styles.logo}><span className={styles.dot} />VeoRec</div>
         <h1 className={styles.title}>Create account</h1>
         <p className={styles.sub}>Start recording and sharing in seconds</p>
 

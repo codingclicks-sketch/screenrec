@@ -34,7 +34,7 @@ export default function Login() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.logo}><span className={styles.dot} />ScreenRec</div>
+        <div className={styles.logo}><span className={styles.dot} />VeoRec</div>
         <h1 className={styles.title}>Welcome back</h1>
         <p className={styles.sub}>Sign in to your account</p>
 

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ScreenRec — Screen Recorder & Share",
+  "name": "VeoRec — Screen Recorder & Share",
   "version": "1.0.0",
   "description": "Record your screen, camera and mic, then get an instant shareable link. Free, fast, no watermark — a simple Loom alternative.",
   "permissions": [
@@ -10,7 +10,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ScreenRec — Record your screen",
+    "default_title": "VeoRec — Record your screen",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",

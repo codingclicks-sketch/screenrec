@@ -6,12 +6,12 @@ export default function Privacy() {
   return (
     <div className={styles.page}>
       <div className={styles.container}>
-        <Link to="/" className={styles.logo}><span className={styles.dot} />ScreenRec</Link>
+        <Link to="/" className={styles.logo}><span className={styles.dot} />VeoRec</Link>
         <h1>Privacy Policy</h1>
         <p className={styles.updated}>Last updated: June 2, 2026</p>
 
         <p>
-          ScreenRec ("we", "our", or "the Service") provides a screen-recording tool and
+          VeoRec ("we", "our", or "the Service") provides a screen-recording tool and
           Chrome extension that lets you record your screen, camera and microphone and
           share the resulting videos via a link. This policy explains what we collect and
           how we use it.
@@ -67,7 +67,7 @@ export default function Privacy() {
           <a href="mailto:codingclicks@gmail.com">codingclicks@gmail.com</a>.
         </p>
 
-        <p className={styles.footer}><Link to="/">← Back to ScreenRec</Link></p>
+        <p className={styles.footer}><Link to="/">← Back to VeoRec</Link></p>
       </div>
     </div>
   );

@@ -79,7 +79,7 @@ export default function Pricing() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <Link to="/" className={styles.logo}><span className={styles.dot} />ScreenRec</Link>
+        <Link to="/" className={styles.logo}><span className={styles.dot} />VeoRec</Link>
         <div className={styles.headerRight}>
           {user
             ? <Link to="/" className="btn-ghost" style={{ fontSize: 13 }}>← Dashboard</Link>

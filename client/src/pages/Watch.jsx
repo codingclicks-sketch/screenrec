@@ -157,7 +157,7 @@ export default function Watch() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <Link to="/" className={styles.logo}><img src="/logo.png" className={styles.logoImg} alt="" />ScreenRec</Link>
+        <Link to="/" className={styles.logo}><img src="/logo.png" className={styles.logoImg} alt="" />VeoRec</Link>
         <div className={styles.headerActions}>
           <button className="btn-primary" onClick={() => copy('link', window.location.href)}>
             {copied === 'link' ? '✓ Copied!' : '🔗 Copy link'}
