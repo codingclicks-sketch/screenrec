@@ -136,18 +136,35 @@ async function handleStop() {
   chunks = [];
 
   try {
+    // Get auth token from storage
+    const { sr_token } = await chrome.storage.local.get('sr_token');
+    if (!sr_token) { setStatus('Not logged in — please sign in via the extension popup.'); return; }
+
     const title = `Recording ${new Date().toLocaleString()}`;
     const form = new FormData();
     form.append('video', blob, 'recording.webm');
     form.append('title', title);
     form.append('duration', String(Math.floor(duration / 1000)));
 
-    const res = await fetch(`${SERVER}/api/upload`, { method: 'POST', body: form });
+    const res = await fetch(`${SERVER}/api/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${sr_token}` },
+      body: form,
+    });
     const data = await res.json();
+    if (!res.ok) {
+      setStatus(res.status === 401
+        ? 'Session expired — please sign in again via the extension popup.'
+        : 'Upload failed: ' + (data.error || res.status));
+      mainBtn.className = 'btn btn-start';
+      mainBtn.textContent = 'Start Recording';
+      optionsPanel.style.display = 'block';
+      return;
+    }
     const shareUrl = `https://screenrec.codingclicks.com/watch/${data.id}`;
 
-    // Save to session so popup also sees it
-    await chrome.storage.session.set({ shareLink: shareUrl, recording: false });
+    // Save so popup also sees it
+    await chrome.storage.local.set({ shareLink: shareUrl, recording: false });
     chrome.runtime.sendMessage({ type: 'UPLOAD_DONE', url: shareUrl });
 
     linkUrl.textContent = shareUrl;

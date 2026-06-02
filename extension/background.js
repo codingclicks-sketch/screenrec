@@ -8,10 +8,10 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   }
 
   if (msg.type === 'RECORDER_STARTED') {
-    chrome.storage.session.set({ recording: true, startTime: msg.startTime });
+    chrome.storage.local.set({ recording: true, startTime: msg.startTime });
   }
 
   if (msg.type === 'UPLOAD_DONE') {
-    chrome.storage.session.set({ shareLink: msg.url, recording: false });
+    chrome.storage.local.set({ shareLink: msg.url, recording: false });
   }
 });

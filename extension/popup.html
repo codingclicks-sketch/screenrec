@@ -11,162 +11,127 @@
       color: #f0f0f4;
     }
     .header {
-      padding: 16px;
+      padding: 14px 16px;
       border-bottom: 1px solid #2e2e36;
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      background: #7c5cfc;
-    }
-    .logo { font-size: 16px; font-weight: 700; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #7c5cfc; }
+    .logo { font-size: 15px; font-weight: 700; flex: 1; }
+    .user-name { font-size: 11px; color: #9090a0; }
+    .sign-out { font-size: 11px; color: #9090a0; cursor: pointer; background: none; border: none; padding: 2px 6px; border-radius: 4px; }
+    .sign-out:hover { background: #2e2e36; color: #f0f0f4; }
+
     .body { padding: 16px; }
 
-    .status {
-      font-size: 12px;
-      color: #9090a0;
-      margin-bottom: 14px;
-      min-height: 16px;
+    /* ── Auth panel ── */
+    .auth-panel {}
+    .auth-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .auth-sub { font-size: 12px; color: #9090a0; margin-bottom: 14px; }
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 11px; color: #9090a0; margin-bottom: 4px; }
+    .field input {
+      width: 100%; padding: 7px 10px;
+      background: #1a1a1f; border: 1px solid #2e2e36; border-radius: 6px;
+      color: #f0f0f4; font-size: 13px; outline: none;
     }
+    .field input:focus { border-color: #7c5cfc; }
+    .btn-auth {
+      width: 100%; padding: 9px; border-radius: 7px; font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; background: #7c5cfc; color: #fff; margin-top: 4px;
+    }
+    .btn-auth:hover { opacity: .88; }
+    .btn-auth:disabled { opacity: .5; cursor: not-allowed; }
+    .toggle { font-size: 12px; color: #9090a0; text-align: center; margin-top: 10px; cursor: pointer; }
+    .toggle span { color: #7c5cfc; text-decoration: underline; cursor: pointer; }
+    .auth-error { font-size: 12px; color: #ef4444; margin-bottom: 8px; min-height: 16px; }
+
+    /* ── Recorder panel ── */
+    .status { font-size: 12px; color: #9090a0; margin-bottom: 14px; min-height: 16px; }
     .status.recording { color: #ef4444; }
     .status.uploading { color: #f59e0b; }
     .status.done { color: #22c55e; }
-
-    .timer {
-      font-size: 32px;
-      font-weight: 700;
-      text-align: center;
-      letter-spacing: 2px;
-      margin: 8px 0 16px;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: opacity .15s;
-    }
+    .timer { font-size: 32px; font-weight: 700; text-align: center; letter-spacing: 2px; margin: 8px 0 16px; font-variant-numeric: tabular-nums; }
+    .btn { width: 100%; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: opacity .15s; }
     .btn:hover { opacity: .88; }
     .btn-record { background: #7c5cfc; color: #fff; }
     .btn-stop { background: #ef4444; color: #fff; }
     .btn-disabled { background: #2e2e36; color: #9090a0; cursor: not-allowed; }
-
-    .options {
-      margin-bottom: 14px;
-    }
-    .option-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      font-size: 13px;
-      color: #c0c0cc;
-    }
-    select {
-      background: #1a1a1f;
-      border: 1px solid #2e2e36;
-      border-radius: 6px;
-      color: #f0f0f4;
-      padding: 4px 8px;
-      font-size: 12px;
-      cursor: pointer;
-    }
+    .options { margin-bottom: 14px; }
+    .option-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #c0c0cc; }
+    select { background: #1a1a1f; border: 1px solid #2e2e36; border-radius: 6px; color: #f0f0f4; padding: 4px 8px; font-size: 12px; cursor: pointer; }
     label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
     input[type=checkbox] { cursor: pointer; accent-color: #7c5cfc; }
-
-    .link-box {
-      margin-top: 12px;
-      padding: 10px;
-      background: #1a1a1f;
-      border: 1px solid #2e2e36;
-      border-radius: 8px;
-      display: none;
-    }
+    .link-box { margin-top: 12px; padding: 10px; background: #1a1a1f; border: 1px solid #2e2e36; border-radius: 8px; display: none; }
     .link-box.show { display: block; }
-    .link-url {
-      font-size: 11px;
-      color: #9090a0;
-      word-break: break-all;
-      margin-bottom: 8px;
-    }
-    .btn-copy {
-      width: 100%;
-      padding: 7px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      background: #7c5cfc;
-      color: #fff;
-      border: none;
-      cursor: pointer;
-    }
+    .link-url { font-size: 11px; color: #9090a0; word-break: break-all; margin-bottom: 8px; }
+    .btn-copy { width: 100%; padding: 7px; border-radius: 6px; font-size: 13px; font-weight: 600; background: #7c5cfc; color: #fff; border: none; cursor: pointer; }
     .btn-copy:hover { opacity: .88; }
-
-    .progress {
-      height: 3px;
-      background: #2e2e36;
-      border-radius: 2px;
-      margin-top: 10px;
-      overflow: hidden;
-      display: none;
-    }
+    .progress { height: 3px; background: #2e2e36; border-radius: 2px; margin-top: 10px; overflow: hidden; display: none; }
     .progress.show { display: block; }
-    .progress-bar {
-      height: 100%;
-      background: #7c5cfc;
-      border-radius: 2px;
-      transition: width .3s;
-    }
+    .progress-bar { height: 100%; background: #7c5cfc; border-radius: 2px; transition: width .3s; }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="dot"></div>
     <span class="logo">ScreenRec</span>
+    <span class="user-name" id="headerUser"></span>
+    <button class="sign-out" id="signOutBtn" style="display:none" onclick="signOut()">Sign out</button>
   </div>
   <div class="body">
-    <p class="status" id="status">Ready to record</p>
 
-    <div class="options" id="optionsPanel">
-      <div class="option-row">
-        <span>Audio</span>
-        <label>
-          <input type="checkbox" id="audioCheck" checked />
-          Microphone
-        </label>
+    <!-- Auth panel -->
+    <div id="authPanel">
+      <div class="auth-title" id="authTitle">Sign in</div>
+      <div class="auth-sub" id="authSub">to start recording</div>
+      <div class="auth-error" id="authError"></div>
+      <div class="field" id="nameField" style="display:none">
+        <label>Name</label>
+        <input type="text" id="nameInput" placeholder="Your name" />
       </div>
-      <div class="option-row">
-        <span>Quality</span>
-        <select id="qualitySelect">
-          <option value="high">High (1080p)</option>
-          <option value="medium" selected>Medium (720p)</option>
-          <option value="low">Low (480p)</option>
-        </select>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="emailInput" placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="passwordInput" placeholder="••••••••" />
+      </div>
+      <button class="btn-auth" id="authBtn">Sign In</button>
+      <div class="toggle" id="toggleAuth">No account? <span onclick="toggleMode()">Sign up</span></div>
+    </div>
+
+    <!-- Recorder panel -->
+    <div id="recorderPanel" style="display:none">
+      <p class="status" id="status">Ready to record</p>
+      <div class="options" id="optionsPanel">
+        <div class="option-row">
+          <span>Audio</span>
+          <label><input type="checkbox" id="audioCheck" checked /> Microphone</label>
+        </div>
+        <div class="option-row">
+          <span>Quality</span>
+          <select id="qualitySelect">
+            <option value="high">High (1080p)</option>
+            <option value="medium" selected>Medium (720p)</option>
+            <option value="low">Low (480p)</option>
+          </select>
+        </div>
+      </div>
+      <div class="timer" id="timer" style="display:none">00:00</div>
+      <button class="btn btn-record" id="mainBtn">Start Recording</button>
+      <div class="progress" id="progressWrap">
+        <div class="progress-bar" id="progressBar" style="width:0%"></div>
+      </div>
+      <div class="link-box" id="linkBox">
+        <div class="link-url" id="linkUrl"></div>
+        <button class="btn-copy" id="copyBtn">🔗 Copy Link</button>
       </div>
     </div>
 
-    <div class="timer" id="timer" style="display:none">00:00</div>
-
-    <button class="btn btn-record" id="mainBtn">Start Recording</button>
-
-    <div class="progress" id="progressWrap">
-      <div class="progress-bar" id="progressBar" style="width:0%"></div>
-    </div>
-
-    <div class="link-box" id="linkBox">
-      <div class="link-url" id="linkUrl"></div>
-      <button class="btn-copy" id="copyBtn">🔗 Copy Link</button>
-    </div>
   </div>
-
   <script src="popup.js"></script>
 </body>
 </html>

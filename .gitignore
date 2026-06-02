@@ -2,6 +2,7 @@ node_modules/
 server/uploads/
 server/recordings.json
 server/recordings.db
+server/users.json
 client/dist/
 .env
 *.env

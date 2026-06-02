@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styles from './Dashboard.module.css';
 import API from '../api';
+import { useAuth } from '../AuthContext';
 
 function fmt(ms) {
   const s = Math.floor(ms / 1000);
@@ -19,6 +20,7 @@ function fmtDate(ts) {
 }
 
 export default function Dashboard() {
+  const { user, logout, authFetch } = useAuth();
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -27,7 +29,7 @@ export default function Dashboard() {
 
   async function load() {
     try {
-      const res = await fetch(`${API}/api/recordings`);
+      const res = await authFetch(`${API}/api/recordings`);
       setRecordings(await res.json());
     } finally {
       setLoading(false);
@@ -38,12 +40,12 @@ export default function Dashboard() {
 
   async function deleteRec(id) {
     if (!confirm('Delete this recording?')) return;
-    await fetch(`${API}/api/recordings/${id}`, { method: 'DELETE' });
+    await authFetch(`${API}/api/recordings/${id}`, { method: 'DELETE' });
     setRecordings(r => r.filter(x => x.id !== id));
   }
 
   async function saveTitle(id) {
-    await fetch(`${API}/api/recordings/${id}`, {
+    await authFetch(`${API}/api/recordings/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: editTitle }),
@@ -53,7 +55,8 @@ export default function Dashboard() {
   }
 
   function copyLink(id) {
-    const url = `${API}/watch/${id}`;
+    const clientBase = import.meta.env.VITE_API_URL || window.location.origin;
+    const url = `${clientBase}/watch/${id}`;
     navigator.clipboard.writeText(url);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
@@ -66,7 +69,10 @@ export default function Dashboard() {
           <span className={styles.dot} />
           ScreenRec
         </div>
-        <p className={styles.sub}>Your recordings — share instantly with clients</p>
+        <div className={styles.headerRight}>
+          <span className={styles.userName}>👤 {user?.name}</span>
+          <button className="btn-ghost" onClick={logout} style={{ fontSize: 13 }}>Sign out</button>
+        </div>
       </header>
 
       <main className={styles.main}>

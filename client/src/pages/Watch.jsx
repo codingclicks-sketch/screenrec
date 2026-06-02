@@ -15,7 +15,8 @@ export default function Watch() {
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    fetch(`${API}/api/recordings/${id}`)
+    // Public endpoint — no auth needed so anyone with the link can watch
+    fetch(`${API}/api/watch/${id}`)
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setRec)
       .catch(() => setNotFound(true));

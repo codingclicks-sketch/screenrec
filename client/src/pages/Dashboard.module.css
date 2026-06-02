@@ -29,10 +29,16 @@
   display: inline-block;
 }
 
-.sub {
-  color: var(--text2);
-  font-size: 14px;
+.headerRight {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.userName {
+  font-size: 13px;
+  color: var(--text2);
 }
 
 .main {
