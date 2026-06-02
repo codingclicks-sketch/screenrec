@@ -136,7 +136,8 @@ function showRecordingUI() {
 
 mainBtn.addEventListener('click', async () => {
   if (isRecording) {
-    chrome.runtime.sendMessage({ type: 'STOP_FROM_POPUP' });
+    // Broadcast directly to the recorder page (no background/tabs permission needed)
+    chrome.runtime.sendMessage({ type: 'STOP_RECORDING' });
     mainBtn.className = 'btn btn-disabled';
     mainBtn.textContent = 'Stopping…';
     clearInterval(timerInterval); timerInterval = null;

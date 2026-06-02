@@ -104,7 +104,8 @@ mainBtn.addEventListener('click', async () => {
     mainBtn.textContent = 'Stop Recording';
     setStatus('● Recording…', 'recording');
 
-    // Notify background so popup can reflect state
+    // Persist state directly + notify popup (if open) so it can reflect status
+    chrome.storage.local.set({ recording: true, startTime });
     chrome.runtime.sendMessage({ type: 'RECORDER_STARTED', startTime });
 
   } catch (e) {

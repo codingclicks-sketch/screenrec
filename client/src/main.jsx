@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Watch from './pages/Watch';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import Privacy from './pages/Privacy';
 import './index.css';
 
 function PrivateRoute({ children }) {
@@ -26,6 +27,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <Routes>
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/watch/:id" element={<Watch />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
       </Routes>

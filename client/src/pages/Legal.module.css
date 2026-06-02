@@ -1,0 +1,81 @@
+.page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 40px 24px 80px;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  color: var(--text);
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 32px;
+  color: var(--text);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+}
+
+.container h1 {
+  font-size: 30px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.updated {
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 28px;
+}
+
+.container h2 {
+  font-size: 19px;
+  font-weight: 600;
+  margin: 28px 0 10px;
+}
+
+.container p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #c8c8d4;
+  margin-bottom: 12px;
+}
+
+.container ul {
+  margin: 0 0 12px 20px;
+}
+
+.container li {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #c8c8d4;
+  margin-bottom: 8px;
+}
+
+.container code {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+}
+
+.container a { color: var(--accent); }
+
+.footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
