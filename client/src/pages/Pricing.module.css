@@ -7,7 +7,7 @@
   align-items: center;
 }
 .logo { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: var(--text); }
-.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.dot { width: 22px; height: 22px; border-radius: 6px; background: url(/logo.png) center/cover; display: inline-block; }
 .headerRight { margin-left: auto; }
 
 .main { max-width: 860px; margin: 0 auto; padding: 56px 24px 80px; text-align: center; }
@@ -72,3 +72,15 @@
 .currentBtn { background: var(--surface2); color: var(--text2); cursor: default; }
 
 .note { font-size: 13px; color: var(--text2); margin-top: 32px; }
+
+.banner {
+  max-width: 560px; margin: 0 auto 28px;
+  background: #e7f7ef; border: 1px solid #b6e6cf; color: #14794e;
+  padding: 12px 18px; border-radius: 12px; font-size: 14px; font-weight: 500;
+}
+.bannerErr {
+  max-width: 560px; margin: 0 auto 28px;
+  background: #fdecec; border: 1px solid #f5b9b9; color: #c0392b;
+  padding: 12px 18px; border-radius: 12px; font-size: 14px; font-weight: 500;
+}
+.paypal { margin-top: 4px; min-height: 46px; }

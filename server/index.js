@@ -435,6 +435,70 @@ app.delete('/api/folders/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// ── Billing (PayPal) ──────────────────────────────────────────────────────────
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+const PAYPAL_SECRET = process.env.PAYPAL_SECRET;
+const PAYPAL_BASE = process.env.PAYPAL_ENV === 'live'
+  ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+const PRO_PRICE = process.env.PRO_PRICE || '9.00';
+
+async function paypalToken() {
+  const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_SECRET}`).toString('base64');
+  const r = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=client_credentials',
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error_description || 'PayPal auth failed');
+  return d.access_token;
+}
+
+// Frontend asks whether billing is live + gets the public client id
+app.get('/api/billing/config', (req, res) => {
+  res.json({
+    enabled: !!(PAYPAL_CLIENT_ID && PAYPAL_SECRET),
+    clientId: PAYPAL_CLIENT_ID || null,
+    price: PRO_PRICE,
+    env: process.env.PAYPAL_ENV === 'live' ? 'live' : 'sandbox',
+  });
+});
+
+app.post('/api/billing/paypal/create-order', requireAuth, async (req, res) => {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_SECRET) return res.status(400).json({ error: 'Billing not configured' });
+  try {
+    const token = await paypalToken();
+    const r = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        intent: 'CAPTURE',
+        purchase_units: [{ amount: { currency_code: 'USD', value: PRO_PRICE }, description: 'ScreenRec Pro' }],
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) return res.status(400).json({ error: 'Could not create order' });
+    res.json({ id: d.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/billing/paypal/capture', requireAuth, async (req, res) => {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_SECRET) return res.status(400).json({ error: 'Billing not configured' });
+  const { orderID } = req.body;
+  if (!orderID) return res.status(400).json({ error: 'orderID required' });
+  try {
+    const token = await paypalToken();
+    const r = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${orderID}/capture`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    });
+    const d = await r.json();
+    if (!r.ok || d.status !== 'COMPLETED') return res.status(400).json({ error: 'Payment not completed' });
+    const updated = users.update(req.userId, { plan: 'pro', plan_since: Date.now() });
+    res.json(publicUser(updated));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Serve client build ────────────────────────────────────────────────────────
 const clientDist = path.join(__dirname, '../client/dist');
 if (fs.existsSync(clientDist)) {

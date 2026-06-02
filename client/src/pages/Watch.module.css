@@ -27,6 +27,7 @@
   background: var(--accent);
   display: inline-block;
 }
+.logoImg { width: 24px; height: 24px; border-radius: 6px; display: inline-block; }
 
 .headerActions {
   margin-left: auto;

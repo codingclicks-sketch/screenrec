@@ -26,10 +26,10 @@
 }
 
 .dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: url(/logo.png) center/cover;
   display: inline-block;
 }
 

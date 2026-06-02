@@ -29,6 +29,9 @@ export default function Dashboard() {
   const [settingsRec, setSettingsRec] = useState(null);   // recording being configured
   const [analyticsRec, setAnalyticsRec] = useState(null); // recording showing analytics
   const [showRecordHint, setShowRecordHint] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [confirmState, setConfirmState] = useState(null); // { title, message, danger, onConfirm }
 
   async function load() {
     try {
@@ -42,10 +45,17 @@ export default function Dashboard() {
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  async function deleteRec(id) {
-    if (!confirm('Delete this recording?')) return;
-    await authFetch(`${API}/api/recordings/${id}`, { method: 'DELETE' });
-    setRecordings(r => r.filter(x => x.id !== id));
+  function deleteRec(id) {
+    setConfirmState({
+      title: 'Delete recording?',
+      message: 'This permanently removes the video and its link. This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        await authFetch(`${API}/api/recordings/${id}`, { method: 'DELETE' });
+        setRecordings(r => r.filter(x => x.id !== id));
+      },
+    });
   }
   async function saveTitle(id) {
     await authFetch(`${API}/api/recordings/${id}`, {
@@ -60,20 +70,29 @@ export default function Dashboard() {
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
   }
-  async function createFolder() {
-    const name = prompt('Folder name:');
+  function createFolder() { setNewFolderName(''); setNewFolderOpen(true); }
+  async function submitNewFolder() {
+    const name = newFolderName.trim();
     if (!name) return;
     const res = await authFetch(`${API}/api/folders`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
     if (res.ok) { const nf = await res.json(); setFolders(f => [...f, nf]); }
+    setNewFolderOpen(false);
   }
-  async function deleteFolder(id) {
-    if (!confirm('Delete this folder? (recordings are kept)')) return;
-    await authFetch(`${API}/api/folders/${id}`, { method: 'DELETE' });
-    setFolders(f => f.filter(x => x.id !== id));
-    if (activeFolder === id) setActiveFolder('all');
+  function deleteFolder(id) {
+    setConfirmState({
+      title: 'Delete folder?',
+      message: 'The folder is removed. Your recordings are kept and moved to Library.',
+      danger: true,
+      confirmLabel: 'Delete folder',
+      onConfirm: async () => {
+        await authFetch(`${API}/api/folders/${id}`, { method: 'DELETE' });
+        setFolders(f => f.filter(x => x.id !== id));
+        if (activeFolder === id) setActiveFolder('all');
+      },
+    });
   }
 
   const filtered = recordings.filter(r => {
@@ -88,7 +107,7 @@ export default function Dashboard() {
     <div className={styles.shell}>
       {/* ── Sidebar ── */}
       <aside className={styles.sidebar}>
-        <div className={styles.brand}><span className={styles.brandDot} />ScreenRec</div>
+        <div className={styles.brand}><img src="/logo.png" className={styles.brandImg} alt="" />ScreenRec</div>
 
         <button className={styles.recordBtn} onClick={() => setShowRecordHint(true)}>
           <span className={styles.recDot} /> Record a video
@@ -210,6 +229,43 @@ export default function Dashboard() {
               and hit record. Your video will appear here automatically when you finish.
             </p>
             <button className="btn-primary" style={{ width: '100%' }} onClick={() => setShowRecordHint(false)}>Got it</button>
+          </div>
+        </div>
+      )}
+
+      {/* Custom "new folder" prompt */}
+      {newFolderOpen && (
+        <div className={styles.modalBg} onClick={() => setNewFolderOpen(false)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <h2 className={styles.modalTitle}>New folder</h2>
+            <input className={styles.input} autoFocus value={newFolderName}
+              onChange={e => setNewFolderName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submitNewFolder(); }}
+              placeholder="Folder name" />
+            <div className={styles.modalActions}>
+              <button className="btn-ghost" onClick={() => setNewFolderOpen(false)}>Cancel</button>
+              <button className="btn-primary" onClick={submitNewFolder} disabled={!newFolderName.trim()}>Create folder</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom confirm dialog */}
+      {confirmState && (
+        <div className={styles.modalBg} onClick={() => setConfirmState(null)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <h2 className={styles.modalTitle}>{confirmState.title}</h2>
+            <p style={{ color: 'var(--text2)', fontSize: 14, lineHeight: 1.6 }}>{confirmState.message}</p>
+            <div className={styles.modalActions}>
+              <button className="btn-ghost" onClick={() => setConfirmState(null)}>Cancel</button>
+              <button
+                className={confirmState.danger ? 'btn-danger' : 'btn-primary'}
+                style={confirmState.danger ? { background: 'var(--danger)', color: '#fff' } : undefined}
+                onClick={async () => { const fn = confirmState.onConfirm; setConfirmState(null); if (fn) await fn(); }}
+              >
+                {confirmState.confirmLabel || 'Confirm'}
+              </button>
+            </div>
           </div>
         </div>
       )}
