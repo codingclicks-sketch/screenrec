@@ -88,6 +88,13 @@ export default function Dashboard() {
                   muted
                   preload="metadata"
                   className={styles.preview}
+                  onLoadedMetadata={(e) => {
+                    const v = e.target;
+                    if (v.duration === Infinity || isNaN(v.duration)) {
+                      v.currentTime = 1e101;
+                      v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; };
+                    }
+                  }}
                   onMouseOver={e => e.target.play()}
                   onMouseOut={e => { e.target.pause(); e.target.currentTime = 0; }}
                 />

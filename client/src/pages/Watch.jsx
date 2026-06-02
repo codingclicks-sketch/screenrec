@@ -64,6 +64,18 @@ export default function Watch() {
             controls
             autoPlay
             className={styles.video}
+            onLoadedMetadata={(e) => {
+              const v = e.target;
+              if (v.duration === Infinity || isNaN(v.duration)) {
+                // WebM recorded via MediaRecorder lacks duration metadata.
+                // Seek to a huge time to force the browser to scan the file.
+                v.currentTime = 1e101;
+                v.ontimeupdate = () => {
+                  v.ontimeupdate = null;
+                  v.currentTime = 0;
+                };
+              }
+            }}
           />
         </div>
         <div className={styles.info}>
