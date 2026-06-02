@@ -1,0 +1,49 @@
+.page { min-height: 100vh; background: var(--bg); }
+
+.header {
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+}
+.logo { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: var(--text); }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.headerRight { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+.main { max-width: 600px; margin: 0 auto; padding: 40px 24px 80px; }
+.title { font-size: 26px; font-weight: 700; margin-bottom: 24px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.cardTitle { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+
+.planRow { display: flex; align-items: center; justify-content: space-between; }
+.planRow .cardTitle { margin-bottom: 6px; }
+.planName { font-size: 20px; font-weight: 700; color: var(--accent); }
+.upgradeBtn {
+  background: var(--accent); color: #fff; padding: 10px 18px;
+  border-radius: 8px; font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.upgradeBtn:hover { opacity: .88; }
+
+.label { display: block; font-size: 13px; color: var(--text2); margin: 12px 0 5px; }
+.input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); padding: 10px 12px; font-size: 14px; outline: none;
+}
+.input:focus { border-color: var(--accent); }
+
+.saveBtn {
+  margin-top: 18px; padding: 10px 20px; background: var(--accent); color: #fff;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.saveBtn:hover { opacity: .88; }
+.saveBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+.ok  { background: #22c55e20; border: 1px solid #22c55e; color: #22c55e; border-radius: 8px; padding: 9px 12px; font-size: 13px; margin-bottom: 14px; }
+.err { background: #ef444420; border: 1px solid #ef4444; color: #ef4444; border-radius: 8px; padding: 9px 12px; font-size: 13px; margin-bottom: 14px; }

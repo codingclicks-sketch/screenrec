@@ -66,8 +66,10 @@
     .link-box { margin-top: 12px; padding: 10px; background: #1a1a1f; border: 1px solid #2e2e36; border-radius: 8px; display: none; }
     .link-box.show { display: block; }
     .link-url { font-size: 11px; color: #9090a0; word-break: break-all; margin-bottom: 8px; }
-    .btn-copy { width: 100%; padding: 7px; border-radius: 6px; font-size: 13px; font-weight: 600; background: #7c5cfc; color: #fff; border: none; cursor: pointer; }
-    .btn-copy:hover { opacity: .88; }
+    .btn-open { display:block; width: 100%; padding: 8px; border-radius: 6px; font-size: 13px; font-weight: 600; background: #7c5cfc; color: #fff; border: none; cursor: pointer; text-align:center; text-decoration:none; margin-bottom: 6px; }
+    .btn-open:hover { opacity: .88; }
+    .btn-copy { width: 100%; padding: 7px; border-radius: 6px; font-size: 12px; font-weight: 600; background: transparent; color: #c0c0cc; border: 1px solid #3a3a44; cursor: pointer; }
+    .btn-copy:hover { background: #2e2e36; color: #f0f0f4; }
     .progress { height: 3px; background: #2e2e36; border-radius: 2px; margin-top: 10px; overflow: hidden; display: none; }
     .progress.show { display: block; }
     .progress-bar { height: 100%; background: #7c5cfc; border-radius: 2px; transition: width .3s; }
@@ -127,6 +129,7 @@
       </div>
       <div class="link-box" id="linkBox">
         <div class="link-url" id="linkUrl"></div>
+        <a class="btn-open" id="openBtn" href="#" target="_blank" rel="noopener">▶ Open Video</a>
         <button class="btn-copy" id="copyBtn">🔗 Copy Link</button>
       </div>
     </div>

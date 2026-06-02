@@ -7,6 +7,8 @@ import Watch from './pages/Watch';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Privacy from './pages/Privacy';
+import Account from './pages/Account';
+import Pricing from './pages/Pricing';
 import './index.css';
 
 function PrivateRoute({ children }) {
@@ -28,6 +30,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/watch/:id" element={<Watch />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
         <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
       </Routes>

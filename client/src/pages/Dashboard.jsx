@@ -70,7 +70,8 @@ export default function Dashboard() {
           ScreenRec
         </div>
         <div className={styles.headerRight}>
-          <span className={styles.userName}>👤 {user?.name}</span>
+          <Link to="/account" className={styles.userName}>👤 {user?.name}</Link>
+          <Link to="/account" className="btn-ghost" style={{ fontSize: 13 }}>Account</Link>
           <button className="btn-ghost" onClick={logout} style={{ fontSize: 13 }}>Sign out</button>
         </div>
       </header>

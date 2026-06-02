@@ -6,6 +6,7 @@ const timerEl = document.getElementById('timer');
 const linkBox = document.getElementById('linkBox');
 const linkUrl = document.getElementById('linkUrl');
 const copyBtn = document.getElementById('copyBtn');
+const openBtn = document.getElementById('openBtn');
 
 let mediaRecorder = null;
 let chunks = [];
@@ -32,6 +33,7 @@ function updateTimer() {
 // from the fallback button if the browser rejects the auto-start. ──────────────
 async function beginRecording() {
   mainBtn.style.display = 'none';
+  linkBox.classList.remove('show');
   setStatus('Select a screen or window to share…');
 
   const quality = opts.quality || 'medium';
@@ -167,11 +169,12 @@ async function handleStop() {
     chrome.runtime.sendMessage({ type: 'UPLOAD_DONE', url: shareUrl });
 
     linkUrl.textContent = shareUrl;
+    openBtn.href = shareUrl;
     linkBox.classList.add('show');
     setStatus('Saved! Share the link with your client.', 'done');
     mainBtn.style.display = '';
     mainBtn.className = 'btn btn-start';
-    mainBtn.textContent = '▶ Record Again';
+    mainBtn.textContent = '🎬 Record Another';
   } catch (e) {
     showStartButton('Upload failed: ' + e.message);
   }
@@ -180,7 +183,7 @@ async function handleStop() {
 copyBtn.addEventListener('click', () => {
   navigator.clipboard.writeText(linkUrl.textContent).then(() => {
     copyBtn.textContent = '✓ Copied!';
-    setTimeout(() => { copyBtn.textContent = '🔗 Copy Shareable Link'; }, 2000);
+    setTimeout(() => { copyBtn.textContent = '🔗 Copy Link'; }, 2000);
   });
 });
 

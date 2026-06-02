@@ -166,6 +166,8 @@ function animateProgress() {
 function showLink(url) {
   currentLink = url;
   linkUrl.textContent = url;
+  const openBtn = document.getElementById('openBtn');
+  if (openBtn) openBtn.href = url;
   linkBox.classList.add('show');
   progressBar.style.width = '100%';
   setTimeout(() => progressWrap.classList.remove('show'), 800);

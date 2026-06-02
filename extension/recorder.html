@@ -96,9 +96,10 @@
       word-break: break-all;
       margin-bottom: 10px;
     }
-    .btn-copy {
+    .btn-open {
+      display: block;
       width: 100%;
-      padding: 10px;
+      padding: 11px;
       border-radius: 8px;
       font-size: 14px;
       font-weight: 600;
@@ -106,8 +107,23 @@
       color: #fff;
       border: none;
       cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      margin-bottom: 8px;
     }
-    .btn-copy:hover { opacity: .88; }
+    .btn-open:hover { opacity: .88; }
+    .btn-copy {
+      width: 100%;
+      padding: 9px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      background: transparent;
+      color: #c0c0cc;
+      border: 1px solid #3a3a44;
+      cursor: pointer;
+    }
+    .btn-copy:hover { background: #2e2e36; color: #f0f0f4; }
 
     .options {
       margin-bottom: 24px;
@@ -145,7 +161,8 @@
 
     <div class="link-box" id="linkBox">
       <div class="link-url" id="linkUrl"></div>
-      <button class="btn-copy" id="copyBtn">🔗 Copy Shareable Link</button>
+      <a class="btn-open" id="openBtn" href="#" target="_blank" rel="noopener">▶ Open Video</a>
+      <button class="btn-copy" id="copyBtn">🔗 Copy Link</button>
     </div>
   </div>
 

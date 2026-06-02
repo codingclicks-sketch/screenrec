@@ -30,4 +30,12 @@ module.exports = {
     rows.push(user);
     save(rows);
   },
+  update(id, fields) {
+    const rows = load();
+    const i = rows.findIndex(u => u.id === id);
+    if (i === -1) return null;
+    rows[i] = { ...rows[i], ...fields };
+    save(rows);
+    return rows[i];
+  },
 };

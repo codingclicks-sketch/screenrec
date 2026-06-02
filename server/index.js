@@ -29,6 +29,17 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 // ── Auth Routes (public) ─────────────────────────────────────────────────────
+// Serialize a user for client responses — never includes the password hash.
+function publicUser(u) {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    plan: u.plan || 'free',
+    created_at: u.created_at,
+  };
+}
+
 app.post('/api/auth/signup', async (req, res) => {
   const { name, email, password } = req.body;
   if (!email || !password || !name) return res.status(400).json({ error: 'Name, email and password required' });
@@ -36,11 +47,11 @@ app.post('/api/auth/signup', async (req, res) => {
   if (users.findByEmail(email)) return res.status(409).json({ error: 'Email already registered' });
 
   const hash = await bcrypt.hash(password, 10);
-  const user = { id: uuidv4(), name, email: email.toLowerCase(), password: hash, created_at: Date.now() };
+  const user = { id: uuidv4(), name, email: email.toLowerCase(), password: hash, plan: 'free', created_at: Date.now() };
   users.create(user);
 
   const token = signToken(user.id);
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  res.json({ token, user: publicUser(user) });
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -54,13 +65,50 @@ app.post('/api/auth/login', async (req, res) => {
   if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
 
   const token = signToken(user.id);
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  res.json({ token, user: publicUser(user) });
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
   const user = users.findById(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json({ id: user.id, name: user.name, email: user.email });
+  res.json(publicUser(user));
+});
+
+// Update profile (name and/or email)
+app.patch('/api/auth/profile', requireAuth, (req, res) => {
+  const user = users.findById(req.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const { name, email } = req.body;
+  const fields = {};
+  if (typeof name === 'string' && name.trim()) fields.name = name.trim();
+  if (typeof email === 'string' && email.trim()) {
+    const lower = email.trim().toLowerCase();
+    const existing = users.findByEmail(lower);
+    if (existing && existing.id !== user.id) return res.status(409).json({ error: 'Email already in use' });
+    fields.email = lower;
+  }
+  if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update' });
+
+  const updated = users.update(user.id, fields);
+  res.json(publicUser(updated));
+});
+
+// Change password
+app.patch('/api/auth/password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password required' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+
+  const user = users.findById(req.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const ok = await bcrypt.compare(currentPassword, user.password);
+  if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+
+  const hash = await bcrypt.hash(newPassword, 10);
+  users.update(user.id, { password: hash });
+  res.json({ success: true });
 });
 
 // ── Upload / Recordings (protected) ──────────────────────────────────────────
@@ -158,7 +206,8 @@ if (!USE_CLOUDINARY) {
           title: ctx.title || 'Untitled Recording',
           filename: r.secure_url,
           size: r.bytes,
-          duration: parseInt(ctx.duration) || 0,
+          // Prefer Cloudinary's own measured duration (reliable) over our stored value
+          duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
           created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
           cloudinary: true,
           public_id: r.public_id,
@@ -187,7 +236,7 @@ if (!USE_CLOUDINARY) {
         title: ctx.title || 'Untitled Recording',
         filename: r.secure_url,
         size: r.bytes,
-        duration: parseInt(ctx.duration) || 0,
+        duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
         created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
         cloudinary: true,
         public_id: r.public_id,
@@ -249,7 +298,7 @@ app.get('/api/watch/:id', async (req, res) => {
         title: ctx.title || 'Untitled Recording',
         filename: r.secure_url,
         size: r.bytes,
-        duration: parseInt(ctx.duration) || 0,
+        duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
         created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
         cloudinary: true,
       });
