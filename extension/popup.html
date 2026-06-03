@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -11,34 +14,35 @@
     }
     body {
       width: 384px;
-      font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-family:'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
       background:var(--bg); color:var(--text);
-      -webkit-font-smoothing:antialiased;
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+      letter-spacing:-.01em;
     }
-    .app { padding: 22px; }
+    .app { padding: 20px 20px 22px; }
 
     /* ── Header ── */
-    .topbar { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
-    .brand { display:flex; align-items:center; gap:12px; flex:1; }
+    .topbar { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+    .brand { display:flex; align-items:center; gap:11px; flex:1; }
     .brand-icon {
-      width:44px; height:44px; border-radius:13px;
+      width:40px; height:40px; border-radius:12px;
       background:linear-gradient(135deg,#7c7cff,#5b5bf6);
-      display:flex; align-items:center; justify-content:center; font-size:22px;
+      display:flex; align-items:center; justify-content:center;
       box-shadow:0 4px 12px rgba(91,91,246,.35);
     }
-    .brand-name { font-size:23px; font-weight:800; letter-spacing:-.03em; }
-    .top-actions { display:flex; align-items:center; gap:8px; }
-    .avatar { width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff;
-      display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; }
+    .brand-name { font-size:21px; font-weight:700; letter-spacing:-.02em; }
+    .top-actions { display:flex; align-items:center; gap:6px; }
+    .avatar { width:34px; height:34px; border-radius:50%; background:var(--accent); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-weight:600; font-size:14px; }
     .icon-btn { width:32px; height:32px; border-radius:9px; background:none; border:none; cursor:pointer;
-      color:var(--text3); display:flex; align-items:center; justify-content:center; font-size:17px; }
+      color:var(--text3); display:flex; align-items:center; justify-content:center; font-size:16px; }
     .icon-btn:hover { background:var(--soft); color:var(--text2); }
 
     /* ── Hero ── */
-    .hero { display:flex; gap:12px; align-items:center; margin-bottom:20px; }
+    .hero { display:flex; gap:12px; align-items:center; margin-bottom:18px; }
     .hero-icon { width:38px; height:38px; border-radius:11px; background:#eeeefe; color:var(--accent);
       display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .hero-title { font-size:16.5px; font-weight:800; letter-spacing:-.02em; line-height:1.2; }
+    .hero-title { font-size:15.5px; font-weight:700; letter-spacing:-.01em; line-height:1.25; }
     .hero-sub { font-size:13px; color:var(--text2); margin-top:3px; }
 
     /* ── Surface selector ── */
@@ -58,7 +62,7 @@
     .opt-ic { width:38px; height:38px; border-radius:10px; background:#eeeefe; color:var(--accent);
       display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; font-weight:800; }
     .opt-text { flex:1; }
-    .opt-title { font-size:14.5px; font-weight:700; letter-spacing:-.01em; }
+    .opt-title { font-size:14.5px; font-weight:600; letter-spacing:-.01em; }
     .opt-sub { font-size:12px; color:var(--text3); margin-top:1px; }
     .opt-val { font-size:14.5px; font-weight:700; color:var(--text); }
     .pill { font-size:12.5px; font-weight:700; padding:5px 12px; border-radius:20px; }
@@ -67,10 +71,10 @@
     .chev { color:var(--text3); font-size:17px; margin-left:1px; }
 
     /* ── Record button ── */
-    .btn-record { width:100%; padding:16px; border-radius:14px; font-size:16px; font-weight:800;
+    .btn-record { width:100%; padding:15px; border-radius:14px; font-size:15.5px; font-weight:700;
       cursor:pointer; border:none; background:var(--record); color:#fff;
-      display:flex; align-items:center; justify-content:center; gap:11px;
-      box-shadow:0 8px 22px rgba(255,75,75,.4); }
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      box-shadow:0 8px 20px rgba(255,75,75,.38); }
     .btn-record:hover { background:var(--record-h); }
     .btn-record .rdot { width:13px; height:13px; border-radius:50%; background:#fff; }
     .btn-record.stop { background:#10101c; box-shadow:none; }
@@ -88,7 +92,7 @@
     /* ── Latest recording ── */
     .latest { margin-top:22px; border:1px solid var(--border2); border-radius:16px; padding:16px; display:none; }
     .latest.show { display:block; }
-    .latest-head { display:flex; align-items:center; justify-content:space-between; font-size:16px; font-weight:800; margin-bottom:14px; }
+    .latest-head { display:flex; align-items:center; justify-content:space-between; font-size:15px; font-weight:700; margin-bottom:14px; }
     .latest-row { display:flex; align-items:center; gap:12px; }
     .latest-ic { width:42px; height:42px; border-radius:11px; background:#eeeefe; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; }
     .latest-meta { flex:1; min-width:0; }
