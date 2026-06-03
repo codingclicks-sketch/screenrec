@@ -61,6 +61,9 @@ export default function Login() {
         <p className={styles.footer}>
           Don't have an account? <Link to="/signup">Sign up</Link>
         </p>
+        <p className={styles.legal}>
+          <Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link> · <Link to="/refund">Refunds</Link>
+        </p>
       </div>
     </div>
   );

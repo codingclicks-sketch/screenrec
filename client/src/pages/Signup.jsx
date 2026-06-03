@@ -67,6 +67,9 @@ export default function Signup() {
         <p className={styles.footer}>
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
+        <p className={styles.legal}>
+          By signing up you agree to our <Link to="/terms">Terms</Link>, <Link to="/privacy">Privacy</Link> &amp; <Link to="/refund">Refund</Link> policies.
+        </p>
       </div>
     </div>
   );
