@@ -7,6 +7,8 @@ import Watch from './pages/Watch';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
+import Refund from './pages/Refund';
 import Account from './pages/Account';
 import Pricing from './pages/Pricing';
 import Embed from './pages/Embed';
@@ -32,6 +34,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/watch/:id" element={<Watch />} />
         <Route path="/embed/:id" element={<Embed />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/refund" element={<Refund />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
         <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />

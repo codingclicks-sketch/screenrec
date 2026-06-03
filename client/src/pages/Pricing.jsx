@@ -135,6 +135,13 @@ export default function Pricing() {
         {cfg && cfg.env === 'sandbox' && cfg.enabled && (
           <p className={styles.note}>⚠️ Test mode — use Paddle’s sandbox test card to try checkout.</p>
         )}
+
+        <footer className={styles.legalFooter}>
+          VeoRec Pro is billed monthly and processed securely by Paddle.
+          <span>
+            <Link to="/terms">Terms</Link> · <Link to="/refund">Refund Policy</Link> · <Link to="/privacy">Privacy</Link> · <a href="mailto:codingclicks@gmail.com">Contact</a>
+          </span>
+        </footer>
       </main>
     </div>
   );
