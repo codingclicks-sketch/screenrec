@@ -3,6 +3,7 @@ const SERVER = 'https://screenrec-api-production.up.railway.app';
 const mainBtn   = document.getElementById('mainBtn');
 const controls  = document.getElementById('controls');
 const pauseBtn  = document.getElementById('pauseBtn');
+const cancelBtn = document.getElementById('cancelBtn');
 const stopBtn   = document.getElementById('stopBtn');
 const statusEl  = document.getElementById('status');
 const timerEl   = document.getElementById('timer');
@@ -236,9 +237,16 @@ function closeBubble() {
   }
 }
 
+// Close this recorder popup window (used after upload, or on cancel).
+function closeWindow() {
+  try { window.close(); } catch (e) {}
+  try { chrome.windows.getCurrent(w => { if (w && w.id != null) chrome.windows.remove(w.id); }); } catch (e) {}
+}
+
 mainBtn.addEventListener('click', () => beginRecording().catch(onStartError));
 pauseBtn.addEventListener('click', togglePause);
 stopBtn.addEventListener('click', stopRecording);
+cancelBtn.addEventListener('click', cancelRecording);
 
 function stopRecording() {
   clearInterval(timerInterval);
@@ -249,6 +257,20 @@ function stopRecording() {
   previewWrap.classList.remove('show');
   setStatus('Uploading…', 'uploading');
   timerEl.classList.remove('show');
+}
+
+// Discard the recording entirely — nothing is saved or uploaded — and close.
+function cancelRecording() {
+  if (mediaRecorder) {
+    mediaRecorder.onstop = null;                 // prevent upload
+    if (mediaRecorder.state !== 'inactive') { try { mediaRecorder.stop(); } catch (e) {} }
+  }
+  clearInterval(timerInterval);
+  chunks = [];
+  cleanupStreams();
+  closeBubble();
+  chrome.storage.local.set({ recording: false });
+  closeWindow();
 }
 
 async function handleStop() {
@@ -286,13 +308,10 @@ async function handleStop() {
     });
     chrome.runtime.sendMessage({ type: 'UPLOAD_DONE', url: shareUrl, title });
 
-    linkUrl.textContent = shareUrl;
-    openBtn.href = shareUrl;
-    linkBox.classList.add('show');
-    setStatus('Saved! Share the link with your client.', 'done');
-    mainBtn.style.display = '';
-    mainBtn.className = 'btn btn-start';
-    mainBtn.textContent = '🎬 Record Another';
+    // The shareable link is now in the extension popup's "Latest Recording"
+    // card, so close this recorder window automatically.
+    setStatus('Saved ✓  Find the link in the VeoRec popup.', 'done');
+    setTimeout(closeWindow, 1500);
   } catch (e) {
     showStartButton('Upload failed: ' + e.message);
   }

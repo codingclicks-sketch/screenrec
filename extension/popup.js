@@ -196,6 +196,14 @@ function showLatest(rec) {
   linkBox.classList.add('show');
 }
 
+// Dismiss the Latest Recording card — hides it without deleting the video.
+const latestClose = document.getElementById('latestClose');
+if (latestClose) latestClose.addEventListener('click', () => {
+  linkBox.classList.remove('show');
+  currentLink = null;
+  chrome.storage.local.remove('lastRecording');
+});
+
 copyBtn.addEventListener('click', () => {
   if (!currentLink) return;
   navigator.clipboard.writeText(currentLink).then(() => {

@@ -93,6 +93,8 @@
     .latest { margin-top:22px; border:1px solid var(--border2); border-radius:16px; padding:16px; display:none; }
     .latest.show { display:block; }
     .latest-head { display:flex; align-items:center; justify-content:space-between; font-size:15px; font-weight:700; margin-bottom:14px; }
+    .latest-close { background:none; border:none; cursor:pointer; color:var(--text3); font-size:20px; line-height:1; padding:0 4px; border-radius:6px; }
+    .latest-close:hover { background:var(--soft); color:var(--text); }
     .latest-row { display:flex; align-items:center; gap:12px; }
     .latest-ic { width:42px; height:42px; border-radius:11px; background:#eeeefe; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; }
     .latest-meta { flex:1; min-width:0; }
@@ -222,7 +224,7 @@
 
       <!-- Latest recording -->
       <div class="latest" id="linkBox">
-        <div class="latest-head">Latest Recording</div>
+        <div class="latest-head"><span>Latest Recording</span><button class="latest-close" id="latestClose" title="Hide (does not delete)">×</button></div>
         <div class="latest-row">
           <div class="latest-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg></div>
           <div class="latest-meta">

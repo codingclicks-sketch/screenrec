@@ -41,10 +41,12 @@
     .btn-start:hover { background:var(--record-h); }
     .btn-start .rdot { width:9px; height:9px; border-radius:50%; background:#fff; }
 
-    .controls { display:none; gap:10px; }
-    .controls .btn { flex:1; }
+    .controls { display:none; gap:8px; }
+    .controls .btn { flex:1; padding:13px 8px; font-size:14px; }
     .btn-pause { background:var(--soft); color:var(--text); border:1px solid var(--border2); }
-    .btn-pause:hover { background:#e9eb0e; background:#e9ebee; }
+    .btn-pause:hover { background:#e9ebee; }
+    .btn-cancel { background:#fff; color:var(--record); border:1px solid var(--border2); }
+    .btn-cancel:hover { background:#fdecec; border-color:var(--record); }
     .btn-stop { background:#1c1c28; color:#fff; }
     .btn-stop:hover { background:#000; }
 
@@ -83,6 +85,7 @@
 
     <div class="controls" id="controls">
       <button class="btn btn-pause" id="pauseBtn">⏸ Pause</button>
+      <button class="btn btn-cancel" id="cancelBtn">✕ Cancel</button>
       <button class="btn btn-stop" id="stopBtn">⏹ Stop</button>
     </div>
 
