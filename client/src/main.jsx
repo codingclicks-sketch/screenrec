@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import Watch from './pages/Watch';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import Forgot from './pages/Forgot';
+import Reset from './pages/Reset';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 import Refund from './pages/Refund';
@@ -40,6 +42,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
         <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+        <Route path="/forgot" element={<PublicRoute><Forgot /></PublicRoute>} />
+        <Route path="/reset"  element={<Reset />} />
       </Routes>
     </AuthProvider>
   </BrowserRouter>

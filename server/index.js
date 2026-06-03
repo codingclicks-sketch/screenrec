@@ -114,6 +114,85 @@ app.patch('/api/auth/password', requireAuth, async (req, res) => {
   res.json({ success: true });
 });
 
+// What auth methods are configured (frontend uses this to show the Google button etc.)
+app.get('/api/auth/config', (req, res) => {
+  res.json({
+    googleClientId: process.env.GOOGLE_CLIENT_ID || null,
+    emailEnabled: !!process.env.BREVO_API_KEY,
+  });
+});
+
+// ── Sign in with Google ───────────────────────────────────────────────────────
+app.post('/api/auth/google', async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) return res.status(400).json({ error: 'Missing Google credential' });
+  try {
+    const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(credential));
+    const info = await r.json();
+    if (!r.ok || !info.email) return res.status(401).json({ error: 'Invalid Google sign-in' });
+    if (process.env.GOOGLE_CLIENT_ID && info.aud !== process.env.GOOGLE_CLIENT_ID) {
+      return res.status(401).json({ error: 'Google token audience mismatch' });
+    }
+    if (info.email_verified === 'false') return res.status(401).json({ error: 'Google email not verified' });
+
+    const email = info.email.toLowerCase();
+    let user = users.findByEmail(email);
+    if (!user) {
+      user = { id: uuidv4(), name: info.name || email.split('@')[0], email, password: null, googleId: info.sub, plan: 'free', created_at: Date.now() };
+      users.create(user);
+    } else if (!user.googleId) {
+      user = users.update(user.id, { googleId: info.sub });
+    }
+    res.json({ token: signToken(user.id), user: publicUser(user) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Forgot / reset password (email via Brevo) ─────────────────────────────────
+async function sendEmail(to, subject, html) {
+  if (!process.env.BREVO_API_KEY) return false;
+  try {
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': process.env.BREVO_API_KEY, 'Content-Type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        sender: { name: 'VeoRec', email: process.env.EMAIL_FROM || 'noreply@veorec.com' },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
+app.post('/api/auth/forgot', async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const user = users.findByEmail(email);
+  // Only password accounts can reset; always respond ok (don't reveal who exists).
+  if (user && user.password) {
+    const token = crypto.randomBytes(32).toString('hex');
+    users.update(user.id, { resetToken: token, resetExpires: Date.now() + 3600 * 1000 });
+    const base = process.env.CLIENT_URL || 'https://veorec.com';
+    const link = `${base}/reset?token=${token}&email=${encodeURIComponent(email)}`;
+    await sendEmail(email, 'Reset your VeoRec password',
+      `<div style="font-family:sans-serif"><h2>Reset your password</h2><p>Click the button below to set a new password. This link expires in 1 hour.</p><p><a href="${link}" style="display:inline-block;background:#5b5bf6;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600">Reset password</a></p><p style="color:#888;font-size:12px">Or paste this link: ${link}</p><p style="color:#888;font-size:12px">If you didn't request this, you can ignore this email.</p></div>`);
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/reset', async (req, res) => {
+  const { email, token, password } = req.body;
+  if (!email || !token || !password) return res.status(400).json({ error: 'Missing fields' });
+  if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  const user = users.findByEmail(String(email).toLowerCase());
+  if (!user || user.resetToken !== token || !user.resetExpires || user.resetExpires < Date.now()) {
+    return res.status(400).json({ error: 'Invalid or expired reset link' });
+  }
+  const hash = await bcrypt.hash(password, 10);
+  const updated = users.update(user.id, { password: hash, resetToken: null, resetExpires: null });
+  res.json({ token: signToken(updated.id), user: publicUser(updated) });
+});
+
 // ── Upload / Recordings (protected) ──────────────────────────────────────────
 if (!USE_CLOUDINARY) {
   const uploadDir = path.join(__dirname, 'uploads');

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import API from '../api';
+import GoogleButton from '../components/GoogleButton';
 import styles from './Auth.module.css';
 
 export default function Signup() {
@@ -39,6 +40,8 @@ export default function Signup() {
         <p className={styles.sub}>Start recording and sharing in seconds</p>
 
         {error && <div className={styles.error}>{error}</div>}
+
+        <GoogleButton />
 
         <form onSubmit={submit} className={styles.form}>
           <label className={styles.label}>Name</label>

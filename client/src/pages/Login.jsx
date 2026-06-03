@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import API from '../api';
+import GoogleButton from '../components/GoogleButton';
 import styles from './Auth.module.css';
 
 export default function Login() {
@@ -40,6 +41,8 @@ export default function Login() {
 
         {error && <div className={styles.error}>{error}</div>}
 
+        <GoogleButton />
+
         <form onSubmit={submit} className={styles.form}>
           <label className={styles.label}>Email</label>
           <input
@@ -47,7 +50,10 @@ export default function Login() {
             value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
             className={styles.input}
           />
-          <label className={styles.label}>Password</label>
+          <div className={styles.labelRow}>
+            <label className={styles.label}>Password</label>
+            <Link to="/forgot" className={styles.forgot}>Forgot password?</Link>
+          </div>
           <input
             type="password" required placeholder="••••••••"
             value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
