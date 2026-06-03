@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [editTitle, setEditTitle] = useState('');
   const [copied, setCopied] = useState(null);
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState('newest');
   const [activeFolder, setActiveFolder] = useState('all');
   const [settingsRec, setSettingsRec] = useState(null);   // recording being configured
   const [analyticsRec, setAnalyticsRec] = useState(null); // recording showing analytics
@@ -96,11 +97,17 @@ export default function Dashboard() {
     });
   }
 
-  const filtered = recordings.filter(r => {
-    if (activeFolder !== 'all' && r.folder !== activeFolder) return false;
-    if (search && !(r.title || '').toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const filtered = recordings
+    .filter(r => {
+      if (activeFolder !== 'all' && r.folder !== activeFolder) return false;
+      if (search && !(r.title || '').toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sort === 'oldest') return a.created_at - b.created_at;
+      if (sort === 'views') return (b.views || 0) - (a.views || 0);
+      return b.created_at - a.created_at; // newest
+    });
 
   const folderName = activeFolder === 'all' ? 'Library' : (folders.find(f => f.id === activeFolder)?.name || 'Folder');
 
@@ -159,9 +166,28 @@ export default function Dashboard() {
           <div className={styles.pageHead}>
             <h1 className={styles.pageTitle}>{folderName}</h1>
             <span className={styles.count}>{filtered.length} video{filtered.length === 1 ? '' : 's'}</span>
+            {recordings.length > 0 && (
+              <select className={styles.sort} value={sort} onChange={e => setSort(e.target.value)}>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="views">Most viewed</option>
+              </select>
+            )}
           </div>
 
-          {loading && <p className={styles.empty}>Loading…</p>}
+          {loading && (
+            <div className={styles.grid}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className={styles.card}>
+                  <div className={`${styles.thumb} ${styles.skel}`} />
+                  <div className={styles.cardBody}>
+                    <div className={styles.skelLine} style={{ width: '70%' }} />
+                    <div className={styles.skelLine} style={{ width: '45%', height: 10 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {!loading && recordings.length === 0 && (
             <div className={styles.empty}>
               <div className={styles.emptyIcon}>🎬</div>
@@ -176,16 +202,7 @@ export default function Dashboard() {
           <div className={styles.grid}>
             {filtered.map(r => (
               <div key={r.id} className={styles.card}>
-                <Link to={`/watch/${r.id}`} className={styles.thumb}>
-                  {r.thumbnail
-                    ? <img src={r.thumbnail} className={styles.preview} alt={r.title} loading="lazy" />
-                    : <div className={styles.preview} style={{ background: '#000' }} />}
-                  <div className={styles.duration}>{fmtDur(r.duration)}</div>
-                  {r.privacy && r.privacy !== 'public' && (
-                    <div className={styles.lock}>{r.privacy === 'password' ? '🔒' : '👤'}</div>
-                  )}
-                  <span className={styles.playOverlay}>▶</span>
-                </Link>
+                <Thumb r={r} />
 
                 <div className={styles.cardBody}>
                   {editingId === r.id ? (
@@ -283,6 +300,46 @@ export default function Dashboard() {
         <Analytics rec={analyticsRec} authFetch={authFetch} onClose={() => setAnalyticsRec(null)} />
       )}
     </div>
+  );
+}
+
+// ── Library thumbnail with hover-to-play preview (Loom-style) ────────────────
+function Thumb({ r }) {
+  const [hover, setHover] = useState(false);
+  const src = r.cloudinary ? r.filename : `${API}/uploads/${r.filename}`;
+  return (
+    <Link
+      to={`/watch/${r.id}`}
+      className={styles.thumb}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {r.thumbnail
+        ? <img src={r.thumbnail} className={styles.preview} alt={r.title} loading="lazy" />
+        : <div className={styles.preview} style={{ background: '#000' }} />}
+      {hover && (
+        <video
+          className={styles.previewVid}
+          src={src}
+          muted
+          autoPlay
+          loop
+          playsInline
+          onLoadedMetadata={(e) => {
+            const v = e.target;
+            if (v.duration === Infinity || isNaN(v.duration)) {
+              v.currentTime = 1e101;
+              v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; v.play(); };
+            }
+          }}
+        />
+      )}
+      <div className={styles.duration}>{fmtDur(r.duration)}</div>
+      {r.privacy && r.privacy !== 'public' && (
+        <div className={styles.lock}>{r.privacy === 'password' ? '🔒' : '👤'}</div>
+      )}
+      {!hover && <span className={styles.playOverlay}>▶</span>}
+    </Link>
   );
 }
 
