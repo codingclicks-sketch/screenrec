@@ -26,20 +26,20 @@
       display:flex; align-items:center; justify-content:center; font-size:22px;
       box-shadow:0 4px 12px rgba(91,91,246,.35);
     }
-    .brand-name { font-size:26px; font-weight:800; letter-spacing:-.03em; }
-    .top-actions { display:flex; align-items:center; gap:10px; }
-    .avatar { width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff;
-      display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; }
-    .icon-btn { width:34px; height:34px; border-radius:9px; background:none; border:none; cursor:pointer;
-      color:var(--text3); display:flex; align-items:center; justify-content:center; font-size:18px; }
+    .brand-name { font-size:23px; font-weight:800; letter-spacing:-.03em; }
+    .top-actions { display:flex; align-items:center; gap:8px; }
+    .avatar { width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; }
+    .icon-btn { width:32px; height:32px; border-radius:9px; background:none; border:none; cursor:pointer;
+      color:var(--text3); display:flex; align-items:center; justify-content:center; font-size:17px; }
     .icon-btn:hover { background:var(--soft); color:var(--text2); }
 
     /* ── Hero ── */
-    .hero { display:flex; gap:12px; align-items:flex-start; margin-bottom:20px; }
-    .hero-icon { width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,#7c7cff,#5b5bf6);
-      display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
-    .hero-title { font-size:18px; font-weight:800; letter-spacing:-.02em; }
-    .hero-sub { font-size:14px; color:var(--text2); margin-top:2px; }
+    .hero { display:flex; gap:12px; align-items:center; margin-bottom:20px; }
+    .hero-icon { width:38px; height:38px; border-radius:11px; background:#eeeefe; color:var(--accent);
+      display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .hero-title { font-size:16.5px; font-weight:800; letter-spacing:-.02em; line-height:1.2; }
+    .hero-sub { font-size:13px; color:var(--text2); margin-top:3px; }
 
     /* ── Surface selector ── */
     .surface { display:flex; border:1px solid var(--border2); border-radius:14px; padding:6px; margin-bottom:18px; gap:4px; }
@@ -52,22 +52,22 @@
 
     /* ── Options card ── */
     .opts { border:1px solid var(--border2); border-radius:16px; overflow:hidden; margin-bottom:20px; }
-    .opt { display:flex; align-items:center; gap:14px; padding:15px 16px; cursor:pointer; background:#fff; }
+    .opt { display:flex; align-items:center; gap:13px; padding:14px 15px; cursor:pointer; background:#fff; }
     .opt:hover { background:var(--soft); }
     .opt + .opt { border-top:1px solid var(--border); }
-    .opt-ic { width:40px; height:40px; border-radius:11px; background:#eeeefe; color:var(--accent);
-      display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; font-weight:800; }
+    .opt-ic { width:38px; height:38px; border-radius:10px; background:#eeeefe; color:var(--accent);
+      display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; font-weight:800; }
     .opt-text { flex:1; }
-    .opt-title { font-size:15px; font-weight:700; }
-    .opt-sub { font-size:12.5px; color:var(--text3); margin-top:1px; }
-    .opt-val { font-size:15px; font-weight:700; color:var(--text); }
-    .pill { font-size:13px; font-weight:700; padding:5px 12px; border-radius:20px; }
+    .opt-title { font-size:14.5px; font-weight:700; letter-spacing:-.01em; }
+    .opt-sub { font-size:12px; color:var(--text3); margin-top:1px; }
+    .opt-val { font-size:14.5px; font-weight:700; color:var(--text); }
+    .pill { font-size:12.5px; font-weight:700; padding:5px 12px; border-radius:20px; }
     .pill.on { background:var(--green-bg); color:var(--green); }
     .pill.off { background:#fdecec; color:var(--record); }
-    .chev { color:var(--text3); font-size:18px; margin-left:2px; }
+    .chev { color:var(--text3); font-size:17px; margin-left:1px; }
 
     /* ── Record button ── */
-    .btn-record { width:100%; padding:17px; border-radius:15px; font-size:17px; font-weight:800;
+    .btn-record { width:100%; padding:16px; border-radius:14px; font-size:16px; font-weight:800;
       cursor:pointer; border:none; background:var(--record); color:#fff;
       display:flex; align-items:center; justify-content:center; gap:11px;
       box-shadow:0 8px 22px rgba(255,75,75,.4); }
@@ -161,7 +161,7 @@
     <!-- Recorder panel -->
     <div id="recorderPanel" style="display:none">
       <div class="hero">
-        <div class="hero-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>
+        <div class="hero-icon"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13l1-8z"/></svg></div>
         <div>
           <div class="hero-title">Record your screen in seconds</div>
           <div class="hero-sub">High-quality recordings. No limits.</div>
