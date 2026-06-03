@@ -5,113 +5,130 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --accent: #5b5bf6; --record: #ff4b4b; --record-h: #ec3a3a;
-      --bg: #ffffff; --soft: #f4f5f7; --border: #e6e8eb; --border2:#d3d6db;
-      --text: #1c1c28; --text2: #6b7280; --text3:#9aa1ac; --green:#22a06b;
+      --accent:#5b5bf6; --accent-h:#4b4be0; --record:#ff4b4b; --record-h:#ec3a3a;
+      --bg:#ffffff; --soft:#f5f6f8; --border:#eceef1; --border2:#e2e4e8;
+      --text:#10101c; --text2:#6b7280; --text3:#9aa1ac; --green:#16955f; --green-bg:#e7f7ef;
     }
     body {
-      width: 320px;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      -webkit-font-smoothing: antialiased;
+      width: 384px;
+      font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+      background:var(--bg); color:var(--text);
+      -webkit-font-smoothing:antialiased;
     }
-    .header {
-      display: flex; align-items: center; gap: 9px;
-      padding: 16px 18px 12px;
+    .app { padding: 22px; }
+
+    /* ── Header ── */
+    .topbar { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+    .brand { display:flex; align-items:center; gap:12px; flex:1; }
+    .brand-icon {
+      width:44px; height:44px; border-radius:13px;
+      background:linear-gradient(135deg,#7c7cff,#5b5bf6);
+      display:flex; align-items:center; justify-content:center; font-size:22px;
+      box-shadow:0 4px 12px rgba(91,91,246,.35);
     }
-    .logo-dot { width: 22px; height: 22px; border-radius: 7px;
-      background: linear-gradient(135deg,#7c7cff,#5b5bf6); box-shadow:0 2px 8px rgba(91,91,246,.4); }
-    .logo { font-size: 16px; font-weight: 800; letter-spacing:-.02em; flex:1; }
-    .user-chip { font-size: 11px; color: var(--text2); display:flex; align-items:center; gap:6px; }
-    .user-chip .av { width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px; }
-    .sign-out { font-size: 16px; color: var(--text3); cursor:pointer; background:none;border:none;padding:4px 6px;border-radius:7px; }
-    .sign-out:hover { background: var(--soft); color: var(--text); }
-    .body { padding: 6px 18px 18px; }
+    .brand-name { font-size:26px; font-weight:800; letter-spacing:-.03em; }
+    .top-actions { display:flex; align-items:center; gap:10px; }
+    .avatar { width:38px; height:38px; border-radius:50%; background:var(--accent); color:#fff;
+      display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; }
+    .icon-btn { width:34px; height:34px; border-radius:9px; background:none; border:none; cursor:pointer;
+      color:var(--text3); display:flex; align-items:center; justify-content:center; font-size:18px; }
+    .icon-btn:hover { background:var(--soft); color:var(--text2); }
+
+    /* ── Hero ── */
+    .hero { display:flex; gap:12px; align-items:flex-start; margin-bottom:20px; }
+    .hero-icon { width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,#7c7cff,#5b5bf6);
+      display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+    .hero-title { font-size:18px; font-weight:800; letter-spacing:-.02em; }
+    .hero-sub { font-size:14px; color:var(--text2); margin-top:2px; }
+
+    /* ── Surface selector ── */
+    .surface { display:flex; border:1px solid var(--border2); border-radius:14px; padding:6px; margin-bottom:18px; gap:4px; }
+    .surf { flex:1; display:flex; align-items:center; justify-content:center; gap:7px;
+      padding:11px 6px; border-radius:10px; background:none; border:none; cursor:pointer;
+      font-size:13px; font-weight:600; color:var(--text2); white-space:nowrap; }
+    .surf svg { width:17px; height:17px; }
+    .surf:hover { background:var(--soft); }
+    .surf.active { background:var(--accent); color:#fff; box-shadow:0 4px 12px rgba(91,91,246,.3); }
+
+    /* ── Options card ── */
+    .opts { border:1px solid var(--border2); border-radius:16px; overflow:hidden; margin-bottom:20px; }
+    .opt { display:flex; align-items:center; gap:14px; padding:15px 16px; cursor:pointer; background:#fff; }
+    .opt:hover { background:var(--soft); }
+    .opt + .opt { border-top:1px solid var(--border); }
+    .opt-ic { width:40px; height:40px; border-radius:11px; background:#eeeefe; color:var(--accent);
+      display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; font-weight:800; }
+    .opt-text { flex:1; }
+    .opt-title { font-size:15px; font-weight:700; }
+    .opt-sub { font-size:12.5px; color:var(--text3); margin-top:1px; }
+    .opt-val { font-size:15px; font-weight:700; color:var(--text); }
+    .pill { font-size:13px; font-weight:700; padding:5px 12px; border-radius:20px; }
+    .pill.on { background:var(--green-bg); color:var(--green); }
+    .pill.off { background:#fdecec; color:var(--record); }
+    .chev { color:var(--text3); font-size:18px; margin-left:2px; }
+
+    /* ── Record button ── */
+    .btn-record { width:100%; padding:17px; border-radius:15px; font-size:17px; font-weight:800;
+      cursor:pointer; border:none; background:var(--record); color:#fff;
+      display:flex; align-items:center; justify-content:center; gap:11px;
+      box-shadow:0 8px 22px rgba(255,75,75,.4); }
+    .btn-record:hover { background:var(--record-h); }
+    .btn-record .rdot { width:13px; height:13px; border-radius:50%; background:#fff; }
+    .btn-record.stop { background:#10101c; box-shadow:none; }
+    .btn-record.disabled { background:#cfd3da; cursor:not-allowed; box-shadow:none; }
+
+    .free-note { text-align:center; font-size:14px; color:var(--text2); margin-top:16px; font-weight:500; }
+    .free-note b { color:var(--text); font-weight:700; }
+
+    .timer { font-size:38px; font-weight:800; text-align:center; letter-spacing:1px; margin:8px 0 14px; font-variant-numeric:tabular-nums; display:none; }
+    .status { font-size:13px; color:var(--text2); text-align:center; min-height:0; }
+    .status.recording { color:var(--record); font-weight:700; }
+    .status.uploading { color:#d9820a; font-weight:700; }
+    .status.done { color:var(--green); font-weight:700; }
+
+    /* ── Latest recording ── */
+    .latest { margin-top:22px; border:1px solid var(--border2); border-radius:16px; padding:16px; display:none; }
+    .latest.show { display:block; }
+    .latest-head { display:flex; align-items:center; justify-content:space-between; font-size:16px; font-weight:800; margin-bottom:14px; }
+    .latest-row { display:flex; align-items:center; gap:12px; }
+    .latest-ic { width:42px; height:42px; border-radius:11px; background:#eeeefe; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; }
+    .latest-meta { flex:1; min-width:0; }
+    .latest-title { font-size:14.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .latest-time { font-size:12.5px; color:var(--text3); margin-top:1px; }
+    .latest-btn { display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:600;
+      padding:8px 13px; border-radius:10px; border:1px solid var(--border2); background:#fff;
+      color:var(--accent); cursor:pointer; text-decoration:none; }
+    .latest-btn:hover { background:var(--soft); }
 
     /* ── Auth ── */
-    .auth-title { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
-    .auth-sub { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
-    .field { margin-bottom: 11px; }
-    .field label { display:block; font-size: 11px; color: var(--text2); margin-bottom: 5px; font-weight:600; }
-    .field input {
-      width: 100%; padding: 10px 12px; background:#fff; border: 1px solid var(--border2);
-      border-radius: 9px; color: var(--text); font-size: 13px; outline: none;
-    }
-    .field input:focus { border-color: var(--accent); box-shadow:0 0 0 3px #eeeefe; }
-    .btn-auth {
-      width: 100%; padding: 11px; border-radius: 10px; font-size: 14px; font-weight: 700;
-      cursor: pointer; border: none; background: var(--accent); color: #fff; margin-top: 6px;
-    }
-    .btn-auth:hover { background:#4b4be0; }
-    .btn-auth:disabled { opacity:.55; cursor: not-allowed; }
-    .toggle { font-size: 12px; color: var(--text2); text-align: center; margin-top: 12px; }
-    .toggle span { color: var(--accent); font-weight:600; cursor: pointer; }
-    .auth-error { font-size: 12px; color: var(--record); margin-bottom: 8px; min-height: 15px; }
-
-    /* ── Recorder options (Loom-style rows) ── */
-    .status { font-size: 12px; color: var(--text2); margin: 2px 0 12px; min-height: 14px; }
-    .status.recording { color: var(--record); font-weight:600; }
-    .status.uploading { color: #d9820a; }
-    .status.done { color: var(--green); font-weight:600; }
-
-    .opt-row {
-      display:flex; align-items:center; gap:11px;
-      background: var(--soft); border:1px solid transparent;
-      border-radius: 11px; padding: 11px 13px; margin-bottom: 9px;
-      cursor: pointer;
-    }
-    .opt-row:hover { border-color: var(--border2); }
-    .opt-ic { font-size:17px; width:20px; text-align:center; }
-    .opt-main { flex:1; }
-    .opt-label { font-size: 13px; font-weight: 600; }
-    .opt-sub { font-size: 11px; color: var(--text3); }
-    .opt-row select {
-      border:none; background:transparent; font-size:13px; font-weight:600; color:var(--text);
-      cursor:pointer; outline:none; text-align:right;
-    }
-    /* toggle switch */
-    .switch { position:relative; width:38px; height:22px; flex-shrink:0; }
-    .switch input { opacity:0; width:0; height:0; }
-    .slider { position:absolute; inset:0; background:#cfd3da; border-radius:22px; transition:.18s; }
-    .slider:before { content:''; position:absolute; height:16px; width:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.18s; box-shadow:0 1px 3px rgba(0,0,0,.3); }
-    .switch input:checked + .slider { background: var(--green); }
-    .switch input:checked + .slider:before { transform: translateX(16px); }
-
-    .timer { font-size: 34px; font-weight: 800; text-align:center; letter-spacing:1px; margin: 6px 0 14px; font-variant-numeric: tabular-nums; }
-
-    .btn-record {
-      width: 100%; padding: 13px; border-radius: 12px; font-size: 15px; font-weight: 700;
-      cursor: pointer; border: none; background: var(--record); color: #fff;
-      display:flex; align-items:center; justify-content:center; gap:9px;
-      box-shadow: 0 6px 18px rgba(255,75,75,.32);
-    }
-    .btn-record:hover { background: var(--record-h); }
-    .btn-record .rdot { width:9px;height:9px;border-radius:50%;background:#fff; }
-    .btn-stop { background:#1c1c28; box-shadow:none; }
-    .btn-disabled { background:#cfd3da; color:#fff; cursor:not-allowed; box-shadow:none; }
-    .limit-note { text-align:center; font-size:11px; color: var(--text3); margin-top: 9px; }
-
-    .link-box { margin-top: 14px; padding: 12px; background: var(--soft); border-radius: 11px; display:none; }
-    .link-box.show { display:block; }
-    .link-url { font-size: 11px; color: var(--text2); word-break: break-all; margin-bottom: 9px; }
-    .btn-open { display:block; width:100%; padding:9px; border-radius:9px; font-size:13px; font-weight:700; background:var(--accent); color:#fff; border:none; cursor:pointer; text-align:center; text-decoration:none; margin-bottom:7px; }
-    .btn-open:hover { background:#4b4be0; }
-    .btn-copy { width:100%; padding:8px; border-radius:9px; font-size:12px; font-weight:600; background:#fff; color:var(--text2); border:1px solid var(--border2); cursor:pointer; }
-    .btn-copy:hover { background:var(--soft); color:var(--text); }
-    .progress { height:4px; background:var(--soft); border-radius:3px; margin-top:11px; overflow:hidden; display:none; }
-    .progress.show { display:block; }
-    .progress-bar { height:100%; background:var(--accent); border-radius:3px; transition:width .3s; }
+    .auth-title { font-size:19px; font-weight:800; margin-bottom:3px; }
+    .auth-sub { font-size:13px; color:var(--text2); margin-bottom:18px; }
+    .field { margin-bottom:12px; }
+    .field label { display:block; font-size:12px; color:var(--text2); margin-bottom:6px; font-weight:600; }
+    .field input { width:100%; padding:12px 14px; background:#fff; border:1px solid var(--border2);
+      border-radius:11px; color:var(--text); font-size:14px; outline:none; }
+    .field input:focus { border-color:var(--accent); box-shadow:0 0 0 3px #eeeefe; }
+    .btn-auth { width:100%; padding:13px; border-radius:12px; font-size:15px; font-weight:700;
+      cursor:pointer; border:none; background:var(--accent); color:#fff; margin-top:6px; }
+    .btn-auth:hover { background:var(--accent-h); }
+    .btn-auth:disabled { opacity:.55; cursor:not-allowed; }
+    .toggle { font-size:13px; color:var(--text2); text-align:center; margin-top:14px; }
+    .toggle span { color:var(--accent); font-weight:700; cursor:pointer; }
+    .auth-error { font-size:13px; color:var(--record); margin-bottom:8px; min-height:16px; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="logo-dot"></div>
-    <span class="logo">VeoRec</span>
-    <span class="user-chip" id="userChip"></span>
-    <button class="sign-out" id="signOutBtn" style="display:none" onclick="signOut()" title="Sign out">⏻</button>
-  </div>
-  <div class="body">
+  <div class="app">
+    <!-- Header -->
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-icon">🎥</div>
+        <span class="brand-name">VeoRec</span>
+      </div>
+      <div class="top-actions" id="topActions" style="display:none">
+        <span class="avatar" id="userChip">?</span>
+        <button class="icon-btn" id="signOutBtn" title="Sign out" onclick="signOut()">⏻</button>
+      </div>
+    </div>
 
     <!-- Auth panel -->
     <div id="authPanel">
@@ -136,68 +153,73 @@
 
     <!-- Recorder panel -->
     <div id="recorderPanel" style="display:none">
-      <p class="status" id="status">Ready to record</p>
-
-      <div id="optionsPanel">
-        <label class="opt-row">
-          <span class="opt-ic">🎥</span>
-          <span class="opt-main">
-            <div class="opt-label">Camera</div>
-            <div class="opt-sub">Add your webcam</div>
-          </span>
-          <select id="cameraSelect">
-            <option value="off" selected>Off</option>
-            <option value="bubble">Bubble</option>
-            <option value="only">Camera only</option>
-          </select>
-        </label>
-
-        <label class="opt-row">
-          <span class="opt-ic">🎙️</span>
-          <span class="opt-main">
-            <div class="opt-label">Microphone</div>
-            <div class="opt-sub">Record your voice</div>
-          </span>
-          <span class="switch"><input type="checkbox" id="audioCheck" checked /><span class="slider"></span></span>
-        </label>
-
-        <label class="opt-row">
-          <span class="opt-ic">⚙️</span>
-          <span class="opt-main">
-            <div class="opt-label">Quality</div>
-            <div class="opt-sub">Video resolution</div>
-          </span>
-          <select id="qualitySelect">
-            <option value="high">1080p</option>
-            <option value="medium" selected>720p</option>
-            <option value="low">480p</option>
-          </select>
-        </label>
-
-        <label class="opt-row">
-          <span class="opt-ic">⏱️</span>
-          <span class="opt-main">
-            <div class="opt-label">Countdown</div>
-            <div class="opt-sub">3-2-1 before start</div>
-          </span>
-          <span class="switch"><input type="checkbox" id="countdownCheck" checked /><span class="slider"></span></span>
-        </label>
+      <div class="hero">
+        <div class="hero-icon">🎬</div>
+        <div>
+          <div class="hero-title">Record your screen in seconds</div>
+          <div class="hero-sub">High-quality recordings. No limits.</div>
+        </div>
       </div>
 
-      <div class="timer" id="timer" style="display:none">00:00</div>
+      <!-- Surface selector -->
+      <div class="surface" id="surface">
+        <button class="surf active" data-surface="monitor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          Entire Screen
+        </button>
+        <button class="surf" data-surface="browser">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 6.5h.01"/></svg>
+          Browser Tab
+        </button>
+        <button class="surf" data-surface="window">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18"/></svg>
+          Window
+        </button>
+      </div>
 
+      <!-- Options -->
+      <div class="opts">
+        <div class="opt" id="cameraRow">
+          <div class="opt-ic">🎥</div>
+          <div class="opt-text"><div class="opt-title">Camera</div><div class="opt-sub">Add your webcam</div></div>
+          <div class="opt-val" id="cameraVal">Off</div><span class="chev">›</span>
+        </div>
+        <div class="opt" id="micRow">
+          <div class="opt-ic">🎙️</div>
+          <div class="opt-text"><div class="opt-title">Microphone</div><div class="opt-sub">Record your voice</div></div>
+          <span class="pill on" id="micVal">On</span><span class="chev">›</span>
+        </div>
+        <div class="opt" id="qualityRow">
+          <div class="opt-ic">HD</div>
+          <div class="opt-text"><div class="opt-title">Quality</div><div class="opt-sub">Video resolution</div></div>
+          <div class="opt-val" id="qualityVal">1080p</div><span class="chev">›</span>
+        </div>
+        <div class="opt" id="countdownRow">
+          <div class="opt-ic">⏱️</div>
+          <div class="opt-text"><div class="opt-title">Countdown</div><div class="opt-sub">3-2-1 before start</div></div>
+          <span class="pill on" id="countdownVal">On</span><span class="chev">›</span>
+        </div>
+      </div>
+
+      <div class="timer" id="timer">00:00</div>
       <button class="btn-record" id="mainBtn"><span class="rdot"></span> Start Recording</button>
-      <div class="limit-note" id="limitNote">Free · unlimited recordings</div>
+      <div class="status" id="status"></div>
+      <div class="free-note" id="freeNote"><b>✨ Free</b> · Unlimited recordings</div>
 
-      <div class="progress" id="progressWrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
-
-      <div class="link-box" id="linkBox">
-        <div class="link-url" id="linkUrl"></div>
-        <a class="btn-open" id="openBtn" href="#" target="_blank" rel="noopener">▶ Open Video</a>
-        <button class="btn-copy" id="copyBtn">🔗 Copy Link</button>
+      <!-- Latest recording -->
+      <div class="latest" id="linkBox">
+        <div class="latest-head">Latest Recording</div>
+        <div class="latest-row">
+          <div class="latest-ic">🎞️</div>
+          <div class="latest-meta">
+            <div class="latest-title" id="latestTitle">Recording</div>
+            <div class="latest-time" id="linkUrl">just now</div>
+          </div>
+          <a class="latest-btn" id="openBtn" href="#" target="_blank" rel="noopener">↗ Open</a>
+          <button class="latest-btn" id="copyBtn">🔗 Copy Link</button>
+        </div>
       </div>
     </div>
-
   </div>
   <script src="popup.js"></script>
 </body>

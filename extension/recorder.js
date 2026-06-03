@@ -101,10 +101,10 @@ async function beginRecording() {
   // floating DOM overlay already injected onto the page, so it's captured as
   // part of the screen — no canvas, which means recording survives minimize.)
   if (cam !== 'only') {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: { width: { ideal: maxW }, height: { ideal: maxH }, frameRate: { ideal: 30 } },
-      audio: true,
-    });
+    const videoConstraints = { width: { ideal: maxW }, height: { ideal: maxH }, frameRate: { ideal: 30 } };
+    // Hint the picker toward the surface the user chose (monitor/browser/window)
+    if (['monitor', 'browser', 'window'].includes(opts.surface)) videoConstraints.displaySurface = opts.surface;
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints, audio: true });
     activeStreams.push(screenStream);
   }
   if (cam === 'only') {
@@ -280,8 +280,11 @@ async function handleStop() {
     }
     const shareUrl = `https://veorec.com/watch/${data.id}`;
 
-    await chrome.storage.local.set({ shareLink: shareUrl, recording: false });
-    chrome.runtime.sendMessage({ type: 'UPLOAD_DONE', url: shareUrl });
+    await chrome.storage.local.set({
+      shareLink: shareUrl, recording: false,
+      lastRecording: { url: shareUrl, title, at: Date.now() },
+    });
+    chrome.runtime.sendMessage({ type: 'UPLOAD_DONE', url: shareUrl, title });
 
     linkUrl.textContent = shareUrl;
     openBtn.href = shareUrl;
