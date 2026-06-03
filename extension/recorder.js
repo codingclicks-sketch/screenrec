@@ -260,7 +260,7 @@ async function handleStop() {
     const { sr_token } = await chrome.storage.local.get('sr_token');
     if (!sr_token) { showStartButton('Not logged in — please sign in via the extension popup.'); return; }
 
-    const title = `Recording ${new Date().toLocaleString()}`;
+    const title = 'Screen recording';
     const form = new FormData();
     form.append('video', blob, 'recording.webm');
     form.append('title', title);
