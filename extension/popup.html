@@ -96,8 +96,11 @@
     .latest-row { display:flex; align-items:center; gap:12px; }
     .latest-ic { width:42px; height:42px; border-radius:11px; background:#eeeefe; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; }
     .latest-meta { flex:1; min-width:0; }
-    .latest-title { font-size:14.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .latest-time { font-size:12.5px; color:var(--text3); margin-top:1px; }
+    .latest-title { display:block; font-size:14.5px; font-weight:700; color:var(--text); text-decoration:none;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+    .latest-title:hover { color:var(--accent); text-decoration:underline; }
+    .latest-time { font-size:12.5px; color:var(--text3); margin-top:1px; white-space:nowrap; }
+    .latest-btn svg { width:15px; height:15px; }
     .latest-btn { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600;
       padding:7px 11px; border-radius:10px; border:1px solid var(--border2); background:#fff;
       color:var(--accent); cursor:pointer; text-decoration:none; flex-shrink:0; white-space:nowrap; }
@@ -223,11 +226,10 @@
         <div class="latest-row">
           <div class="latest-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg></div>
           <div class="latest-meta">
-            <div class="latest-title" id="latestTitle">Recording</div>
+            <a class="latest-title" id="latestTitle" href="#" target="_blank" rel="noopener">Screen recording</a>
             <div class="latest-time" id="linkUrl">just now</div>
           </div>
-          <a class="latest-btn" id="openBtn" href="#" target="_blank" rel="noopener">↗ Open</a>
-          <button class="latest-btn" id="copyBtn">🔗 Copy Link</button>
+          <button class="latest-btn" id="copyBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Copy Link</button>
         </div>
       </div>
     </div>

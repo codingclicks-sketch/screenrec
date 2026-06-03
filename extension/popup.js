@@ -32,8 +32,8 @@ const freeNote     = document.getElementById('freeNote');
 const linkBox      = document.getElementById('linkBox');
 const latestTitle  = document.getElementById('latestTitle');
 const linkUrl      = document.getElementById('linkUrl');
-const openBtn      = document.getElementById('openBtn');
 const copyBtn      = document.getElementById('copyBtn');
+const copyBtnDefault = copyBtn.innerHTML;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let isSignup = false;
@@ -190,9 +190,9 @@ function timeAgo(ts) {
 function showLatest(rec) {
   if (!rec || !rec.url) return;
   currentLink = rec.url;
-  latestTitle.textContent = rec.title || 'Recording';
+  latestTitle.textContent = rec.title || 'Screen recording';
+  latestTitle.href = rec.url;
   linkUrl.textContent = timeAgo(rec.at || Date.now());
-  openBtn.href = rec.url;
   linkBox.classList.add('show');
 }
 
@@ -200,7 +200,7 @@ copyBtn.addEventListener('click', () => {
   if (!currentLink) return;
   navigator.clipboard.writeText(currentLink).then(() => {
     copyBtn.textContent = '✓ Copied!';
-    setTimeout(() => { copyBtn.innerHTML = '🔗 Copy Link'; }, 2000);
+    setTimeout(() => { copyBtn.innerHTML = copyBtnDefault; }, 2000);
   });
 });
 
