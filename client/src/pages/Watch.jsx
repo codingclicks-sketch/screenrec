@@ -176,14 +176,24 @@ export default function Watch() {
             className={styles.video}
             onLoadedMetadata={(e) => {
               const v = e.target;
+              const start = Number(rec.trimStart) || 0;
               if (v.duration === Infinity || isNaN(v.duration)) {
                 v.currentTime = 1e101;
                 v.ontimeupdate = () => {
-                  v.ontimeupdate = null; v.currentTime = 0;
+                  v.ontimeupdate = null; v.currentTime = start;
                   if (Number.isFinite(v.duration)) setDur(v.duration);
                 };
               } else {
+                if (start) v.currentTime = start;
                 setDur(v.duration);
+              }
+            }}
+            onTimeUpdate={(e) => {
+              const v = e.target;
+              const start = Number(rec.trimStart) || 0;
+              if (rec.trimEnd != null && v.currentTime >= rec.trimEnd) {
+                v.pause();
+                v.currentTime = start;   // loop back to trimmed start
               }
             }}
           />

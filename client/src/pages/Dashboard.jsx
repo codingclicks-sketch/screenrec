@@ -345,12 +345,15 @@ function Thumb({ r }) {
 
 // ── Share settings modal ────────────────────────────────────────────────────
 function ShareSettings({ rec, folders, authFetch, onClose, onSaved }) {
+  const [title, setTitle] = useState(rec.title || '');
   const [privacy, setPrivacy] = useState(rec.privacy || 'public');
   const [password, setPassword] = useState('');
   const [description, setDescription] = useState(rec.description || '');
   const [ctaLabel, setCtaLabel] = useState(rec.cta?.label || '');
   const [ctaUrl, setCtaUrl] = useState(rec.cta?.url || '');
   const [folder, setFolder] = useState(rec.folder || '');
+  const [trimStart, setTrimStart] = useState(rec.trimStart ?? '');
+  const [trimEnd, setTrimEnd] = useState(rec.trimEnd ?? '');
   const [saving, setSaving] = useState(false);
   const embed = `<iframe src="${CLIENT_BASE}/embed/${rec.id}" width="640" height="360" frameborder="0" allowfullscreen></iframe>`;
   const [copiedEmbed, setCopiedEmbed] = useState(false);
@@ -358,8 +361,11 @@ function ShareSettings({ rec, folders, authFetch, onClose, onSaved }) {
   async function save() {
     setSaving(true);
     const body = {
+      title: title.trim() || undefined,
       privacy, description, folder: folder || null,
       cta: ctaUrl ? { label: ctaLabel || 'Learn more', url: ctaUrl } : null,
+      trimStart: trimStart === '' ? null : Number(trimStart),
+      trimEnd: trimEnd === '' ? null : Number(trimEnd),
     };
     if (privacy === 'password' && password) body.password = password;
     const res = await authFetch(`${API}/api/recordings/${rec.id}/meta`, {
@@ -369,14 +375,30 @@ function ShareSettings({ rec, folders, authFetch, onClose, onSaved }) {
     setSaving(false);
     if (res.ok) {
       const d = await res.json();
-      onSaved({ privacy: d.privacy, description: d.description, cta: d.cta, folder: d.folder });
+      onSaved({
+        title: title.trim() || rec.title,
+        privacy: d.privacy, description: d.description, cta: d.cta, folder: d.folder,
+        trimStart: d.trimStart, trimEnd: d.trimEnd,
+      });
     }
   }
 
   return (
     <div className={styles.modalBg} onClick={onClose}>
       <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <h2 className={styles.modalTitle}>Share settings</h2>
+        <h2 className={styles.modalTitle}>Video settings</h2>
+
+        <label className={styles.fieldLabel}>Title</label>
+        <input className={styles.input} value={title} onChange={e => setTitle(e.target.value)}
+          placeholder="Video title" />
+
+        <label className={styles.fieldLabel}>Trim (seconds) — viewers only see this range</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input className={styles.input} type="number" min="0" value={trimStart}
+            onChange={e => setTrimStart(e.target.value)} placeholder="Start (e.g. 3)" />
+          <input className={styles.input} type="number" min="0" value={trimEnd}
+            onChange={e => setTrimEnd(e.target.value)} placeholder={`End (e.g. ${rec.duration || 60})`} />
+        </div>
 
         <label className={styles.fieldLabel}>Privacy</label>
         <select className={styles.select} value={privacy} onChange={e => setPrivacy(e.target.value)}>

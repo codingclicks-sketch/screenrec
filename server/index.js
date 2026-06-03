@@ -223,6 +223,8 @@ if (!USE_CLOUDINARY) {
           privacy: m.privacy,
           cta: m.cta,
           folder: m.folder,
+          trimStart: m.trimStart,
+          trimEnd: m.trimEnd,
           commentCount: m.comments.length,
         };
       });
@@ -339,7 +341,7 @@ app.get('/api/watch/:id', async (req, res) => {
     if (m.privacy === 'password' && m.passwordHash) {
       return res.json({ id: video.id, title: video.title, requiresPassword: true });
     }
-    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy });
+    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -355,7 +357,7 @@ app.post('/api/watch/:id/unlock', async (req, res) => {
       const ok = await bcrypt.compare(req.body.password || '', m.passwordHash);
       if (!ok) return res.status(401).json({ error: 'Incorrect password' });
     }
-    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy });
+    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -409,7 +411,7 @@ app.get('/api/recordings/:id/analytics', requireAuth, async (req, res) => {
 
 app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
-  const { description, cta, privacy, password, folder } = req.body;
+  const { title, description, cta, privacy, password, folder, trimStart, trimEnd } = req.body;
   const fields = {};
   if (typeof description === 'string') fields.description = description.slice(0, 5000);
   if (cta === null) fields.cta = null;
@@ -418,10 +420,23 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (typeof password === 'string' && password) fields.passwordHash = await bcrypt.hash(password, 10);
   if (privacy && privacy !== 'password') fields.passwordHash = null;
   if (folder === null || typeof folder === 'string') fields.folder = folder;
+  if (trimStart === null || Number.isFinite(trimStart)) fields.trimStart = trimStart === null ? null : Math.max(0, Math.floor(trimStart));
+  if (trimEnd === null || Number.isFinite(trimEnd)) fields.trimEnd = trimEnd === null ? null : Math.floor(trimEnd);
+
+  // Title lives in Cloudinary's context (the video record), not meta — update it there.
+  if (typeof title === 'string' && title.trim() && USE_CLOUDINARY) {
+    try {
+      await cloudinary.uploader.add_context(`title=${title.trim().slice(0, 200)}`,
+        [`screenrec/${req.userId}/${req.params.id}`], { resource_type: 'video' });
+    } catch (e) {}
+  }
+
   const updated = meta.set(req.params.id, fields);
   res.json({
+    title: typeof title === 'string' ? title.trim() : undefined,
     description: updated.description, cta: updated.cta, privacy: updated.privacy,
     folder: updated.folder, hasPassword: !!updated.passwordHash,
+    trimStart: updated.trimStart, trimEnd: updated.trimEnd,
   });
 });
 

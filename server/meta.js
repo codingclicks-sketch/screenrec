@@ -25,6 +25,8 @@ function defaults() {
     privacy: 'public',    // 'public' | 'login' | 'password'
     passwordHash: null,
     folder: null,         // folderId
+    trimStart: null,      // seconds — virtual trim (player only plays start..end)
+    trimEnd: null,
   };
 }
 

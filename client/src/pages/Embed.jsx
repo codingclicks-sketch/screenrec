@@ -35,9 +35,18 @@ export default function Embed() {
         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
         onLoadedMetadata={(e) => {
           const v = e.target;
+          const start = Number(rec.trimStart) || 0;
           if (v.duration === Infinity || isNaN(v.duration)) {
             v.currentTime = 1e101;
-            v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; };
+            v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = start; };
+          } else if (start) {
+            v.currentTime = start;
+          }
+        }}
+        onTimeUpdate={(e) => {
+          const v = e.target;
+          if (rec.trimEnd != null && v.currentTime >= rec.trimEnd) {
+            v.pause(); v.currentTime = Number(rec.trimStart) || 0;
           }
         }}
       />
