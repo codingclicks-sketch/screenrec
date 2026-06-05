@@ -13,6 +13,8 @@ import Terms from './pages/Terms';
 import Refund from './pages/Refund';
 import Account from './pages/Account';
 import Pricing from './pages/Pricing';
+import Billing from './pages/Billing';
+import Admin from './pages/Admin';
 import Embed from './pages/Embed';
 import './index.css';
 
@@ -40,6 +42,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/refund" element={<Refund />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
+        <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
+        <Route path="/dashboard/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
+        <Route path="/admin" element={<PrivateRoute><Admin /></PrivateRoute>} />
         <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
         <Route path="/forgot" element={<PublicRoute><Forgot /></PublicRoute>} />

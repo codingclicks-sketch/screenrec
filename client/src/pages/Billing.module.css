@@ -1,0 +1,35 @@
+.page { min-height: 100vh; background: var(--bg, #f6f6fa); }
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 28px; border-bottom: 1px solid var(--border, #e8e8ef); background: #fff;
+}
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 17px; color: #14141f; text-decoration: none; }
+.dot { width: 24px; height: 24px; border-radius: 7px; background: url(/logo.png) center/cover; }
+.back { font-size: 13px; color: #5b5b6b; text-decoration: none; }
+.back:hover { color: #14141f; }
+
+.main { max-width: 760px; margin: 0 auto; padding: 36px 24px 64px; }
+.title { font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 6px; color: #14141f; }
+.sub { font-size: 15px; color: #5b5b6b; margin: 0 0 28px; }
+
+.banner { background: #eef0ff; border: 1px solid #d6dbff; color: #3835c7; padding: 12px 16px; border-radius: 12px; font-size: 14px; margin-bottom: 20px; }
+.bannerWarn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 12px 16px; border-radius: 12px; font-size: 14px; margin-bottom: 20px; }
+
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 680px) { .cards { grid-template-columns: 1fr; } }
+
+.upgradeStrip {
+  margin-top: 22px; padding: 20px 22px; border-radius: 16px;
+  background: linear-gradient(135deg, #14141f, #2a2a45); color: #fff;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.upgradeStrip strong { font-weight: 800; }
+.upgradeBtns { display: flex; gap: 10px; }
+.btnGhost { padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,.3); background: transparent; color: #fff; font-weight: 600; font-size: 13.5px; cursor: pointer; }
+.btnGhost:hover { background: rgba(255,255,255,.1); }
+.btnPrimary { padding: 10px 16px; border-radius: 10px; border: none; background: #5b5bf6; color: #fff; font-weight: 700; font-size: 13.5px; cursor: pointer; }
+.btnPrimary:hover { background: #4848d6; }
+
+.legal { margin-top: 28px; font-size: 12.5px; color: #9090a0; text-align: center; line-height: 1.7; }
+.legal a { color: #5b5b6b; text-decoration: none; }
+.legal a:hover { color: #5b5bf6; }

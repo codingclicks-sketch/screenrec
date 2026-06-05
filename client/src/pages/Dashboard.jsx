@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import styles from './Dashboard.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
+import { useBilling } from '../hooks/useBilling';
+import StorageMeter from '../components/StorageMeter';
+import UpgradeModal from '../components/UpgradeModal';
 
 // Share links should use the site's own domain (not the API host).
 const CLIENT_BASE = typeof window !== 'undefined' ? window.location.origin : '';
@@ -19,6 +22,7 @@ function fmtDate(ts) { return new Date(ts).toLocaleString(); }
 
 export default function Dashboard() {
   const { user, logout, authFetch } = useAuth();
+  const { usage, isPaid } = useBilling();
   const [recordings, setRecordings] = useState([]);
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +34,7 @@ export default function Dashboard() {
   const [activeFolder, setActiveFolder] = useState('all');
   const [settingsRec, setSettingsRec] = useState(null);   // recording being configured
   const [analyticsRec, setAnalyticsRec] = useState(null); // recording showing analytics
+  const [upgrade, setUpgrade] = useState(null);           // { feature, reason } | null
   const [showRecordHint, setShowRecordHint] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -141,7 +146,15 @@ export default function Dashboard() {
         </nav>
 
         <div className={styles.sidebarFoot}>
-          {user?.plan !== 'pro' && <Link to="/pricing" className={styles.upgrade}>✨ Upgrade to Pro</Link>}
+          {usage && (
+            <div style={{ padding: '0 4px 12px' }}>
+              <StorageMeter usage={usage} isPaid={isPaid} showUpgradeHint={false} />
+            </div>
+          )}
+          <Link to="/billing" className={styles.navItem} style={{ width: '100%', marginBottom: 8 }}>
+            <span className={styles.navIcon}>💳</span> Billing & plan
+          </Link>
+          {!isPaid && <Link to="/pricing" className={styles.upgrade}>✨ Upgrade to Pro</Link>}
           <div className={styles.userRow}>
             <Link to="/account" className={styles.userLink}>
               <span className={styles.avatar}>{(user?.name || '?').charAt(0).toUpperCase()}</span>
@@ -291,14 +304,24 @@ export default function Dashboard() {
       {settingsRec && (
         <ShareSettings rec={settingsRec} folders={folders} authFetch={authFetch}
           onClose={() => setSettingsRec(null)}
+          onUpgrade={(feature, reason) => { setSettingsRec(null); setUpgrade({ feature, reason }); }}
           onSaved={(patch) => {
             setRecordings(rs => rs.map(x => x.id === settingsRec.id ? { ...x, ...patch } : x));
             setSettingsRec(null);
           }} />
       )}
       {analyticsRec && (
-        <Analytics rec={analyticsRec} authFetch={authFetch} onClose={() => setAnalyticsRec(null)} />
+        <Analytics rec={analyticsRec} authFetch={authFetch}
+          onUpgrade={(feature, reason) => { setAnalyticsRec(null); setUpgrade({ feature, reason }); }}
+          onClose={() => setAnalyticsRec(null)} />
       )}
+
+      <UpgradeModal
+        open={!!upgrade}
+        feature={upgrade?.feature || 'default'}
+        reason={upgrade?.reason}
+        onClose={() => setUpgrade(null)}
+      />
     </div>
   );
 }
@@ -344,7 +367,7 @@ function Thumb({ r }) {
 }
 
 // ── Share settings modal ────────────────────────────────────────────────────
-function ShareSettings({ rec, folders, authFetch, onClose, onSaved }) {
+function ShareSettings({ rec, folders, authFetch, onClose, onSaved, onUpgrade }) {
   const [title, setTitle] = useState(rec.title || '');
   const [privacy, setPrivacy] = useState(rec.privacy || 'public');
   const [password, setPassword] = useState('');
@@ -380,6 +403,10 @@ function ShareSettings({ rec, folders, authFetch, onClose, onSaved }) {
         privacy: d.privacy, description: d.description, cta: d.cta, folder: d.folder,
         trimStart: d.trimStart, trimEnd: d.trimEnd,
       });
+    } else if (res.status === 403) {
+      // Premium feature locked — surface the matching upgrade modal.
+      const d = await res.json().catch(() => ({}));
+      if (d.upgradeRequired && onUpgrade) onUpgrade(d.feature || 'default', d.error);
     }
   }
 
@@ -444,11 +471,20 @@ function ShareSettings({ rec, folders, authFetch, onClose, onSaved }) {
 }
 
 // ── Analytics modal ────────────────────────────────────────────────────────
-function Analytics({ rec, authFetch, onClose }) {
+function Analytics({ rec, authFetch, onClose, onUpgrade }) {
   const [data, setData] = useState(null);
   useEffect(() => {
     authFetch(`${API}/api/recordings/${rec.id}/analytics`)
-      .then(r => r.json()).then(setData).catch(() => setData({}));
+      .then(async (r) => {
+        if (r.status === 403) {
+          const d = await r.json().catch(() => ({}));
+          if (d.upgradeRequired && onUpgrade) onUpgrade(d.feature || 'analytics', d.error);
+          return null;
+        }
+        return r.json();
+      })
+      .then((d) => { if (d) setData(d); })
+      .catch(() => setData({}));
   }, [rec.id]);
 
   return (
