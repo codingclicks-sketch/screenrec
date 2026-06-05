@@ -16,6 +16,7 @@ import Account from './pages/Account';
 import Pricing from './pages/Pricing';
 import Billing from './pages/Billing';
 import Admin from './pages/Admin';
+import Contact from './pages/Contact';
 import Embed from './pages/Embed';
 import './index.css';
 
@@ -49,6 +50,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/terms" element={<Terms />} />
         <Route path="/refund" element={<Refund />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
         <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
         <Route path="/dashboard/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />

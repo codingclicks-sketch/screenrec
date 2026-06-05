@@ -152,22 +152,84 @@ const PLANS = {
 
 const DEFAULT_PLAN_SLUG = 'free';
 
-/** Resolve a plan by slug. Unknown/legacy values fall back to free safely. */
+// ── Runtime overrides ─────────────────────────────────────────────────────────
+// The admin panel can change prices/limits/features without a code deploy. Those
+// edits are persisted to plan_overrides.json and merged over the code defaults
+// here. A tiny in-memory cache avoids re-reading the file on every request.
+const fs = require('fs');
+const path = require('path');
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const OVERRIDES_FILE = path.join(DATA_DIR, 'plan_overrides.json');
+const GB_BYTES = GB;
+
+let _cache = null;
+let _cacheAt = 0;
+function loadOverrides() {
+  if (_cache && Date.now() - _cacheAt < 3000) return _cache;
+  try { _cache = fs.existsSync(OVERRIDES_FILE) ? JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf8')) : {}; }
+  catch { _cache = {}; }
+  _cacheAt = Date.now();
+  return _cache;
+}
+function saveOverrides(obj) {
+  fs.writeFileSync(OVERRIDES_FILE, JSON.stringify(obj, null, 2));
+  _cache = obj; _cacheAt = Date.now();
+}
+
+// Whitelisted fields an admin may override (never the Paddle ids or internal id).
+const OVERRIDABLE = ['name', 'monthlyPrice', 'yearlyPrice', 'storageLimitGB',
+  'recordingLimitMinutes', 'exportQuality', 'branding', 'badge', 'yearlyBadge', 'purchasable'];
+
+function applyOverride(base) {
+  const ov = loadOverrides()[base.slug];
+  if (!ov) return base;
+  const merged = { ...base, features: { ...base.features } };
+  for (const k of OVERRIDABLE) if (k in ov) merged[k] = ov[k];
+  if (ov.features) merged.features = { ...base.features, ...ov.features };
+  // keep derived field in sync if storage was changed
+  if ('storageLimitGB' in ov) merged.storageLimitBytes = ov.storageLimitGB * GB_BYTES;
+  return merged;
+}
+
+/** Resolve a plan by slug (with admin overrides applied). Unknown → free. */
 function getPlan(slug) {
-  if (!slug) return PLANS[DEFAULT_PLAN_SLUG];
-  return PLANS[String(slug).toLowerCase()] || PLANS[DEFAULT_PLAN_SLUG];
+  const base = (slug && PLANS[String(slug).toLowerCase()]) || PLANS[DEFAULT_PLAN_SLUG];
+  return applyOverride(base);
+}
+
+/** Persist an admin edit to a plan. Returns the merged plan. */
+function setPlanOverride(slug, fields) {
+  if (!PLANS[slug]) return null;
+  const all = loadOverrides();
+  const cur = all[slug] || {};
+  for (const k of Object.keys(fields)) {
+    if (k === 'features' && fields.features) cur.features = { ...(cur.features || {}), ...fields.features };
+    else if (OVERRIDABLE.includes(k)) cur[k] = fields[k];
+  }
+  all[slug] = cur;
+  saveOverrides(all);
+  return getPlan(slug);
+}
+
+/** Clear overrides for a plan (revert to code defaults). */
+function clearPlanOverride(slug) {
+  const all = loadOverrides();
+  delete all[slug];
+  saveOverrides(all);
+  return getPlan(slug);
 }
 
 /** All plans the public pricing page should render (purchasable, ordered). */
 function listPublicPlans() {
   return Object.values(PLANS)
+    .map((p) => getPlan(p.slug))
     .filter((p) => p.purchasable)
     .sort((a, b) => a.order - b.order);
 }
 
-/** All plans (incl. future) — for admin tooling. */
+/** All plans (incl. future), overrides applied — for admin tooling. */
 function listAllPlans() {
-  return Object.values(PLANS).sort((a, b) => a.order - b.order);
+  return Object.values(PLANS).map((p) => getPlan(p.slug)).sort((a, b) => a.order - b.order);
 }
 
 /**
@@ -215,4 +277,6 @@ module.exports = {
   listAllPlans,
   resolvePlanByPriceId,
   publicPlan,
+  setPlanOverride,
+  clearPlanOverride,
 };

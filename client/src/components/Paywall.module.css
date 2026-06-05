@@ -79,10 +79,12 @@
 .ghostBtn:hover { color: var(--pw-text2); }
 
 /* ── Pricing table ──────────────────────────────────────────────────────────── */
-.cycleToggle { display: inline-flex; background: var(--pw-surface2); border-radius: 999px; padding: 4px; gap: 4px; margin: 0 auto 28px; }
-.cycleBtn { border: none; background: transparent; padding: 8px 18px; border-radius: 999px; font-size: 13.5px; font-weight: 600; color: var(--pw-text2); cursor: pointer; }
-.cycleActive { background: #fff; color: var(--pw-text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.cycleSave { font-size: 11px; font-weight: 700; color: #16a34a; margin-left: 6px; }
+.cycleToggle { display: inline-flex; background: #eef0f6; border-radius: 999px; padding: 5px; gap: 4px; margin: 0 auto 28px; }
+.cycleBtn { border: none; background: transparent; padding: 9px 20px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--pw-text2); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .18s ease; }
+.cycleBtn:hover { color: var(--pw-text); }
+.cycleActive { background: var(--pw-accent); color: #fff; box-shadow: 0 4px 12px rgba(91,91,246,.32); }
+.cycleSave { font-size: 11px; font-weight: 700; color: #16a34a; background: #dcfce7; padding: 2px 8px; border-radius: 999px; }
+.cycleActive .cycleSave { background: rgba(255,255,255,.22); color: #fff; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 760px; margin: 0 auto; }
 .card { background: var(--pw-surface); border: 1px solid var(--pw-border); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; position: relative; }
