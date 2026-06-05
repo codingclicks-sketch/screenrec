@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 import Dashboard from './pages/Dashboard';
+import Landing from './pages/Landing';
 import Watch from './pages/Watch';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -30,11 +31,18 @@ function PublicRoute({ children }) {
   return user ? <Navigate to="/" replace /> : children;
 }
 
+// "/" shows the marketing landing for guests, the app dashboard once signed in.
+function HomeRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <div style={{ display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',color:'#9090a0' }}>Loading…</div>;
+  return user ? <Dashboard /> : <Landing />;
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <BrowserRouter>
     <AuthProvider>
       <Routes>
-        <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/" element={<HomeRoute />} />
         <Route path="/watch/:id" element={<Watch />} />
         <Route path="/embed/:id" element={<Embed />} />
         <Route path="/privacy" element={<Privacy />} />
