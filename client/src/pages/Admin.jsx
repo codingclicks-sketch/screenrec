@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users as UsersIcon, CreditCard, Mail, DollarSign,
   TrendingUp, HardDrive, Video, UserCheck, RefreshCw, Crown, Ban, Save, RotateCcw,
+  UserPlus, Trash2, X, ArchiveRestore,
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import API from '../api';
@@ -118,6 +119,7 @@ function UsersTab({ token, authGet }) {
   const [rows, setRows] = useState(null);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState('');
+  const [showInvite, setShowInvite] = useState(false);
 
   const load = useCallback(() => authGet(`/api/admin/users?q=${encodeURIComponent(q)}`).then((d) => setRows(d.users)).catch(() => {}), [authGet, q]);
   useEffect(() => { load(); }, [load]);
@@ -133,28 +135,42 @@ function UsersTab({ token, authGet }) {
     } finally { setBusy(''); }
   }
 
+  async function remove(u) {
+    if (!window.confirm(`Delete ${u.name || u.email}? This permanently removes their account.`)) return;
+    setBusy(u.id);
+    try {
+      const r = await fetch(`${API}/api/admin/users/${u.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || 'Could not delete user'); return; }
+      await load();
+    } finally { setBusy(''); }
+  }
+
   return (
     <>
       <div className={s.headRow}>
         <h1 className={s.h1}>Users {rows ? `(${rows.length})` : ''}</h1>
-        <input className={s.search} placeholder="Search name or email…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className={s.headActions}>
+          <input className={s.search} placeholder="Search name or email…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <button className={`${s.smBtn} ${s.smPrimary}`} onClick={() => setShowInvite(true)}><UserPlus size={15} /> Invite user</button>
+        </div>
       </div>
       {!rows ? <p className={s.muted}>Loading…</p> : (
         <div className={s.tableWrap}>
           <table className={s.table}>
-            <thead><tr><th>User</th><th>Plan</th><th>Storage</th><th>Videos</th><th>Joined</th><th>Grant premium</th></tr></thead>
+            <thead><tr><th>User</th><th>Plan</th><th>Storage</th><th>Videos</th><th>Joined</th><th>Grant premium</th><th></th></tr></thead>
             <tbody>
-              {rows.map((u) => <UserRow key={u.id} u={u} busy={busy === u.id} onSet={setPlan} />)}
-              {!rows.length && <tr><td colSpan={6} className={s.muted}>No users found</td></tr>}
+              {rows.map((u) => <UserRow key={u.id} u={u} busy={busy === u.id} onSet={setPlan} onDelete={remove} />)}
+              {!rows.length && <tr><td colSpan={7} className={s.muted}>No users found</td></tr>}
             </tbody>
           </table>
         </div>
       )}
+      {showInvite && <InviteModal token={token} onClose={() => setShowInvite(false)} onCreated={() => { setShowInvite(false); load(); }} />}
     </>
   );
 }
 
-function UserRow({ u, busy, onSet }) {
+function UserRow({ u, busy, onSet, onDelete }) {
   const [days, setDays] = useState('');
   const planBadge = u.planSlug === 'free'
     ? <span className={`${s.badge} ${s.badgeFree}`}>Free</span>
@@ -183,7 +199,72 @@ function UserRow({ u, busy, onSet }) {
           )}
         </div>
       </td>
+      <td>
+        {!u.isAdmin && (
+          <button className={s.iconBtn} title="Delete user" disabled={busy} onClick={() => onDelete(u)}><Trash2 size={15} /></button>
+        )}
+      </td>
     </tr>
+  );
+}
+
+function InviteModal({ token, onClose, onCreated }) {
+  const [f, setF] = useState({ name: '', email: '', mode: 'invite', password: '', planSlug: 'free' });
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    try {
+      const body = {
+        name: f.name, email: f.email, planSlug: f.planSlug,
+        sendInvite: f.mode === 'invite',
+        password: f.mode === 'password' ? f.password : undefined,
+      };
+      const r = await fetch(`${API}/api/admin/users`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErr(d.error || 'Could not create user'); return; }
+      if (f.mode === 'invite' && !d.invited) {
+        alert('User created, but the invite email could not be sent (email service not configured). Share a password reset link with them, or set a password manually.');
+      }
+      onCreated();
+    } catch { setErr('Network error'); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className={s.modalBg} onClick={onClose}>
+      <div className={s.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={s.modalHead}><strong>Invite / create user</strong><button className={s.iconBtn} onClick={onClose}><X size={18} /></button></div>
+        <form onSubmit={submit} className={s.modalForm}>
+          {err && <div className={s.err}>{err}</div>}
+          <label className={s.field}><span>Name</span><input required value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Full name" /></label>
+          <label className={s.field}><span>Email</span><input required type="email" value={f.email} onChange={(e) => set('email', e.target.value)} placeholder="user@example.com" /></label>
+          <label className={s.field}><span>Plan</span>
+            <select value={f.planSlug} onChange={(e) => set('planSlug', e.target.value)}>
+              <option value="free">Free</option><option value="pro">Pro (comped)</option><option value="business">Business (comped)</option>
+            </select>
+          </label>
+          <label className={s.field}><span>Access</span>
+            <select value={f.mode} onChange={(e) => set('mode', e.target.value)}>
+              <option value="invite">Email an invite link (they set their own password)</option>
+              <option value="password">Set a password now</option>
+            </select>
+          </label>
+          {f.mode === 'password' && (
+            <label className={s.field}><span>Password</span><input type="text" minLength={6} required value={f.password} onChange={(e) => set('password', e.target.value)} placeholder="Min 6 characters" /></label>
+          )}
+          <div className={s.modalActions}>
+            <button type="button" className={s.smBtn} onClick={onClose}>Cancel</button>
+            <button type="submit" className={`${s.smBtn} ${s.smPrimary}`} disabled={busy}><UserPlus size={14} /> {busy ? 'Creating…' : 'Create user'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -243,7 +324,11 @@ function PlanEditor({ plan, token, onSaved }) {
         <L label="Yearly $"><input type="number" step="0.01" value={f.yearlyPrice} onChange={(e) => set('yearlyPrice', e.target.value)} /></L>
         <L label="Storage (GB)"><input type="number" value={f.storageLimitGB} onChange={(e) => set('storageLimitGB', e.target.value)} /></L>
         <L label="Rec. limit (min)"><input type="number" value={f.recordingLimitMinutes} onChange={(e) => set('recordingLimitMinutes', e.target.value)} /></L>
-        <L label="Export quality"><input value={f.exportQuality} onChange={(e) => set('exportQuality', e.target.value)} /></L>
+        <L label="Export quality">
+          <select value={f.exportQuality} onChange={(e) => set('exportQuality', e.target.value)}>
+            {['480p', '720p', '1080p', '1440p', '4k'].map((q) => <option key={q} value={q}>{q}</option>)}
+          </select>
+        </L>
         <L label="Purchasable"><select value={f.purchasable ? '1' : '0'} onChange={(e) => set('purchasable', e.target.value === '1')}><option value="1">Yes</option><option value="0">No</option></select></L>
       </div>
       <div className={s.featToggles}>
@@ -267,6 +352,7 @@ const L = ({ label, children }) => <label className={s.field}><span>{label}</spa
 /* ── Contacts ─────────────────────────────────────────────────────────────── */
 function ContactsTab({ token, authGet }) {
   const [rows, setRows] = useState(null);
+  const [filter, setFilter] = useState('inbox'); // inbox | new | replied | archived | all
   const load = useCallback(() => authGet('/api/admin/contacts').then((d) => setRows(d.contacts)).catch(() => {}), [authGet]);
   useEffect(() => { load(); }, [load]);
 
@@ -279,12 +365,35 @@ function ContactsTab({ token, authGet }) {
   }
 
   if (!rows) return <p className={s.muted}>Loading…</p>;
+
+  const counts = {
+    inbox: rows.filter((c) => c.status !== 'archived').length,
+    new: rows.filter((c) => c.status === 'new').length,
+    replied: rows.filter((c) => c.status === 'replied').length,
+    archived: rows.filter((c) => c.status === 'archived').length,
+    all: rows.length,
+  };
+  const TABS_M = [
+    { id: 'inbox', label: 'Inbox' }, { id: 'new', label: 'New' },
+    { id: 'replied', label: 'Replied' }, { id: 'archived', label: 'Archived' }, { id: 'all', label: 'All' },
+  ];
+  const shown = rows.filter((c) =>
+    filter === 'all' ? true : filter === 'inbox' ? c.status !== 'archived' : c.status === filter);
+
   return (
     <>
-      <h1 className={s.h1}>Messages {rows.length ? `(${rows.length})` : ''}</h1>
-      {!rows.length && <p className={s.muted}>No messages yet. They’ll appear here when someone uses the contact form.</p>}
+      <h1 className={s.h1}>Messages</h1>
+      <div className={s.msgTabs}>
+        {TABS_M.map((t) => (
+          <button key={t.id} className={filter === t.id ? s.msgTabActive : s.msgTab} onClick={() => setFilter(t.id)}>
+            {t.label} <span className={s.msgCount}>{counts[t.id]}</span>
+          </button>
+        ))}
+      </div>
+
+      {!shown.length && <p className={s.muted}>No messages in “{filter}”.</p>}
       <div className={s.msgList}>
-        {rows.map((c) => (
+        {shown.map((c) => (
           <div key={c.id} className={`${s.msgCard} ${c.status === 'new' ? s.msgNew : ''}`}>
             <div className={s.msgHead}>
               <div><strong>{c.name}</strong> <a href={`mailto:${c.email}`}>{c.email}</a></div>
@@ -296,8 +405,10 @@ function ContactsTab({ token, authGet }) {
               <span className={s.muted}>{fmtDate(c.createdAt)}</span>
               <div className={s.msgActions}>
                 <a className={s.smBtn} href={`mailto:${c.email}?subject=Re: ${encodeURIComponent(c.subject || 'Your message to VeoRec')}`}>Reply</a>
-                {c.status !== 'replied' && <button className={s.smBtn} onClick={() => setStatus(c.id, 'replied')}>Mark replied</button>}
-                {c.status !== 'archived' && <button className={s.smBtn} onClick={() => setStatus(c.id, 'archived')}>Archive</button>}
+                {c.status !== 'replied' && c.status !== 'archived' && <button className={s.smBtn} onClick={() => setStatus(c.id, 'replied')}>Mark replied</button>}
+                {c.status === 'archived'
+                  ? <button className={s.smBtn} onClick={() => setStatus(c.id, 'read')}><ArchiveRestore size={13} /> Unarchive</button>
+                  : <button className={s.smBtn} onClick={() => setStatus(c.id, 'archived')}>Archive</button>}
               </div>
             </div>
           </div>

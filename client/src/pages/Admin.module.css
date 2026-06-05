@@ -67,7 +67,8 @@
 .smBtn:disabled { opacity: .55; cursor: not-allowed; }
 
 /* ── Plans editor ────────────────────────────────────────────────────────── */
-.planGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+.planGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+@media (max-width: 860px) { .planGrid { grid-template-columns: 1fr; } }
 .planCard { background: #fff; border: 1px solid #ececf3; border-radius: 16px; padding: 20px; }
 .planHead { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .planHead strong { font-size: 16px; }
@@ -82,7 +83,31 @@
 .planActions { display: flex; align-items: center; gap: 8px; }
 .saveMsg { font-size: 12.5px; color: #16a34a; font-weight: 600; }
 
+.headActions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.iconBtn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid #e2e2ea; background: #fff; color: #8a8aa0; cursor: pointer; }
+.iconBtn:hover { background: #fef2f2; color: #b91c1c; border-color: #f3c2c2; }
+.iconBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Modal (invite user) ─────────────────────────────────────────────────── */
+.modalBg { position: fixed; inset: 0; background: rgba(20,20,31,.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+.modal { background: #fff; border-radius: 18px; width: 100%; max-width: 460px; padding: 24px; box-shadow: 0 24px 60px rgba(20,20,40,.22); }
+.modalHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.modalHead strong { font-size: 17px; }
+.modalHead .iconBtn:hover { background: #f3f3f8; color: #14141f; border-color: #e2e2ea; }
+.modalForm { display: flex; flex-direction: column; gap: 13px; }
+.modalForm .field { gap: 6px; }
+.modalForm .field span { font-size: 12.5px; color: #5b5b6b; font-weight: 600; }
+.modalForm input, .modalForm select { border: 1px solid #e2e2ea; border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; }
+.modalForm input:focus, .modalForm select:focus { border-color: #5b5bf6; }
+.modalActions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 6px; }
+
 /* ── Messages ────────────────────────────────────────────────────────────── */
+.msgTabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid #ececf3; padding-bottom: 0; flex-wrap: wrap; }
+.msgTab, .msgTabActive { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border: none; background: transparent; font-size: 13.5px; font-weight: 600; color: #8a8aa0; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.msgTab:hover { color: #14141f; }
+.msgTabActive { color: #5b5bf6; border-bottom-color: #5b5bf6; }
+.msgCount { font-size: 11px; font-weight: 700; background: #ececf3; color: #6b6b7b; padding: 1px 7px; border-radius: 999px; }
+.msgTabActive .msgCount { background: #eef0ff; color: #4338ca; }
 .msgList { display: flex; flex-direction: column; gap: 12px; }
 .msgCard { background: #fff; border: 1px solid #ececf3; border-radius: 14px; padding: 18px; }
 .msgNew { border-color: #c7d2fe; box-shadow: 0 0 0 3px rgba(99,102,241,.06); }

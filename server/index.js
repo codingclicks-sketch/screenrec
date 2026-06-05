@@ -828,6 +828,53 @@ app.patch('/api/admin/users/:id/plan', requireAuth, requireAdmin, (req, res) => 
   res.json({ ok: true, entitlements: entitlements.summary(updated) });
 });
 
+// ── Admin: create / invite a user ─────────────────────────────────────────────
+app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 120);
+  const email = String(req.body.email || '').trim().toLowerCase().slice(0, 200);
+  const password = req.body.password ? String(req.body.password) : '';
+  const planSlug = req.body.planSlug || null;
+  const sendInvite = req.body.sendInvite !== false; // default: send invite link
+  if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Invalid email' });
+  if (users.findByEmail(email)) return res.status(409).json({ error: 'A user with that email already exists' });
+  if (password && password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+  const user = {
+    id: uuidv4(), name, email,
+    password: password ? await bcrypt.hash(password, 10) : null,
+    plan: 'free', created_at: Date.now(),
+  };
+  // Optional comp grant on creation.
+  if (planSlug && planSlug !== 'free' && plans.getPlan(planSlug).slug === String(planSlug).toLowerCase()) {
+    user.manualPlan = planSlug;
+  }
+  // Invite flow: set a reset token and email a "set your password" link.
+  let invited = false;
+  if (!password && sendInvite) {
+    const token = crypto.randomBytes(32).toString('hex');
+    user.resetToken = token;
+    user.resetExpires = Date.now() + 7 * 24 * 3600 * 1000; // 7-day invite window
+    const base = process.env.CLIENT_URL || 'https://veorec.com';
+    const link = `${base}/reset?token=${token}&email=${encodeURIComponent(email)}`;
+    invited = await sendEmail(email, 'You’re invited to VeoRec',
+      `<div style="font-family:sans-serif"><h2>Welcome to VeoRec, ${name}!</h2><p>An account has been created for you. Click below to set your password and get started.</p><p><a href="${link}" style="display:inline-block;background:#5b5bf6;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:600">Set your password</a></p><p style="color:#888;font-size:12px">Or paste this link: ${link}</p><p style="color:#888;font-size:12px">This invite expires in 7 days.</p></div>`);
+  }
+  users.create(user);
+  res.json({ ok: true, user: publicUser(user), invited });
+});
+
+// ── Admin: delete a user ──────────────────────────────────────────────────────
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
+  const target = users.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (target.id === req.userId) return res.status(400).json({ error: 'You cannot delete your own account' });
+  if (isAdmin(target)) return res.status(403).json({ error: 'Cannot delete another admin' });
+  users.remove(target.id);
+  subscriptions.remove(target.id);
+  res.json({ ok: true });
+});
+
 // ── Admin: plans (view + edit pricing/limits/features at runtime) ─────────────
 app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
   res.json({ plans: plans.listAllPlans() });

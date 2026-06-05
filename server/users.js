@@ -38,4 +38,12 @@ module.exports = {
     save(rows);
     return rows[i];
   },
+  remove(id) {
+    const rows = load();
+    const next = rows.filter(u => u.id !== id);
+    if (next.length === rows.length) return false;
+    save(next);
+    return true;
+  },
+  all() { return load(); },
 };
