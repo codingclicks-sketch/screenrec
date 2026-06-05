@@ -70,6 +70,14 @@ const folders = {
   get(id) {
     return loadJSON(FOLDER_FILE, []).find(f => f.id === id) || null;
   },
+  update(id, userId, fields) {
+    const all = loadJSON(FOLDER_FILE, []);
+    const i = all.findIndex(f => f.id === id && f.userId === userId);
+    if (i === -1) return null;
+    all[i] = { ...all[i], ...fields };
+    saveJSON(FOLDER_FILE, all);
+    return all[i];
+  },
   remove(id, userId) {
     let all = loadJSON(FOLDER_FILE, []);
     all = all.filter(f => !(f.id === id && f.userId === userId));
