@@ -1,0 +1,26 @@
+.title { font-size: 27px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 22px; }
+.muted { color: #9090a0; font-size: 14px; }
+
+.proBanner { background: linear-gradient(120deg, #eef0ff, #f3edff); border: 1px solid #e0e0ff; border-radius: 14px; padding: 16px 18px; font-size: 14px; color: #3b3b5b; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.proBanner strong { font-weight: 700; }
+.proBtn { margin-left: auto; background: #5b5bf6; color: #fff; text-decoration: none; font-weight: 700; font-size: 13.5px; padding: 9px 16px; border-radius: 10px; white-space: nowrap; }
+.proBtn:hover { background: #4848d6; }
+
+.statGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; margin-bottom: 26px; }
+.statCard { background: #fff; border: 1px solid #ececf3; border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 14px; }
+.statIcon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.statValue { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+.statLabel { font-size: 12.5px; color: #6b6b7b; margin-top: 2px; }
+
+.panel { background: #fff; border: 1px solid #ececf3; border-radius: 16px; padding: 22px; }
+.panelTitle { font-size: 15px; font-weight: 700; margin: 0 0 14px; }
+.list { display: flex; flex-direction: column; gap: 4px; }
+.row { display: flex; align-items: center; gap: 14px; padding: 10px; border-radius: 12px; text-decoration: none; color: inherit; }
+.row:hover { background: #f7f7fa; }
+.rowThumb { width: 92px; flex-shrink: 0; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: #1a1a2e; }
+.rowThumb img { width: 100%; height: 100%; object-fit: cover; }
+.blank { width: 100%; height: 100%; background: #1a1a2e; }
+.rowMain { flex: 1; min-width: 0; }
+.rowMain strong { display: block; font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rowMain small { font-size: 12.5px; color: #9090a0; }
+.rowViews { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: #5b5bf6; }

@@ -1,28 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  MoreHorizontal, Copy, Share2, BarChart2, Pencil, Trash2, Check,
+  LayoutGrid, List, Lock, Users as UsersIcon, Play, Film, FolderInput,
+} from 'lucide-react';
 import styles from './Dashboard.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
-import { useBilling } from '../hooks/useBilling';
-import StorageMeter from '../components/StorageMeter';
+import AppShell from '../components/AppShell';
 import UpgradeModal from '../components/UpgradeModal';
 
-// Share links should use the site's own domain (not the API host).
 const CLIENT_BASE = typeof window !== 'undefined' ? window.location.origin : '';
 
-function fmtDur(s) {
-  const m = Math.floor(s / 60);
-  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+function fmtDur(s) { const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')}`; }
+function timeAgo(ts) {
+  const d = Math.floor((Date.now() - ts) / 1000);
+  if (d < 60) return 'just now';
+  if (d < 3600) return `${Math.floor(d / 60)} min ago`;
+  if (d < 86400) { const h = Math.floor(d / 3600); return `${h} hour${h > 1 ? 's' : ''} ago`; }
+  const days = Math.floor(d / 86400);
+  if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`;
+  return new Date(ts).toLocaleDateString();
 }
-function fmtSize(bytes) {
-  if (bytes > 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024).toFixed(0)} KB`;
-}
-function fmtDate(ts) { return new Date(ts).toLocaleString(); }
 
 export default function Dashboard() {
-  const { user, logout, authFetch } = useAuth();
-  const { usage, isPaid } = useBilling();
+  const { user, authFetch } = useAuth();
   const [recordings, setRecordings] = useState([]);
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,21 +33,15 @@ export default function Dashboard() {
   const [copied, setCopied] = useState(null);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('newest');
-  const [activeFolder, setActiveFolder] = useState('all');
-  const [settingsRec, setSettingsRec] = useState(null);   // recording being configured
-  const [analyticsRec, setAnalyticsRec] = useState(null); // recording showing analytics
-  const [upgrade, setUpgrade] = useState(null);           // { feature, reason } | null
-  const [showRecordHint, setShowRecordHint] = useState(false);
-  const [newFolderOpen, setNewFolderOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [confirmState, setConfirmState] = useState(null); // { title, message, danger, onConfirm }
+  const [view, setView] = useState('grid');
+  const [settingsRec, setSettingsRec] = useState(null);
+  const [analyticsRec, setAnalyticsRec] = useState(null);
+  const [upgrade, setUpgrade] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
 
   async function load() {
     try {
-      const [rRes, fRes] = await Promise.all([
-        authFetch(`${API}/api/recordings`),
-        authFetch(`${API}/api/folders`),
-      ]);
+      const [rRes, fRes] = await Promise.all([authFetch(`${API}/api/recordings`), authFetch(`${API}/api/folders`)]);
       setRecordings(await rRes.json());
       setFolders(await fRes.json());
     } finally { setLoading(false); }
@@ -54,319 +50,201 @@ export default function Dashboard() {
 
   function deleteRec(id) {
     setConfirmState({
-      title: 'Delete recording?',
-      message: 'This permanently removes the video and its link. This cannot be undone.',
-      danger: true,
-      confirmLabel: 'Delete',
-      onConfirm: async () => {
-        await authFetch(`${API}/api/recordings/${id}`, { method: 'DELETE' });
-        setRecordings(r => r.filter(x => x.id !== id));
-      },
+      title: 'Delete recording?', message: 'This permanently removes the video and its link. This cannot be undone.',
+      danger: true, confirmLabel: 'Delete',
+      onConfirm: async () => { await authFetch(`${API}/api/recordings/${id}`, { method: 'DELETE' }); setRecordings((r) => r.filter((x) => x.id !== id)); },
     });
   }
   async function saveTitle(id) {
-    await authFetch(`${API}/api/recordings/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: editTitle }),
-    });
-    setRecordings(r => r.map(x => x.id === id ? { ...x, title: editTitle } : x));
+    await authFetch(`${API}/api/recordings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: editTitle }) });
+    setRecordings((r) => r.map((x) => (x.id === id ? { ...x, title: editTitle } : x)));
     setEditingId(null);
   }
-  function copyLink(id) {
-    navigator.clipboard.writeText(`${CLIENT_BASE}/watch/${id}`);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 2000);
-  }
-  function createFolder() { setNewFolderName(''); setNewFolderOpen(true); }
-  async function submitNewFolder() {
-    const name = newFolderName.trim();
-    if (!name) return;
-    const res = await authFetch(`${API}/api/folders`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    if (res.ok) { const nf = await res.json(); setFolders(f => [...f, nf]); }
-    setNewFolderOpen(false);
-  }
-  function deleteFolder(id) {
-    setConfirmState({
-      title: 'Delete folder?',
-      message: 'The folder is removed. Your recordings are kept and moved to Library.',
-      danger: true,
-      confirmLabel: 'Delete folder',
-      onConfirm: async () => {
-        await authFetch(`${API}/api/folders/${id}`, { method: 'DELETE' });
-        setFolders(f => f.filter(x => x.id !== id));
-        if (activeFolder === id) setActiveFolder('all');
-      },
-    });
+  function copyLink(id) { navigator.clipboard.writeText(`${CLIENT_BASE}/watch/${id}`); setCopied(id); setTimeout(() => setCopied(null), 2000); }
+  async function moveToFolder(id, folderId) {
+    await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: folderId }) });
+    setRecordings((r) => r.map((x) => (x.id === id ? { ...x, folder: folderId } : x)));
   }
 
   const filtered = recordings
-    .filter(r => {
-      if (activeFolder !== 'all' && r.folder !== activeFolder) return false;
-      if (search && !(r.title || '').toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sort === 'oldest') return a.created_at - b.created_at;
-      if (sort === 'views') return (b.views || 0) - (a.views || 0);
-      return b.created_at - a.created_at; // newest
-    });
-
-  const folderName = activeFolder === 'all' ? 'Library' : (folders.find(f => f.id === activeFolder)?.name || 'Folder');
+    .filter((r) => !search || (r.title || '').toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (sort === 'oldest' ? a.created_at - b.created_at : sort === 'views' ? (b.views || 0) - (a.views || 0) : b.created_at - a.created_at));
 
   return (
-    <div className={styles.shell}>
-      {/* ── Sidebar ── */}
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}><img src="/logo.png" className={styles.brandImg} alt="" />VeoRec</div>
+    <AppShell active="library" search={search} onSearch={setSearch}>
+      <div className={styles.pageHead}>
+        <div className={styles.titleRow}>
+          <h1 className={styles.pageTitle}>Library</h1>
+          <span className={styles.count}>{recordings.length} videos</span>
+        </div>
+        <div className={styles.toolbar}>
+          <select className={styles.sort} value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="views">Most viewed</option>
+          </select>
+          <div className={styles.viewToggle}>
+            <button className={view === 'grid' ? styles.viewActive : styles.viewBtn} onClick={() => setView('grid')}><LayoutGrid size={16} /></button>
+            <button className={view === 'list' ? styles.viewActive : styles.viewBtn} onClick={() => setView('list')}><List size={16} /></button>
+          </div>
+        </div>
+      </div>
 
-        <button className={styles.recordBtn} onClick={() => setShowRecordHint(true)}>
-          <span className={styles.recDot} /> Record a video
-        </button>
-
-        <nav className={styles.nav}>
-          <button className={activeFolder === 'all' ? styles.navActive : styles.navItem} onClick={() => setActiveFolder('all')}>
-            <span className={styles.navIcon}>🎬</span> Library
-          </button>
-        </nav>
-
-        <div className={styles.navLabel}>Folders</div>
-        <nav className={styles.nav}>
-          {folders.map(f => (
-            <div key={f.id} className={styles.folderRow}>
-              <button className={activeFolder === f.id ? styles.navActive : styles.navItem} onClick={() => setActiveFolder(f.id)}>
-                <span className={styles.navIcon}>📁</span> {f.name}
-              </button>
-              <button className={styles.folderDel} title="Delete folder" onClick={() => deleteFolder(f.id)}>×</button>
-            </div>
+      {loading && (
+        <div className={styles.grid}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className={styles.card}><div className={`${styles.thumb} ${styles.skel}`} /><div className={styles.cardBody}><div className={styles.skelLine} style={{ width: '70%' }} /><div className={styles.skelLine} style={{ width: '45%', height: 10 }} /></div></div>
           ))}
-          <button className={styles.navItem} onClick={createFolder}><span className={styles.navIcon}>＋</span> New folder</button>
-        </nav>
-
-        <div className={styles.sidebarFoot}>
-          {usage && (
-            <div style={{ padding: '0 4px 12px' }}>
-              <StorageMeter usage={usage} isPaid={isPaid} showUpgradeHint={false} />
-            </div>
-          )}
-          <Link to="/billing" className={styles.navItem} style={{ width: '100%', marginBottom: 8 }}>
-            <span className={styles.navIcon}>💳</span> Billing & plan
-          </Link>
-          {!isPaid && <Link to="/pricing" className={styles.upgrade}>✨ Upgrade to Pro</Link>}
-          <div className={styles.userRow}>
-            <Link to="/account" className={styles.userLink}>
-              <span className={styles.avatar}>{(user?.name || '?').charAt(0).toUpperCase()}</span>
-              <span className={styles.userMeta}><strong>{user?.name}</strong><small>{user?.email}</small></span>
-            </Link>
-            <button className={styles.signout} onClick={logout} title="Sign out">⏻</button>
-          </div>
-        </div>
-      </aside>
-
-      {/* ── Main ── */}
-      <main className={styles.content}>
-        <header className={styles.topbar}>
-          <input className={styles.search} value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search recordings…" />
-          <button className={styles.newVideo} onClick={() => setShowRecordHint(true)}>
-            <span className={styles.recDot} /> New video
-          </button>
-        </header>
-
-        <div className={styles.contentInner}>
-          <div className={styles.pageHead}>
-            <h1 className={styles.pageTitle}>{folderName}</h1>
-            <span className={styles.count}>{filtered.length} video{filtered.length === 1 ? '' : 's'}</span>
-            {recordings.length > 0 && (
-              <select className={styles.sort} value={sort} onChange={e => setSort(e.target.value)}>
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="views">Most viewed</option>
-              </select>
-            )}
-          </div>
-
-          {loading && (
-            <div className={styles.grid}>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className={styles.card}>
-                  <div className={`${styles.thumb} ${styles.skel}`} />
-                  <div className={styles.cardBody}>
-                    <div className={styles.skelLine} style={{ width: '70%' }} />
-                    <div className={styles.skelLine} style={{ width: '45%', height: 10 }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {!loading && recordings.length === 0 && (
-            <div className={styles.empty}>
-              <div className={styles.emptyIcon}>🎬</div>
-              <h2>No recordings yet</h2>
-              <p>Click <strong>Record a video</strong> and the VeoRec extension will capture your screen. Your videos show up here.</p>
-            </div>
-          )}
-          {!loading && recordings.length > 0 && filtered.length === 0 && (
-            <p className={styles.empty}>No recordings match your filter.</p>
-          )}
-
-          <div className={styles.grid}>
-            {filtered.map(r => (
-              <div key={r.id} className={styles.card}>
-                <Thumb r={r} />
-
-                <div className={styles.cardBody}>
-                  {editingId === r.id ? (
-                    <div className={styles.editRow}>
-                      <input value={editTitle} onChange={e => setEditTitle(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && saveTitle(r.id)} autoFocus />
-                      <button className="btn-primary" onClick={() => saveTitle(r.id)}>Save</button>
-                      <button className="btn-ghost" onClick={() => setEditingId(null)}>×</button>
-                    </div>
-                  ) : (
-                    <h3 className={styles.title} onClick={() => { setEditingId(r.id); setEditTitle(r.title); }}
-                      title="Click to rename">{r.title}</h3>
-                  )}
-
-                  <p className={styles.meta}>
-                    {r.views || 0} views · {r.commentCount || 0} comments · {fmtDate(r.created_at)}
-                  </p>
-
-                  <div className={styles.actions}>
-                    <button className="btn-primary" style={{ fontSize: 12, padding: '6px 12px' }}
-                      onClick={() => copyLink(r.id)}>
-                      {copied === r.id ? '✓ Copied!' : 'Copy link'}
-                    </button>
-                    <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setSettingsRec(r)}>Share</button>
-                    <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setAnalyticsRec(r)}>Stats</button>
-                    <button className="btn-danger" style={{ fontSize: 12 }} onClick={() => deleteRec(r.id)}>Delete</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </main>
-
-      {showRecordHint && (
-        <div className={styles.modalBg} onClick={() => setShowRecordHint(false)}>
-          <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>🎬</div>
-            <h2 className={styles.modalTitle} style={{ textAlign: 'center' }}>Record a video</h2>
-            <p style={{ color: 'var(--text2)', fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>
-              Click the <strong>VeoRec</strong> icon in your browser toolbar, choose your options,
-              and hit record. Your video will appear here automatically when you finish.
-            </p>
-            <button className="btn-primary" style={{ width: '100%' }} onClick={() => setShowRecordHint(false)}>Got it</button>
-          </div>
         </div>
       )}
 
-      {/* Custom "new folder" prompt */}
-      {newFolderOpen && (
-        <div className={styles.modalBg} onClick={() => setNewFolderOpen(false)}>
-          <div className={styles.modal} onClick={e => e.stopPropagation()}>
-            <h2 className={styles.modalTitle}>New folder</h2>
-            <input className={styles.input} autoFocus value={newFolderName}
-              onChange={e => setNewFolderName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') submitNewFolder(); }}
-              placeholder="Folder name" />
-            <div className={styles.modalActions}>
-              <button className="btn-ghost" onClick={() => setNewFolderOpen(false)}>Cancel</button>
-              <button className="btn-primary" onClick={submitNewFolder} disabled={!newFolderName.trim()}>Create folder</button>
-            </div>
-          </div>
+      {!loading && recordings.length === 0 && (
+        <div className={styles.empty}>
+          <div className={styles.emptyIcon}><Film size={30} color="#5b5bf6" /></div>
+          <h2>No recordings yet</h2>
+          <p>Click <strong>Record Video</strong> and the VeoRec extension captures your screen. Your videos show up here.</p>
         </div>
       )}
+      {!loading && recordings.length > 0 && filtered.length === 0 && <p className={styles.noMatch}>No recordings match “{search}”.</p>}
 
-      {/* Custom confirm dialog */}
-      {confirmState && (
-        <div className={styles.modalBg} onClick={() => setConfirmState(null)}>
-          <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
-            <h2 className={styles.modalTitle}>{confirmState.title}</h2>
-            <p style={{ color: 'var(--text2)', fontSize: 14, lineHeight: 1.6 }}>{confirmState.message}</p>
-            <div className={styles.modalActions}>
-              <button className="btn-ghost" onClick={() => setConfirmState(null)}>Cancel</button>
-              <button
-                className={confirmState.danger ? 'btn-danger' : 'btn-primary'}
-                style={confirmState.danger ? { background: 'var(--danger)', color: '#fff' } : undefined}
-                onClick={async () => { const fn = confirmState.onConfirm; setConfirmState(null); if (fn) await fn(); }}
-              >
-                {confirmState.confirmLabel || 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className={view === 'grid' ? styles.grid : styles.list}>
+        {filtered.map((r) => (
+          <Card
+            key={r.id} r={r} view={view} folders={folders}
+            copied={copied === r.id} editing={editingId === r.id} editTitle={editTitle}
+            onCopy={() => copyLink(r.id)}
+            onShare={() => setSettingsRec(r)}
+            onStats={() => setAnalyticsRec(r)}
+            onRename={() => { setEditingId(r.id); setEditTitle(r.title); }}
+            onRenameChange={setEditTitle}
+            onRenameSave={() => saveTitle(r.id)}
+            onRenameCancel={() => setEditingId(null)}
+            onMove={(fid) => moveToFolder(r.id, fid)}
+            onDelete={() => deleteRec(r.id)}
+          />
+        ))}
+      </div>
 
+      {confirmState && <Confirm state={confirmState} onClose={() => setConfirmState(null)} />}
       {settingsRec && (
         <ShareSettings rec={settingsRec} folders={folders} authFetch={authFetch}
           onClose={() => setSettingsRec(null)}
           onUpgrade={(feature, reason) => { setSettingsRec(null); setUpgrade({ feature, reason }); }}
-          onSaved={(patch) => {
-            setRecordings(rs => rs.map(x => x.id === settingsRec.id ? { ...x, ...patch } : x));
-            setSettingsRec(null);
-          }} />
+          onSaved={(patch) => { setRecordings((rs) => rs.map((x) => (x.id === settingsRec.id ? { ...x, ...patch } : x))); setSettingsRec(null); }} />
       )}
       {analyticsRec && (
         <Analytics rec={analyticsRec} authFetch={authFetch}
           onUpgrade={(feature, reason) => { setAnalyticsRec(null); setUpgrade({ feature, reason }); }}
           onClose={() => setAnalyticsRec(null)} />
       )}
+      <UpgradeModal open={!!upgrade} feature={upgrade?.feature || 'default'} reason={upgrade?.reason} onClose={() => setUpgrade(null)} />
+    </AppShell>
+  );
+}
 
-      <UpgradeModal
-        open={!!upgrade}
-        feature={upgrade?.feature || 'default'}
-        reason={upgrade?.reason}
-        onClose={() => setUpgrade(null)}
-      />
+/* ── Video card (grid + list) ─────────────────────────────────────────────── */
+function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, onStats, onRename, onRenameChange, onRenameSave, onRenameCancel, onMove, onDelete }) {
+  const [menu, setMenu] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) { setMenu(false); setMoveOpen(false); } }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const menuEl = (
+    <div className={styles.cardMenuWrap} ref={ref}>
+      <button className={styles.menuBtn} onClick={() => setMenu((m) => !m)}><MoreHorizontal size={18} /></button>
+      {menu && (
+        <div className={styles.menu}>
+          <button className={styles.menuItem} onClick={() => { setMenu(false); onCopy(); }}>{copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied!' : 'Copy link'}</button>
+          <button className={styles.menuItem} onClick={() => { setMenu(false); onShare(); }}><Share2 size={15} /> Share settings</button>
+          <button className={styles.menuItem} onClick={() => { setMenu(false); onStats(); }}><BarChart2 size={15} /> Analytics</button>
+          <button className={styles.menuItem} onClick={() => { setMenu(false); onRename(); }}><Pencil size={15} /> Rename</button>
+          <div className={styles.menuSub}>
+            <button className={styles.menuItem} onClick={() => setMoveOpen((o) => !o)}><FolderInput size={15} /> Move to folder</button>
+            {moveOpen && (
+              <div className={styles.subMenu}>
+                <button className={styles.menuItem} onClick={() => { setMenu(false); onMove(null); }}>No folder</button>
+                {folders.map((f) => <button key={f.id} className={styles.menuItem} onClick={() => { setMenu(false); onMove(f.id); }}>{f.name}</button>)}
+                {!folders.length && <span className={styles.menuEmpty}>No folders yet</span>}
+              </div>
+            )}
+          </div>
+          <div className={styles.menuDivider} />
+          <button className={`${styles.menuItem} ${styles.menuDanger}`} onClick={() => { setMenu(false); onDelete(); }}><Trash2 size={15} /> Delete</button>
+        </div>
+      )}
+    </div>
+  );
+
+  const titleEl = editing ? (
+    <div className={styles.editRow}>
+      <input value={editTitle} onChange={(e) => onRenameChange(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onRenameSave()} autoFocus />
+      <button className={styles.miniPrimary} onClick={onRenameSave}>Save</button>
+      <button className={styles.miniGhost} onClick={onRenameCancel}>×</button>
+    </div>
+  ) : (
+    <h3 className={styles.title} onClick={onRename} title="Click to rename">{r.title}</h3>
+  );
+
+  if (view === 'list') {
+    return (
+      <div className={styles.listRow}>
+        <Thumb r={r} small />
+        <div className={styles.listMain}>{titleEl}<p className={styles.meta}><UsersIcon size={13} /> {r.views || 0} views · {timeAgo(r.created_at)}</p></div>
+        {menuEl}
+      </div>
+    );
+  }
+  return (
+    <div className={styles.card}>
+      <Thumb r={r} />
+      <div className={styles.cardBody}>
+        {titleEl}
+        <div className={styles.cardFoot}>
+          <p className={styles.meta}><UsersIcon size={13} /> {r.views || 0} views · {timeAgo(r.created_at)}</p>
+          {menuEl}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Library thumbnail with hover-to-play preview (Loom-style) ────────────────
-function Thumb({ r }) {
+function Thumb({ r, small }) {
   const [hover, setHover] = useState(false);
   const src = r.cloudinary ? r.filename : `${API}/uploads/${r.filename}`;
   return (
-    <Link
-      to={`/watch/${r.id}`}
-      className={styles.thumb}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      {r.thumbnail
-        ? <img src={r.thumbnail} className={styles.preview} alt={r.title} loading="lazy" />
-        : <div className={styles.preview} style={{ background: '#000' }} />}
-      {hover && (
-        <video
-          className={styles.previewVid}
-          src={src}
-          muted
-          autoPlay
-          loop
-          playsInline
-          onLoadedMetadata={(e) => {
-            const v = e.target;
-            if (v.duration === Infinity || isNaN(v.duration)) {
-              v.currentTime = 1e101;
-              v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; v.play(); };
-            }
-          }}
-        />
+    <Link to={`/watch/${r.id}`} className={small ? styles.thumbSmall : styles.thumb} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      {r.thumbnail ? <img src={r.thumbnail} className={styles.preview} alt={r.title} loading="lazy" /> : <div className={styles.preview} style={{ background: '#1a1a2e' }} />}
+      {hover && !small && (
+        <video className={styles.previewVid} src={src} muted autoPlay loop playsInline
+          onLoadedMetadata={(e) => { const v = e.target; if (v.duration === Infinity || isNaN(v.duration)) { v.currentTime = 1e101; v.ontimeupdate = () => { v.ontimeupdate = null; v.currentTime = 0; v.play(); }; } }} />
       )}
       <div className={styles.duration}>{fmtDur(r.duration)}</div>
-      {r.privacy && r.privacy !== 'public' && (
-        <div className={styles.lock}>{r.privacy === 'password' ? '🔒' : '👤'}</div>
-      )}
-      {!hover && <span className={styles.playOverlay}>▶</span>}
+      {r.privacy && r.privacy !== 'public' && <div className={styles.lock}>{r.privacy === 'password' ? <Lock size={12} /> : <UsersIcon size={12} />}</div>}
+      {!hover && !small && <span className={styles.playOverlay}><Play size={20} fill="#fff" /></span>}
     </Link>
   );
 }
 
-// ── Share settings modal ────────────────────────────────────────────────────
+function Confirm({ state, onClose }) {
+  return (
+    <div className={styles.modalBg} onClick={onClose}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+        <h2 className={styles.modalTitle}>{state.title}</h2>
+        <p className={styles.modalText}>{state.message}</p>
+        <div className={styles.modalActions}>
+          <button className={styles.ghostBtn} onClick={onClose}>Cancel</button>
+          <button className={state.danger ? styles.dangerBtn : styles.primaryBtn} onClick={async () => { const fn = state.onConfirm; onClose(); if (fn) await fn(); }}>{state.confirmLabel || 'Confirm'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Share settings modal (unchanged behaviour) ───────────────────────────── */
 function ShareSettings({ rec, folders, authFetch, onClose, onSaved, onUpgrade }) {
   const [title, setTitle] = useState(rec.title || '');
   const [privacy, setPrivacy] = useState(rec.privacy || 'public');
@@ -384,27 +262,17 @@ function ShareSettings({ rec, folders, authFetch, onClose, onSaved, onUpgrade })
   async function save() {
     setSaving(true);
     const body = {
-      title: title.trim() || undefined,
-      privacy, description, folder: folder || null,
+      title: title.trim() || undefined, privacy, description, folder: folder || null,
       cta: ctaUrl ? { label: ctaLabel || 'Learn more', url: ctaUrl } : null,
-      trimStart: trimStart === '' ? null : Number(trimStart),
-      trimEnd: trimEnd === '' ? null : Number(trimEnd),
+      trimStart: trimStart === '' ? null : Number(trimStart), trimEnd: trimEnd === '' ? null : Number(trimEnd),
     };
     if (privacy === 'password' && password) body.password = password;
-    const res = await authFetch(`${API}/api/recordings/${rec.id}/meta`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const res = await authFetch(`${API}/api/recordings/${rec.id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     setSaving(false);
     if (res.ok) {
       const d = await res.json();
-      onSaved({
-        title: title.trim() || rec.title,
-        privacy: d.privacy, description: d.description, cta: d.cta, folder: d.folder,
-        trimStart: d.trimStart, trimEnd: d.trimEnd,
-      });
+      onSaved({ title: title.trim() || rec.title, privacy: d.privacy, description: d.description, cta: d.cta, folder: d.folder, trimStart: d.trimStart, trimEnd: d.trimEnd });
     } else if (res.status === 403) {
-      // Premium feature locked — surface the matching upgrade modal.
       const d = await res.json().catch(() => ({}));
       if (d.upgradeRequired && onUpgrade) onUpgrade(d.feature || 'default', d.error);
     }
@@ -412,121 +280,73 @@ function ShareSettings({ rec, folders, authFetch, onClose, onSaved, onUpgrade })
 
   return (
     <div className={styles.modalBg} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <h2 className={styles.modalTitle}>Video settings</h2>
-
         <label className={styles.fieldLabel}>Title</label>
-        <input className={styles.input} value={title} onChange={e => setTitle(e.target.value)}
-          placeholder="Video title" />
-
+        <input className={styles.input} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Video title" />
         <label className={styles.fieldLabel}>Trim (seconds) — viewers only see this range</label>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input className={styles.input} type="number" min="0" value={trimStart}
-            onChange={e => setTrimStart(e.target.value)} placeholder="Start (e.g. 3)" />
-          <input className={styles.input} type="number" min="0" value={trimEnd}
-            onChange={e => setTrimEnd(e.target.value)} placeholder={`End (e.g. ${rec.duration || 60})`} />
+          <input className={styles.input} type="number" min="0" value={trimStart} onChange={(e) => setTrimStart(e.target.value)} placeholder="Start (e.g. 3)" />
+          <input className={styles.input} type="number" min="0" value={trimEnd} onChange={(e) => setTrimEnd(e.target.value)} placeholder={`End (e.g. ${rec.duration || 60})`} />
         </div>
-
         <label className={styles.fieldLabel}>Privacy</label>
-        <select className={styles.select} value={privacy} onChange={e => setPrivacy(e.target.value)}>
-          <option value="public">🌍 Anyone with the link</option>
-          <option value="login">👤 Signed-in users only</option>
-          <option value="password">🔒 Password protected</option>
+        <select className={styles.select} value={privacy} onChange={(e) => setPrivacy(e.target.value)}>
+          <option value="public">Anyone with the link</option>
+          <option value="login">Signed-in users only</option>
+          <option value="password">Password protected</option>
         </select>
-        {privacy === 'password' && (
-          <input className={styles.input} type="password" value={password}
-            onChange={e => setPassword(e.target.value)} placeholder="Set a password" />
-        )}
-
+        {privacy === 'password' && <input className={styles.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Set a password" />}
         <label className={styles.fieldLabel}>Description</label>
-        <textarea className={styles.input} rows={2} value={description}
-          onChange={e => setDescription(e.target.value)} placeholder="Add a description…" />
-
+        <textarea className={styles.input} rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add a description…" />
         <label className={styles.fieldLabel}>Call-to-action button (optional)</label>
-        <input className={styles.input} value={ctaLabel} onChange={e => setCtaLabel(e.target.value)}
-          placeholder="Button text (e.g. Book a call)" />
-        <input className={styles.input} value={ctaUrl} onChange={e => setCtaUrl(e.target.value)}
-          placeholder="https://…" />
-
+        <input className={styles.input} value={ctaLabel} onChange={(e) => setCtaLabel(e.target.value)} placeholder="Button text (e.g. Book a call)" />
+        <input className={styles.input} value={ctaUrl} onChange={(e) => setCtaUrl(e.target.value)} placeholder="https://…" />
         <label className={styles.fieldLabel}>Folder</label>
-        <select className={styles.select} value={folder} onChange={e => setFolder(e.target.value)}>
+        <select className={styles.select} value={folder} onChange={(e) => setFolder(e.target.value)}>
           <option value="">No folder</option>
-          {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
-
         <label className={styles.fieldLabel}>Embed code</label>
         <code className={styles.embedCode}>{embed}</code>
-        <button className="btn-ghost" style={{ fontSize: 12, marginBottom: 8 }}
-          onClick={() => { navigator.clipboard.writeText(embed); setCopiedEmbed(true); setTimeout(() => setCopiedEmbed(false), 2000); }}>
-          {copiedEmbed ? '✓ Copied!' : 'Copy embed code'}
-        </button>
-
+        <button className={styles.ghostBtn} style={{ fontSize: 12, marginBottom: 8 }} onClick={() => { navigator.clipboard.writeText(embed); setCopiedEmbed(true); setTimeout(() => setCopiedEmbed(false), 2000); }}>{copiedEmbed ? '✓ Copied!' : 'Copy embed code'}</button>
         <div className={styles.modalActions}>
-          <button className="btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          <button className={styles.ghostBtn} onClick={onClose}>Cancel</button>
+          <button className={styles.primaryBtn} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Analytics modal ────────────────────────────────────────────────────────
 function Analytics({ rec, authFetch, onClose, onUpgrade }) {
   const [data, setData] = useState(null);
   useEffect(() => {
     authFetch(`${API}/api/recordings/${rec.id}/analytics`)
-      .then(async (r) => {
-        if (r.status === 403) {
-          const d = await r.json().catch(() => ({}));
-          if (d.upgradeRequired && onUpgrade) onUpgrade(d.feature || 'analytics', d.error);
-          return null;
-        }
-        return r.json();
-      })
-      .then((d) => { if (d) setData(d); })
-      .catch(() => setData({}));
+      .then(async (r) => { if (r.status === 403) { const d = await r.json().catch(() => ({})); if (d.upgradeRequired && onUpgrade) onUpgrade(d.feature || 'analytics', d.error); return null; } return r.json(); })
+      .then((d) => { if (d) setData(d); }).catch(() => setData({}));
   }, [rec.id]);
-
   return (
     <div className={styles.modalBg} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <h2 className={styles.modalTitle}>📊 {rec.title}</h2>
-        {!data ? <p className={styles.empty}>Loading…</p> : (
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <h2 className={styles.modalTitle}>{rec.title}</h2>
+        {!data ? <p className={styles.noMatch}>Loading…</p> : (
           <>
             <div className={styles.statRow}>
               <div className={styles.stat}><div className={styles.statNum}>{data.views || 0}</div><div className={styles.statLbl}>Views</div></div>
               <div className={styles.stat}><div className={styles.statNum}>{(data.comments || []).length}</div><div className={styles.statLbl}>Comments</div></div>
               <div className={styles.stat}><div className={styles.statNum}>{(data.reactions || []).length}</div><div className={styles.statLbl}>Reactions</div></div>
             </div>
-
-            {(data.reactions || []).length > 0 && (
-              <div className={styles.reactSummary}>
-                {Object.entries((data.reactions || []).reduce((acc, r) => { acc[r.emoji] = (acc[r.emoji] || 0) + 1; return acc; }, {})).map(([e, n]) => <span key={e}>{e} {n}</span>)}
-              </div>
-            )}
-
             <label className={styles.fieldLabel}>Recent viewers</label>
-            {(data.viewers || []).length === 0
-              ? <p className={styles.dim}>No signed-in viewers yet.</p>
-              : <ul className={styles.viewerList}>
-                  {data.viewers.slice(0, 20).map((v, i) => (
-                    <li key={i}>{v.name} <span className={styles.dim}>· {new Date(v.at).toLocaleDateString()}</span></li>
-                  ))}
-                </ul>}
-
+            {(data.viewers || []).length === 0 ? <p className={styles.dim}>No signed-in viewers yet.</p> : (
+              <ul className={styles.viewerList}>{data.viewers.slice(0, 20).map((v, i) => <li key={i}>{v.name} <span className={styles.dim}>· {new Date(v.at).toLocaleDateString()}</span></li>)}</ul>
+            )}
             <label className={styles.fieldLabel}>Comments</label>
-            {(data.comments || []).length === 0
-              ? <p className={styles.dim}>No comments yet.</p>
-              : <ul className={styles.viewerList}>
-                  {data.comments.slice().reverse().slice(0, 20).map(c => (
-                    <li key={c.id}><strong>{c.name}:</strong> {c.text}</li>
-                  ))}
-                </ul>}
+            {(data.comments || []).length === 0 ? <p className={styles.dim}>No comments yet.</p> : (
+              <ul className={styles.viewerList}>{data.comments.slice().reverse().slice(0, 20).map((c) => <li key={c.id}><strong>{c.name}:</strong> {c.text}</li>)}</ul>
+            )}
           </>
         )}
-        <div className={styles.modalActions}>
-          <button className="btn-primary" onClick={onClose}>Close</button>
-        </div>
+        <div className={styles.modalActions}><button className={styles.primaryBtn} onClick={onClose}>Close</button></div>
       </div>
     </div>
   );

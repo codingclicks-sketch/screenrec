@@ -643,6 +643,13 @@ app.post('/api/folders', requireAuth, (req, res) => {
   if (!name) return res.status(400).json({ error: 'Folder name required' });
   res.json(folders.create({ id: uuidv4(), userId: req.userId, name, created_at: Date.now() }));
 });
+app.patch('/api/folders/:id', requireAuth, (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Folder name required' });
+  const updated = folders.update(req.params.id, req.userId, { name });
+  if (!updated) return res.status(404).json({ error: 'Folder not found' });
+  res.json(updated);
+});
 app.delete('/api/folders/:id', requireAuth, (req, res) => {
   folders.remove(req.params.id, req.userId);
   res.json({ success: true });

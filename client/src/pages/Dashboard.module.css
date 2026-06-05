@@ -233,6 +233,65 @@
 .viewerList li { padding: 6px 0; border-bottom: 1px solid var(--border); }
 .dim { color: var(--text2); font-size: 13px; }
 
+/* ── Redesigned Library (used inside AppShell) ───────────────────────────── */
+.pageHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.titleRow { display: flex; align-items: baseline; gap: 12px; }
+.pageTitle { font-size: 27px; font-weight: 800; letter-spacing: -.02em; }
+.count { font-size: 14px; color: var(--text2, #6b6b7b); }
+.toolbar { display: flex; align-items: center; gap: 10px; }
+.sort { background: #fff; border: 1px solid #e2e2ea; border-radius: 10px; padding: 9px 12px; font-size: 13.5px; color: #14141f; cursor: pointer; font-weight: 500; }
+.viewToggle { display: inline-flex; background: #f2f2f7; border-radius: 10px; padding: 3px; }
+.viewBtn, .viewActive { display: flex; align-items: center; justify-content: center; width: 34px; height: 32px; border: none; background: transparent; border-radius: 8px; color: #9090a0; cursor: pointer; }
+.viewBtn:hover { color: #14141f; }
+.viewActive { background: #fff; color: #5b5bf6; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+.list { display: flex; flex-direction: column; gap: 4px; }
+.listRow { display: flex; align-items: center; gap: 16px; padding: 12px; border-radius: 14px; }
+.listRow:hover { background: #f7f7fa; }
+.listMain { flex: 1; min-width: 0; }
+.thumbSmall { display: block; position: relative; width: 140px; flex-shrink: 0; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: #1a1a2e; }
+
+.card { background: #fff; border: 1px solid #ececf3; border-radius: 16px; overflow: hidden; transition: box-shadow .18s, transform .18s, border-color .18s; }
+.card:hover { box-shadow: 0 14px 36px rgba(30,30,60,.12); transform: translateY(-3px); border-color: #e0e0ee; }
+.thumb { border-radius: 0; }
+.duration { background: rgba(11,11,20,.85); }
+.lock { display: flex; align-items: center; background: rgba(11,11,20,.85); color: #fff; }
+.playOverlay { background: rgba(11,11,20,.25); }
+
+.cardBody { padding: 14px 16px 14px; }
+.title { font-size: 15.5px; font-weight: 700; }
+.cardFoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.meta { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #8a8aa0; margin: 0; }
+
+/* card "⋯" menu */
+.cardMenuWrap { position: relative; flex-shrink: 0; }
+.menuBtn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: #9090a0; cursor: pointer; }
+.menuBtn:hover { background: #f2f2f7; color: #14141f; }
+.menu { position: absolute; bottom: calc(100% + 6px); right: 0; min-width: 184px; background: #fff; border: 1px solid #ececf3; border-radius: 13px; box-shadow: 0 14px 40px rgba(20,20,40,.18); padding: 6px; z-index: 40; }
+.menuItem { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 11px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #14141f; background: transparent; border: none; cursor: pointer; text-align: left; font-family: inherit; }
+.menuItem:hover { background: #f5f5fa; }
+.menuDanger { color: #dc2626; }
+.menuDanger:hover { background: #fef2f2; }
+.menuDivider { height: 1px; background: #f0f0f5; margin: 5px 0; }
+.menuSub { position: relative; }
+.subMenu { margin: 2px 0 2px 12px; border-left: 2px solid #f0f0f5; padding-left: 4px; max-height: 180px; overflow-y: auto; }
+.menuEmpty { display: block; padding: 8px 11px; font-size: 12.5px; color: #9090a0; }
+
+/* buttons + modal text */
+.primaryBtn { background: #5b5bf6; color: #fff; border: none; border-radius: 10px; padding: 10px 18px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.primaryBtn:hover { background: #4848d6; }
+.primaryBtn:disabled { opacity: .6; cursor: not-allowed; }
+.ghostBtn { background: #f2f2f7; color: #14141f; border: none; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.ghostBtn:hover { background: #e8e8f0; }
+.dangerBtn { background: #dc2626; color: #fff; border: none; border-radius: 10px; padding: 10px 18px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.dangerBtn:hover { background: #b91c1c; }
+.miniPrimary { background: #5b5bf6; color: #fff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.miniGhost { background: transparent; color: #9090a0; border: none; font-size: 17px; cursor: pointer; padding: 0 6px; }
+.modalText { font-size: 14.5px; color: #5b5b6b; line-height: 1.6; margin: 0 0 6px; }
+.noMatch { color: #9090a0; font-size: 14px; padding: 20px 0; }
+.emptyIcon { width: 64px; height: 64px; border-radius: 18px; background: #eef0ff; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+
 @media (max-width: 720px) {
   .sidebar { display: none; }
 }
