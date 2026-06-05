@@ -1,0 +1,131 @@
+/* Shared styling for the monetization UI — modern, light SaaS aesthetic
+   (Inter, soft surfaces, rounded), consistent with the rest of VeoRec. */
+
+:root {
+  --pw-accent: #5b5bf6;
+  --pw-accent-dark: #4848d6;
+  --pw-record: #ff4b4b;
+  --pw-text: #14141f;
+  --pw-text2: #5b5b6b;
+  --pw-text3: #9090a0;
+  --pw-border: #e8e8ef;
+  --pw-surface: #ffffff;
+  --pw-surface2: #f6f6fa;
+}
+
+/* ── Plan badge ─────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  padding: 3px 9px; border-radius: 999px; text-transform: uppercase;
+}
+.badgeFree { background: #ececf3; color: #6b6b7b; }
+.badgePro  { background: linear-gradient(135deg, #5b5bf6, #7b5bf6); color: #fff; }
+.badgeBusiness { background: #0f172a; color: #fff; }
+
+/* ── Meters ─────────────────────────────────────────────────────────────────── */
+.meter { display: flex; flex-direction: column; gap: 8px; }
+.meterHead { display: flex; align-items: baseline; justify-content: space-between; }
+.meterLabel { font-size: 13px; font-weight: 600; color: var(--pw-text2); }
+.meterValue { font-size: 13px; color: var(--pw-text3); font-variant-numeric: tabular-nums; }
+.track { height: 8px; border-radius: 999px; background: var(--pw-surface2); overflow: hidden; }
+.fill { height: 100%; border-radius: 999px; background: var(--pw-accent); transition: width .4s ease; }
+.fillWarn { background: #f59e0b; }
+.fillDanger { background: var(--pw-record); }
+.meterHint { font-size: 12px; color: var(--pw-text3); }
+.meterHint a { color: var(--pw-accent); font-weight: 600; text-decoration: none; }
+.meterHint a:hover { text-decoration: underline; }
+
+/* ── Upgrade modal ──────────────────────────────────────────────────────────── */
+.overlay {
+  position: fixed; inset: 0; background: rgba(20,20,31,.5);
+  backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 20px; animation: fade .15s ease;
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--pw-surface); border-radius: 20px; width: 100%; max-width: 440px;
+  padding: 32px; box-shadow: 0 24px 60px rgba(20,20,40,.22); position: relative;
+  animation: pop .18s cubic-bezier(.2,.9,.3,1.2);
+}
+@keyframes pop { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modalClose {
+  position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; border: none;
+  background: var(--pw-surface2); border-radius: 8px; cursor: pointer; color: var(--pw-text2);
+  font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
+}
+.modalClose:hover { background: #ececf3; }
+.modalIcon {
+  width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #eef0ff, #f3edff); margin-bottom: 18px; font-size: 24px;
+}
+.modalTitle { font-size: 21px; font-weight: 800; color: var(--pw-text); margin: 0 0 8px; letter-spacing: -.01em; }
+.modalText { font-size: 14.5px; color: var(--pw-text2); line-height: 1.55; margin: 0 0 20px; }
+.modalFeatures { list-style: none; padding: 0; margin: 0 0 24px; display: flex; flex-direction: column; gap: 10px; }
+.modalFeatures li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--pw-text); }
+.modalCheck { color: var(--pw-accent); font-weight: 800; }
+.modalActions { display: flex; flex-direction: column; gap: 10px; }
+.primaryBtn {
+  width: 100%; padding: 13px; border: none; border-radius: 11px; cursor: pointer;
+  background: var(--pw-accent); color: #fff; font-size: 15px; font-weight: 700;
+  transition: background .15s, transform .05s;
+}
+.primaryBtn:hover { background: var(--pw-accent-dark); }
+.primaryBtn:active { transform: translateY(1px); }
+.ghostBtn {
+  width: 100%; padding: 11px; border: none; border-radius: 11px; cursor: pointer;
+  background: transparent; color: var(--pw-text3); font-size: 13.5px; font-weight: 600;
+}
+.ghostBtn:hover { color: var(--pw-text2); }
+
+/* ── Pricing table ──────────────────────────────────────────────────────────── */
+.cycleToggle { display: inline-flex; background: var(--pw-surface2); border-radius: 999px; padding: 4px; gap: 4px; margin: 0 auto 28px; }
+.cycleBtn { border: none; background: transparent; padding: 8px 18px; border-radius: 999px; font-size: 13.5px; font-weight: 600; color: var(--pw-text2); cursor: pointer; }
+.cycleActive { background: #fff; color: var(--pw-text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.cycleSave { font-size: 11px; font-weight: 700; color: #16a34a; margin-left: 6px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 760px; margin: 0 auto; }
+.card { background: var(--pw-surface); border: 1px solid var(--pw-border); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; position: relative; }
+.cardFeatured { border-color: var(--pw-accent); box-shadow: 0 12px 40px rgba(91,91,246,.14); }
+.popular { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: var(--pw-accent); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+.planName { font-size: 18px; font-weight: 800; margin: 0 0 4px; color: var(--pw-text); }
+.planTag { font-size: 13px; color: var(--pw-text2); margin: 0 0 18px; min-height: 36px; }
+.priceRow { display: flex; align-items: baseline; gap: 4px; margin-bottom: 4px; }
+.priceAmount { font-size: 36px; font-weight: 800; color: var(--pw-text); letter-spacing: -.02em; }
+.pricePeriod { font-size: 14px; color: var(--pw-text3); }
+.priceSub { font-size: 12.5px; color: #16a34a; font-weight: 600; min-height: 18px; margin-bottom: 18px; }
+.featureList { list-style: none; padding: 0; margin: 0 0 24px; display: flex; flex-direction: column; gap: 11px; flex: 1; }
+.featureList li { display: flex; gap: 10px; font-size: 14px; color: var(--pw-text); align-items: flex-start; }
+.featureList .check { color: var(--pw-accent); font-weight: 800; flex-shrink: 0; }
+.featureMuted { color: var(--pw-text3) !important; }
+.featureMuted .check { color: var(--pw-text3); }
+.planBtn { width: 100%; padding: 12px; border-radius: 11px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; text-align: center; text-decoration: none; display: block; }
+.planBtnPrimary { background: var(--pw-accent); color: #fff; }
+.planBtnPrimary:hover { background: var(--pw-accent-dark); }
+.planBtnGhost { background: var(--pw-surface2); color: var(--pw-text); }
+.planBtnGhost:hover { background: #ececf3; }
+.planBtnCurrent { background: transparent; color: var(--pw-text3); border: 1px solid var(--pw-border); cursor: default; }
+
+/* ── Subscription / billing cards ───────────────────────────────────────────── */
+.scard { background: var(--pw-surface); border: 1px solid var(--pw-border); border-radius: 16px; padding: 24px; }
+.scardHead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.scardTitle { font-size: 15px; font-weight: 700; color: var(--pw-text); }
+.statRow { display: flex; flex-direction: column; gap: 14px; }
+.statItem { display: flex; align-items: center; justify-content: space-between; }
+.statLabel { font-size: 13.5px; color: var(--pw-text2); }
+.statValue { font-size: 13.5px; font-weight: 600; color: var(--pw-text); }
+.statusPill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: capitalize; }
+.statusActive { background: #e7f7ef; color: #14794e; }
+.statusPast_due { background: #fef3c7; color: #92400e; }
+.statusCanceled { background: #fee2e2; color: #b91c1c; }
+.statusPaused { background: #ececf3; color: #6b6b7b; }
+.statusTrialing { background: #e0e7ff; color: #4338ca; }
+
+.actionRow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.btn { padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; border: 1px solid var(--pw-border); background: #fff; color: var(--pw-text); }
+.btn:hover { background: var(--pw-surface2); }
+.btnPrimary { background: var(--pw-accent); color: #fff; border-color: var(--pw-accent); }
+.btnPrimary:hover { background: var(--pw-accent-dark); }
+.btnDanger { color: #b91c1c; border-color: #f3c2c2; }
+.btnDanger:hover { background: #fef2f2; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }

@@ -31,6 +31,8 @@
 
     .timer { font-size:54px; font-weight:800; letter-spacing:2px; font-variant-numeric:tabular-nums; margin-bottom:24px; display:none; }
     .timer.show { display:block; }
+    .timer.limitWarn { color:#d9820a; animation:pulseWarn 1s ease-in-out infinite; }
+    @keyframes pulseWarn { 0%,100% { opacity:1; } 50% { opacity:.55; } }
 
     .preview-wrap { margin:0 0 18px; display:none; }
     .preview-wrap.show { display:block; }

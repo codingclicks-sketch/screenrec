@@ -29,6 +29,27 @@ let activeStreams = [];    // all source streams to stop at the end
 // Options carried over from the popup
 let opts = { quality: 'medium', audio: true, camera: 'off', countdown: true };
 
+// Recording-length limit (seconds). Driven by the user's plan — fetched on load.
+// Defaults to the Free limit (5 min) as a safe fallback until entitlements load.
+let recordingLimitSec = 5 * 60;
+let limitWarned = false;          // 30s-remaining warning shown once
+let limitReached = false;         // auto-stopped at the cap
+
+// Fetch the signed-in user's plan recording limit so the countdown matches it.
+async function loadPlanLimit() {
+  try {
+    const { sr_token } = await chrome.storage.local.get('sr_token');
+    if (!sr_token) return;
+    const res = await fetch(`${SERVER}/api/me/entitlements`, {
+      headers: { Authorization: `Bearer ${sr_token}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const mins = data?.plan?.recordingLimitMinutes;
+    if (Number.isFinite(mins) && mins > 0) recordingLimitSec = mins * 60;
+  } catch { /* keep the safe default */ }
+}
+
 function setStatus(msg, cls = '') {
   statusEl.textContent = msg;
   statusEl.className = 'status ' + cls;
@@ -43,6 +64,21 @@ function updateTimer() {
   const s = elapsedSeconds();
   const m = String(Math.floor(s / 60)).padStart(2, '0');
   timerEl.textContent = `${m}:${String(s % 60).padStart(2, '0')}`;
+
+  // ── Plan recording-length limit (live countdown) ─────────────────────────
+  const remaining = recordingLimitSec - s;
+  if (!limitReached && remaining <= 0) {
+    // Hard cap reached — auto-stop so the upload always passes server validation.
+    limitReached = true;
+    setStatus(`⏱ Recording limit reached (${Math.round(recordingLimitSec / 60)} min) — saving…`, 'uploading');
+    stopRecording();
+    return;
+  }
+  if (!limitWarned && remaining <= 30 && remaining > 0) {
+    limitWarned = true;
+    timerEl.classList.add('limitWarn');
+    setStatus(`⚠ 30 seconds remaining on your plan limit`, 'recording');
+  }
 }
 
 function videoSize(quality) {
@@ -166,6 +202,9 @@ async function beginRecording() {
   startTime = Date.now();
   pausedAccum = 0;
   pauseStartedAt = null;
+  limitWarned = false;
+  limitReached = false;
+  timerEl.classList.remove('limitWarn');
 
   const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
     ? 'video/webm;codecs=vp9' : 'video/webm';
@@ -210,6 +249,16 @@ function showStartButton(message) {
   mainBtn.style.display = '';
   mainBtn.className = 'btn btn-start';
   mainBtn.textContent = '▶ Start Recording';
+}
+
+// Server rejected the upload because of a plan limit. Show the upsell and open
+// the pricing page so the user can upgrade without hunting for it.
+function showUpgradePrompt(reason) {
+  // Reuse the start button (its existing listener restarts a recording) and open
+  // the pricing page in a new tab so the user can upgrade right away.
+  showStartButton((reason || 'This recording exceeds your plan limit.') + ' Upgrade to Pro for longer recordings & more storage.');
+  try { chrome.tabs.create({ url: 'https://veorec.com/pricing' }); }
+  catch { try { window.open('https://veorec.com/pricing'); } catch {} }
 }
 
 function onStartError(e) {
@@ -295,6 +344,12 @@ async function handleStop() {
     });
     const data = await res.json();
     if (!res.ok) {
+      if (res.status === 403 && data.upgradeRequired) {
+        // Plan limit hit server-side (storage or recording length).
+        setStatus((data.error || 'Upgrade required to save this recording.') + ' ', 'uploading');
+        showUpgradePrompt(data.error);
+        return;
+      }
       showStartButton(res.status === 401
         ? 'Session expired — please sign in again via the extension popup.'
         : 'Upload failed: ' + (data.error || res.status));
@@ -338,5 +393,6 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (recOptions) opts = { ...opts, ...recOptions };
   } catch {}
   setStatus('Preparing your recording…');
+  await loadPlanLimit();           // match the countdown to the user's plan
   beginRecording().catch(onStartError);
 })();

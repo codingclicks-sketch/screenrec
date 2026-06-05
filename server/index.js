@@ -11,6 +11,18 @@ const users = require('./users');
 const { meta, folders } = require('./meta');
 const { signToken, requireAuth, verifyToken } = require('./auth');
 
+// ── Monetization layer ────────────────────────────────────────────────────────
+const plans = require('./plans');
+const entitlements = require('./entitlements');
+const subscriptions = require('./subscriptions');
+const usageService = require('./usage.service');
+const permissions = require('./permissions.service');
+const billingService = require('./billing.service');
+const billingConfig = require('./billing.config');
+const conversion = require('./conversion');
+const cron = require('./cron');
+const { makeHandler: makePaddleWebhook } = require('./webhooks.paddle');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 const USE_CLOUDINARY = !!(process.env.CLOUDINARY_CLOUD_NAME);
@@ -34,13 +46,30 @@ app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 // ── Auth Routes (public) ─────────────────────────────────────────────────────
 // Serialize a user for client responses — never includes the password hash.
 function publicUser(u) {
+  const ent = entitlements.summary(u);
   return {
     id: u.id,
     name: u.name,
     email: u.email,
-    plan: u.plan || 'free',
+    // coarse slug kept for back-compat; UI should prefer `entitlements`
+    plan: ent.planSlug,
+    entitlements: ent,           // { plan{features…}, planSlug, isPaid, subscription }
+    isAdmin: isAdmin(u),
     created_at: u.created_at,
   };
+}
+
+// Admin allowlist via env (comma-separated emails). Server-side only.
+function isAdmin(u) {
+  const list = (process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+  return !!(u && u.email && list.includes(u.email.toLowerCase()));
+}
+
+function requireAdmin(req, res, next) {
+  const u = users.findById(req.userId);
+  if (!isAdmin(u)) return res.status(403).json({ error: 'Admin only' });
+  req.user = u;
+  next();
 }
 
 app.post('/api/auth/signup', async (req, res) => {
@@ -207,9 +236,28 @@ if (!USE_CLOUDINARY) {
   app.post('/api/upload', requireAuth, upload.single('video'), (req, res) => {
     const { title, duration } = req.body;
     const id = uuidv4();
+    const user = users.findById(req.userId);
+    const durationSec = parseInt(duration) || 0;
+    const sizeBytes = req.file.size || 0;
+
+    // Server-side enforcement (mirrors the Cloudinary branch).
+    const recCheck = permissions.canRecord(user, durationSec);
+    if (!recCheck.allowed) {
+      if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      conversion.track({ userId: user.id, userPlan: recCheck.meta?.plan, featureRequested: conversion.TRIGGERS.RECORDING_LIMIT, meta: recCheck.meta });
+      return res.status(403).json({ error: recCheck.reason, upgradeRequired: true, code: 'recording_limit', meta: recCheck.meta });
+    }
+    const storeCheck = permissions.canUploadVideo(user, sizeBytes);
+    if (!storeCheck.allowed) {
+      if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      conversion.track({ userId: user.id, userPlan: storeCheck.meta?.plan, featureRequested: conversion.TRIGGERS.STORAGE_FULL, meta: storeCheck.meta });
+      return res.status(403).json({ error: storeCheck.reason, upgradeRequired: true, code: 'storage_limit', meta: storeCheck.meta });
+    }
+
     db.insert({ id, userId: req.userId, title: title || 'Untitled Recording',
-      filename: req.file.filename, size: req.file.size,
-      duration: parseInt(duration) || 0, created_at: Date.now() });
+      filename: req.file.filename, size: sizeBytes,
+      duration: durationSec, created_at: Date.now() });
+    usageService.updateUsage(req.userId, { bytes: sizeBytes, videos: 1, seconds: durationSec, upload: true });
     const base = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
     res.json({ id, url: `${base}/watch/${id}` });
   });
@@ -230,6 +278,7 @@ if (!USE_CLOUDINARY) {
     const p = path.join(__dirname, 'uploads', row.filename);
     if (fs.existsSync(p)) fs.unlinkSync(p);
     db.delete(req.params.id);
+    usageService.updateUsage(req.userId, { bytes: -(row.size || 0), videos: -1, seconds: -(row.duration || 0) });
     res.json({ success: true });
   });
 
@@ -249,6 +298,25 @@ if (!USE_CLOUDINARY) {
       const { title, duration } = req.body;
       const id = uuidv4();
       const recTitle = title || 'Untitled Recording';
+      const user = users.findById(req.userId);
+      const durationSec = parseInt(duration) || 0;
+      const sizeBytes = req.file?.size || req.file?.buffer?.length || 0;
+
+      // ── SERVER-SIDE ENFORCEMENT (never trust the client) ───────────────────
+      // 1) Recording length limit.
+      const recCheck = permissions.canRecord(user, durationSec);
+      if (!recCheck.allowed) {
+        conversion.track({ userId: user.id, userPlan: recCheck.meta?.plan,
+          featureRequested: conversion.TRIGGERS.RECORDING_LIMIT, meta: recCheck.meta });
+        return res.status(403).json({ error: recCheck.reason, upgradeRequired: true, code: 'recording_limit', meta: recCheck.meta });
+      }
+      // 2) Storage limit (primary free-plan limiter).
+      const storeCheck = permissions.canUploadVideo(user, sizeBytes);
+      if (!storeCheck.allowed) {
+        conversion.track({ userId: user.id, userPlan: storeCheck.meta?.plan,
+          featureRequested: conversion.TRIGGERS.STORAGE_FULL, meta: storeCheck.meta });
+        return res.status(403).json({ error: storeCheck.reason, upgradeRequired: true, code: 'storage_limit', meta: storeCheck.meta });
+      }
 
       const result = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -261,6 +329,14 @@ if (!USE_CLOUDINARY) {
           (err, result) => err ? reject(err) : resolve(result)
         );
         stream.end(req.file.buffer);
+      });
+
+      // ── Usage accounting (incremental; cron heals any drift) ───────────────
+      usageService.updateUsage(req.userId, {
+        bytes: result.bytes || sizeBytes,
+        videos: 1,
+        seconds: Math.round(result.duration || durationSec),
+        upload: true,
       });
 
       const base = process.env.PUBLIC_URL || `https://${req.get('host')}`;
@@ -342,8 +418,18 @@ if (!USE_CLOUDINARY) {
 
   app.delete('/api/recordings/:id', requireAuth, async (req, res) => {
     try {
+      // Look up size/duration first so we can decrement usage accurately.
+      let freedBytes = 0, freedSeconds = 0;
+      try {
+        const r = await cloudinary.search
+          .expression(`resource_type:video AND public_id=screenrec/${req.userId}/${req.params.id}`)
+          .max_results(1).execute();
+        if (r.resources.length) { freedBytes = r.resources[0].bytes || 0; freedSeconds = Math.round(r.resources[0].duration || 0); }
+      } catch {}
+
       await cloudinary.uploader.destroy(`screenrec/${req.userId}/${req.params.id}`, { resource_type: 'video' });
       meta.remove(req.params.id);
+      usageService.updateUsage(req.userId, { bytes: -freedBytes, videos: -1, seconds: -freedSeconds });
       res.json({ success: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -484,17 +570,47 @@ app.post('/api/watch/:id/comment', (req, res) => {
 // ── Owner: analytics + share settings ────────────────────────────────────────
 app.get('/api/recordings/:id/analytics', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  // Feature gate — analytics is Pro-only. Capability-based, not name-based.
+  const user = users.findById(req.userId);
+  const check = permissions.canUseAnalytics(user);
+  if (!check.allowed) {
+    conversion.track({ userId: user.id, userPlan: check.meta?.plan, featureRequested: conversion.TRIGGERS.ANALYTICS, meta: check.meta });
+    return res.status(403).json({ error: check.reason, upgradeRequired: true, code: 'feature_locked', feature: 'analytics' });
+  }
   const m = meta.get(req.params.id);
   res.json({ views: m.views, viewers: m.viewers, reactions: m.reactions, comments: m.comments });
 });
 
 app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
-  const { title, description, cta, privacy, password, folder, trimStart, trimEnd } = req.body;
+  const user = users.findById(req.userId);
+  const { title, description, cta, privacy, password, folder, trimStart, trimEnd, removeBranding } = req.body;
   const fields = {};
   if (typeof description === 'string') fields.description = description.slice(0, 5000);
   if (cta === null) fields.cta = null;
   else if (cta && typeof cta.url === 'string' && cta.url) fields.cta = { label: String(cta.label || 'Learn more').slice(0, 60), url: cta.url.slice(0, 500) };
+
+  // ── Feature gate: password-protected videos (Pro) ──────────────────────────
+  const wantsPassword = privacy === 'password' || (typeof password === 'string' && password);
+  if (wantsPassword) {
+    const check = permissions.canUsePasswordProtectedVideos(user);
+    if (!check.allowed) {
+      conversion.track({ userId: user.id, userPlan: check.meta?.plan, featureRequested: conversion.TRIGGERS.PASSWORD, meta: check.meta });
+      return res.status(403).json({ error: check.reason, upgradeRequired: true, code: 'feature_locked', feature: 'passwordProtection' });
+    }
+  }
+  // ── Feature gate: remove VeoRec branding (Pro) ─────────────────────────────
+  if (removeBranding === true) {
+    const check = permissions.canRemoveBranding(user);
+    if (!check.allowed) {
+      conversion.track({ userId: user.id, userPlan: check.meta?.plan, featureRequested: conversion.TRIGGERS.REMOVE_BRANDING, meta: check.meta });
+      return res.status(403).json({ error: check.reason, upgradeRequired: true, code: 'feature_locked', feature: 'removeBranding' });
+    }
+    fields.removeBranding = true;
+  } else if (removeBranding === false) {
+    fields.removeBranding = false;
+  }
+
   if (['public', 'login', 'password'].includes(privacy)) fields.privacy = privacy;
   if (typeof password === 'string' && password) fields.passwordHash = await bcrypt.hash(password, 10);
   if (privacy && privacy !== 'password') fields.passwordHash = null;
@@ -531,55 +647,193 @@ app.delete('/api/folders/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// ── Billing (Paddle — Merchant of Record) ────────────────────────────────────
-// Frontend opens Paddle.js checkout with our price + customData{userId}.
-// Paddle then calls our webhook on payment, where we flip the user to Pro.
-const PADDLE_CLIENT_TOKEN = process.env.PADDLE_CLIENT_TOKEN;   // public, used by Paddle.js
-const PADDLE_PRICE_ID = process.env.PADDLE_PRICE_ID;          // e.g. pri_xxx
-const PADDLE_WEBHOOK_SECRET = process.env.PADDLE_WEBHOOK_SECRET;
-const PADDLE_ENV = process.env.PADDLE_ENV === 'production' ? 'production' : 'sandbox';
+// ══════════════════════════════════════════════════════════════════════════════
+// MONETIZATION API
+// ══════════════════════════════════════════════════════════════════════════════
 
-// Frontend asks whether billing is live + gets the public token + price id
+// ── Plans & entitlements (read) ───────────────────────────────────────────────
+// Public pricing data (capability-based; no internal ids leak).
+app.get('/api/plans', (req, res) => {
+  res.json({ plans: plans.listPublicPlans().map(plans.publicPlan) });
+});
+
+// The current user's effective plan + capabilities (UI render only; gates are
+// still enforced server-side on every premium endpoint).
+app.get('/api/me/entitlements', requireAuth, (req, res) => {
+  const u = users.findById(req.userId);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  res.json(entitlements.summary(u));
+});
+
+// The current user's usage vs their plan limits (drives StorageMeter/UsageMeter).
+app.get('/api/me/usage', requireAuth, (req, res) => {
+  const u = users.findById(req.userId);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  const plan = entitlements.resolve(u);
+  res.json(usageService.getUsageSummary(u.id, plan));
+});
+
+// ── Billing config (frontend Paddle.js bootstrap) ─────────────────────────────
 app.get('/api/billing/config', (req, res) => {
   res.json({
     provider: 'paddle',
-    enabled: !!(PADDLE_CLIENT_TOKEN && PADDLE_PRICE_ID),
-    clientToken: PADDLE_CLIENT_TOKEN || null,
-    priceId: PADDLE_PRICE_ID || null,
-    env: PADDLE_ENV,
+    enabled: billingConfig.isBillingEnabled(),
+    clientToken: billingConfig.PADDLE.clientToken || null,
+    env: billingConfig.PADDLE.environment,
+    prices: {
+      proMonthly: billingConfig.getPriceId('pro', 'monthly'),
+      proYearly: billingConfig.getPriceId('pro', 'yearly'),
+    },
   });
 });
 
-// Verify Paddle webhook signature: header "ts=...;h1=<hmac sha256 of `ts:rawBody`>"
-function paddleSignatureValid(req) {
-  if (!PADDLE_WEBHOOK_SECRET) return false;
-  const header = req.headers['paddle-signature'];
-  if (!header) return false;
-  const parts = Object.fromEntries(header.split(';').map(kv => kv.split('=')));
-  if (!parts.ts || !parts.h1) return false;
-  const signed = `${parts.ts}:${req.rawBody}`;
-  const expected = crypto.createHmac('sha256', PADDLE_WEBHOOK_SECRET).update(signed).digest('hex');
-  try { return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.h1)); }
-  catch { return false; }
-}
+// ── Checkout + subscription management (billing.service) ──────────────────────
+app.post('/api/billing/checkout', requireAuth, (req, res) => {
+  const u = users.findById(req.userId);
+  const billingCycle = req.body.billingCycle === 'yearly' ? 'yearly' : 'monthly';
+  const result = billingService.createCheckout(u, billingCycle, 'pro');
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  conversion.track({ userId: u.id, userPlan: entitlements.resolveSlug(u), featureRequested: conversion.TRIGGERS.CHECKOUT_OPEN, meta: { billingCycle } });
+  res.json(result.checkout);
+});
 
-app.post('/api/billing/paddle/webhook', (req, res) => {
-  if (!paddleSignatureValid(req)) return res.status(401).json({ error: 'bad signature' });
-  const event = req.body;
-  const type = event.event_type;
-  // A completed transaction or an active subscription grants Pro.
-  if (type === 'transaction.completed' || type === 'subscription.activated' || type === 'subscription.created') {
-    const userId = event.data?.custom_data?.userId;
-    if (userId && users.findById(userId)) {
-      users.update(userId, { plan: 'pro', plan_since: Date.now() });
-    }
-  }
-  if (type === 'subscription.canceled') {
-    const userId = event.data?.custom_data?.userId;
-    if (userId && users.findById(userId)) users.update(userId, { plan: 'free' });
-  }
+app.get('/api/billing/subscription', requireAuth, async (req, res) => {
+  const u = users.findById(req.userId);
+  const result = await billingService.getSubscription(u);
+  res.json(result);
+});
+
+app.post('/api/billing/sync', requireAuth, async (req, res) => {
+  const u = users.findById(req.userId);
+  const result = await billingService.syncSubscription(u);
+  res.json(result);
+});
+
+app.post('/api/billing/cancel', requireAuth, async (req, res) => {
+  const u = users.findById(req.userId);
+  const result = await billingService.cancelSubscription(u);
+  if (!result.ok) return res.status(400).json(result);
   res.json({ ok: true });
 });
+
+app.post('/api/billing/resume', requireAuth, async (req, res) => {
+  const u = users.findById(req.userId);
+  const result = await billingService.resumeSubscription(u);
+  if (!result.ok) return res.status(400).json(result);
+  res.json({ ok: true });
+});
+
+app.post('/api/billing/change-plan', requireAuth, async (req, res) => {
+  const u = users.findById(req.userId);
+  const billingCycle = req.body.billingCycle === 'yearly' ? 'yearly' : 'monthly';
+  const result = await billingService.changePlan(u, billingCycle, req.body.planSlug || 'pro');
+  if (!result.ok) return res.status(400).json(result);
+  res.json({ ok: true });
+});
+
+app.get('/api/billing/portal', requireAuth, async (req, res) => {
+  const u = users.findById(req.userId);
+  const result = await billingService.getCustomerPortal(u);
+  if (!result.ok) return res.status(400).json(result);
+  res.json({ url: result.url });
+});
+
+// ── Conversion tracking (frontend reports paywall impressions) ────────────────
+app.post('/api/events/upgrade-intent', requireAuth, (req, res) => {
+  const u = users.findById(req.userId);
+  const feature = String(req.body.featureRequested || 'unknown').slice(0, 64);
+  conversion.track({ userId: u.id, userPlan: entitlements.resolveSlug(u), featureRequested: feature, meta: req.body.meta || {} });
+  res.json({ ok: true });
+});
+
+// ── Webhooks (canonical path + legacy alias) ──────────────────────────────────
+const paddleWebhookHandler = makePaddleWebhook({ users });
+app.post('/api/webhooks/paddle', paddleWebhookHandler);
+app.post('/api/billing/paddle/webhook', paddleWebhookHandler); // back-compat
+
+// ── Admin dashboard metrics ───────────────────────────────────────────────────
+app.get('/api/admin/metrics', requireAuth, requireAdmin, (req, res) => {
+  res.json(buildAdminMetrics());
+});
+
+function loadAllUsers() {
+  // users.js has no list(); read the file directly via the same store path.
+  try {
+    const fsx = require('fs'); const px = require('path');
+    const dir = process.env.DATA_DIR || __dirname;
+    const f = px.join(dir, 'users.json');
+    return fsx.existsSync(f) ? JSON.parse(fsx.readFileSync(f, 'utf8')) : [];
+  } catch { return []; }
+}
+
+function buildAdminMetrics() {
+  const all = loadAllUsers();
+  const subs = subscriptions.all();
+  const now = Date.now();
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+  const paidSubs = subs.filter((s) => subscriptions.isEntitled(s));
+  const paidUserIds = new Set(paidSubs.map((s) => s.userId));
+  const freeUsers = all.filter((u) => !paidUserIds.has(u.id));
+
+  // MRR: normalize annual to monthly.
+  let mrr = 0;
+  for (const s of paidSubs) {
+    const plan = plans.getPlan(s.planSlug);
+    if (s.billingCycle === 'yearly') mrr += (plan.yearlyPrice || 0) / 12;
+    else mrr += plan.monthlyPrice || 0;
+  }
+
+  // Usage rollups.
+  let storageConsumed = 0, videosUploaded = 0;
+  for (const u of all) {
+    const usg = usageService.get(u.id);
+    storageConsumed += usg.storageUsedBytes || 0;
+    videosUploaded += usg.videoCount || 0;
+  }
+
+  const canceled = subs.filter((s) => s.status === 'canceled').length;
+  const churnRate = subs.length ? +((canceled / subs.length) * 100).toFixed(1) : 0;
+  const upgradeRate = all.length ? +((paidUserIds.size / all.length) * 100).toFixed(1) : 0;
+
+  const topStorage = all
+    .map((u) => ({ id: u.id, email: u.email, bytes: usageService.get(u.id).storageUsedBytes || 0 }))
+    .sort((a, b) => b.bytes - a.bytes).slice(0, 10);
+  const mostActive = all
+    .map((u) => ({ id: u.id, email: u.email, videos: usageService.get(u.id).videoCount || 0 }))
+    .sort((a, b) => b.videos - a.videos).slice(0, 10);
+
+  return {
+    totalUsers: all.length,
+    activeUsers: all.filter((u) => (now - (u.plan_since || u.created_at || 0)) < THIRTY_DAYS).length,
+    freeUsers: freeUsers.length,
+    paidUsers: paidUserIds.size,
+    mrr: +mrr.toFixed(2),
+    annualRevenue: +(mrr * 12).toFixed(2),
+    videosUploaded,
+    storageConsumedGB: +(storageConsumed / (1024 ** 3)).toFixed(2),
+    upgradeRate,
+    churnRate,
+    conversionEvents: conversion.summarize(now - THIRTY_DAYS),
+    topStorageUsers: topStorage,
+    mostActiveUsers: mostActive,
+  };
+}
+
+// ── Background jobs (usage + subscription reconciliation) ──────────────────────
+async function listUserVideos(userId) {
+  if (!USE_CLOUDINARY) {
+    return db.all().filter((r) => r.userId === userId).map((r) => ({ sizeBytes: r.size, durationSeconds: r.duration }));
+  }
+  try {
+    const result = await cloudinary.search
+      .expression(`folder:screenrec/${userId} AND resource_type:video`)
+      .max_results(500).execute();
+    return result.resources.map((r) => ({ sizeBytes: r.bytes, durationSeconds: Math.round(r.duration || 0) }));
+  } catch { return []; }
+}
+
+cron.start({ listUsers: loadAllUsers, listVideos: listUserVideos });
 
 // ── Serve client build ────────────────────────────────────────────────────────
 const clientDist = path.join(__dirname, '../client/dist');
