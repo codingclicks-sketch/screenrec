@@ -21,6 +21,7 @@ const billingService = require('./billing.service');
 const billingConfig = require('./billing.config');
 const conversion = require('./conversion');
 const cron = require('./cron');
+const contacts = require('./contacts');
 const { makeHandler: makePaddleWebhook } = require('./webhooks.paddle');
 
 const app = express();
@@ -751,9 +752,104 @@ const paddleWebhookHandler = makePaddleWebhook({ users });
 app.post('/api/webhooks/paddle', paddleWebhookHandler);
 app.post('/api/billing/paddle/webhook', paddleWebhookHandler); // back-compat
 
+// ── Contact form (public) ─────────────────────────────────────────────────────
+app.post('/api/contact', async (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 120);
+  const email = String(req.body.email || '').trim().slice(0, 200);
+  const subject = String(req.body.subject || '').trim().slice(0, 160);
+  const message = String(req.body.message || '').trim().slice(0, 5000);
+  if (!name || !email || !message) return res.status(400).json({ error: 'Name, email and message are required' });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Please enter a valid email' });
+
+  const viewer = viewerFromAuth(req);
+  const saved = contacts.create({ name, email, subject, message, userId: viewer?.id });
+
+  // Best-effort email notification to the owner (uses existing Brevo helper).
+  const to = (process.env.ADMIN_EMAILS || '').split(',')[0].trim();
+  if (to) {
+    sendEmail(to, `New VeoRec contact: ${subject || 'No subject'}`,
+      `<div style="font-family:sans-serif"><h3>New contact message</h3>
+       <p><b>From:</b> ${name} &lt;${email}&gt;</p>
+       <p><b>Subject:</b> ${subject || '(none)'}</p>
+       <p><b>Message:</b></p><p style="white-space:pre-wrap">${message.replace(/</g, '&lt;')}</p></div>`)
+      .catch(() => {});
+  }
+  res.json({ ok: true, id: saved.id });
+});
+
 // ── Admin dashboard metrics ───────────────────────────────────────────────────
 app.get('/api/admin/metrics', requireAuth, requireAdmin, (req, res) => {
-  res.json(buildAdminMetrics());
+  res.json({ ...buildAdminMetrics(), newContacts: contacts.countNew() });
+});
+
+// ── Admin: users (list, with plan/usage/subscription) ─────────────────────────
+app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
+  const q = String(req.query.q || '').toLowerCase().trim();
+  const rows = loadAllUsers()
+    .filter((u) => !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q))
+    .map((u) => {
+      const ent = entitlements.summary(u);
+      const usg = usageService.get(u.id);
+      const sub = subscriptions.getByUser(u.id);
+      return {
+        id: u.id, name: u.name, email: u.email,
+        createdAt: u.created_at,
+        authProvider: u.googleId ? 'google' : (u.password ? 'password' : 'other'),
+        planSlug: ent.planSlug, source: ent.source, comped: ent.comped,
+        manualPlan: u.manualPlan || null, manualPlanExpires: u.manualPlanExpires || null,
+        subscriptionStatus: sub?.status || null,
+        billingCycle: sub?.billingCycle || null,
+        storageUsedBytes: usg.storageUsedBytes || 0,
+        videoCount: usg.videoCount || 0,
+        isAdmin: isAdmin(u),
+      };
+    })
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  res.json({ users: rows, total: rows.length });
+});
+
+// ── Admin: grant / revoke a plan for a user (comp premium, no payment) ────────
+app.patch('/api/admin/users/:id/plan', requireAuth, requireAdmin, (req, res) => {
+  const target = users.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  const { planSlug, days } = req.body;
+
+  if (planSlug === null || planSlug === 'free') {
+    // Revoke comp — fall back to their real subscription/free.
+    users.update(target.id, { manualPlan: null, manualPlanExpires: null });
+  } else {
+    if (!plans.getPlan(planSlug) || plans.getPlan(planSlug).slug !== String(planSlug).toLowerCase()) {
+      return res.status(400).json({ error: 'Unknown plan' });
+    }
+    const expires = days && Number(days) > 0 ? Date.now() + Number(days) * 86400000 : null;
+    users.update(target.id, { manualPlan: planSlug, manualPlanExpires: expires });
+  }
+  const updated = users.findById(target.id);
+  res.json({ ok: true, entitlements: entitlements.summary(updated) });
+});
+
+// ── Admin: plans (view + edit pricing/limits/features at runtime) ─────────────
+app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
+  res.json({ plans: plans.listAllPlans() });
+});
+
+app.patch('/api/admin/plans/:slug', requireAuth, requireAdmin, (req, res) => {
+  const updated = plans.setPlanOverride(req.params.slug, req.body || {});
+  if (!updated) return res.status(404).json({ error: 'Unknown plan' });
+  res.json({ ok: true, plan: updated });
+});
+
+app.delete('/api/admin/plans/:slug/override', requireAuth, requireAdmin, (req, res) => {
+  res.json({ ok: true, plan: plans.clearPlanOverride(req.params.slug) });
+});
+
+// ── Admin: contact submissions ────────────────────────────────────────────────
+app.get('/api/admin/contacts', requireAuth, requireAdmin, (req, res) => {
+  res.json({ contacts: contacts.all() });
+});
+app.patch('/api/admin/contacts/:id', requireAuth, requireAdmin, (req, res) => {
+  const status = ['new', 'read', 'replied', 'archived'].includes(req.body.status) ? req.body.status : 'read';
+  res.json({ ok: true, contact: contacts.setStatus(req.params.id, status) });
 });
 
 function loadAllUsers() {

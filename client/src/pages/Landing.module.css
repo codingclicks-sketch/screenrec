@@ -30,7 +30,7 @@
   display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center;
   max-width: 1200px; margin: 0 auto; padding: 70px 40px 60px;
 }
-.pill { display: inline-block; background: #eef0ff; color: #4338ca; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px; margin-bottom: 24px; }
+.pill { display: inline-flex; align-items: center; gap: 7px; background: #eef0ff; color: #4338ca; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px; margin-bottom: 24px; }
 .h1 { font-size: 62px; line-height: 1.04; font-weight: 800; letter-spacing: -.03em; margin: 0 0 22px; }
 .heroSub { font-size: 18px; color: var(--ink2); line-height: 1.6; margin: 0 0 30px; max-width: 440px; }
 .heroBtns { display: flex; gap: 14px; margin-bottom: 22px; flex-wrap: wrap; }
@@ -40,7 +40,7 @@
 .secondaryBtn:hover { background: var(--soft); }
 .recDot { width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.35); }
 .trustBadges { display: flex; gap: 20px; flex-wrap: wrap; color: var(--ink2); font-size: 13.5px; font-weight: 500; }
-.trustBadges span { white-space: nowrap; }
+.trustBadges span { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 900px) { .hero { grid-template-columns: 1fr; padding: 48px 20px; } .h1 { font-size: 44px; } }
 
 /* ── Hero product mockup ─────────────────────────────────────────────────── */
@@ -105,7 +105,7 @@
 
 /* ── Testimonial ─────────────────────────────────────────────────────────── */
 .testimonial { background: var(--soft); border-radius: 22px; padding: 44px 48px; position: relative; max-width: 760px; margin: 0 auto; }
-.quoteMark { font-size: 64px; color: var(--ac); line-height: .6; font-family: Georgia, serif; margin-bottom: 8px; }
+.quoteMark { margin-bottom: 12px; opacity: .9; }
 .testimonial blockquote { font-size: 22px; font-weight: 600; line-height: 1.45; margin: 0 0 24px; letter-spacing: -.01em; }
 .author { display: flex; align-items: center; gap: 12px; }
 .authorAvatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #c7d2fe, #ddd6fe); }
@@ -114,10 +114,15 @@
 @media (max-width: 600px) { .testimonial { padding: 32px 24px; } .testimonial blockquote { font-size: 18px; } }
 
 /* ── Pricing ─────────────────────────────────────────────────────────────── */
-.cycleToggle { display: flex; gap: 4px; background: var(--soft); padding: 4px; border-radius: 999px; width: max-content; margin: 0 auto 30px; }
-.cycleToggle button { border: none; background: transparent; padding: 8px 18px; border-radius: 999px; font-size: 13.5px; font-weight: 600; color: var(--ink2); cursor: pointer; }
-.cycleActive { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.save { color: #16a34a; font-size: 11px; font-weight: 700; margin-left: 4px; }
+.cycleToggle { display: inline-flex; gap: 4px; background: #eef0f6; padding: 5px; border-radius: 999px; margin: 0 auto 32px; position: relative; left: 50%; transform: translateX(-50%); }
+.cycleBtn, .cycleActive { border: none; padding: 9px 22px; border-radius: 999px; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .18s ease; }
+.cycleBtn { background: transparent; color: var(--ink2); }
+.cycleBtn:hover { color: var(--ink); }
+.cycleActive { background: var(--ac); color: #fff; box-shadow: 0 4px 12px rgba(91,91,246,.32); }
+.cycleActive .save { background: rgba(255,255,255,.22); color: #fff; }
+.save { background: #dcfce7; color: #16a34a; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.liCheck { color: #9aa0ad; flex-shrink: 0; }
+.liCheckPro { color: var(--ac); flex-shrink: 0; }
 .pricing { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: start; }
 @media (max-width: 820px) { .pricing { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; } }
 .priceCard { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 28px; position: relative; }
@@ -130,7 +135,7 @@
 .priceAmt span { font-size: 14px; font-weight: 500; color: var(--ink3); margin-left: 6px; }
 .priceNote { font-size: 12.5px; color: #16a34a; font-weight: 600; margin-top: 4px; min-height: 18px; }
 .priceCard ul { list-style: none; padding: 0; margin: 18px 0 22px; display: flex; flex-direction: column; gap: 11px; }
-.priceCard li { font-size: 14px; color: var(--ink); }
+.priceCard li { font-size: 14px; color: var(--ink); display: flex; align-items: center; gap: 9px; }
 .priceBtnPrimary, .priceBtnGhost { display: block; width: 100%; text-align: center; padding: 12px; border-radius: 11px; font-size: 14.5px; font-weight: 700; text-decoration: none; cursor: pointer; border: none; }
 .priceBtnPrimary { background: var(--ac); color: #fff; }
 .priceBtnPrimary:hover { background: #4848d6; }

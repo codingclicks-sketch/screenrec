@@ -1,51 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  Video, Link2, LineChart, FolderOpen, Clapperboard, MessageSquare,
+  CheckCircle2, Mic, Gauge, Timer, Sparkles, Play, Check, Quote,
+} from 'lucide-react';
 import API from '../api';
 import s from './Landing.module.css';
 
-// Fallback plan data mirrors server/plans.js so the page renders even if the
-// API is briefly unreachable. Live data overrides it on load.
 const FALLBACK = [
-  {
-    slug: 'free', name: 'Free', monthlyPrice: 0, yearlyPrice: 0, badge: null,
+  { slug: 'free', name: 'Free', monthlyPrice: 0, yearlyPrice: 0, badge: null,
     features: { removeBrandingEnabled: false, analyticsEnabled: false, customThumbnailEnabled: false, passwordProtectedVideosEnabled: false, priorityProcessingEnabled: false },
-    recordingLimitMinutes: 5, storageLimitGB: 2, exportQuality: '720p',
-  },
-  {
-    slug: 'pro', name: 'Pro', monthlyPrice: 7.99, yearlyPrice: 79, badge: 'Most Popular', yearlyBadge: '2 Months Free',
+    recordingLimitMinutes: 5, storageLimitGB: 2, exportQuality: '720p' },
+  { slug: 'pro', name: 'Pro', monthlyPrice: 7.99, yearlyPrice: 79, badge: 'Most Popular', yearlyBadge: '2 Months Free',
     features: { removeBrandingEnabled: true, analyticsEnabled: true, customThumbnailEnabled: true, passwordProtectedVideosEnabled: true, priorityProcessingEnabled: true },
-    recordingLimitMinutes: 120, storageLimitGB: 100, exportQuality: '1080p',
-  },
+    recordingLimitMinutes: 120, storageLimitGB: 100, exportQuality: '1080p' },
 ];
 
 const FEATURES = [
-  { icon: '🎥', tint: s.tintPurple, title: 'Record effortlessly', text: 'Capture your screen, camera and mic in stunning quality.' },
-  { icon: '🔗', tint: s.tintGreen, title: 'Share instantly', text: 'Get a shareable link in seconds. No uploads. No waiting.' },
-  { icon: '📈', tint: s.tintPink, title: 'Powerful insights', text: 'See who watched, how much, and what they clicked.' },
-  { icon: '📁', tint: s.tintAmber, title: 'Stay organized', text: 'Folders, workspace and everything in its place.' },
+  { Icon: Video, color: '#6366f1', tint: s.tintPurple, title: 'Record effortlessly', text: 'Capture your screen, camera and mic in stunning quality.' },
+  { Icon: Link2, color: '#16a34a', tint: s.tintGreen, title: 'Share instantly', text: 'Get a shareable link in seconds. No uploads. No waiting.' },
+  { Icon: LineChart, color: '#ec4899', tint: s.tintPink, title: 'Powerful insights', text: 'See who watched, how much, and what they clicked.' },
+  { Icon: FolderOpen, color: '#f59e0b', tint: s.tintAmber, title: 'Stay organized', text: 'Folders, workspace and everything in its place.' },
 ];
 
 const STEPS = [
-  { n: 1, icon: '🎬', tint: s.tintPurple, title: 'Record', text: 'Choose what to record and hit start.' },
-  { n: 2, icon: '🔗', tint: s.tintGreen, title: 'Share', text: 'Get your link instantly and share anywhere.' },
-  { n: 3, icon: '💬', tint: s.tintAmber, title: 'Get feedback', text: 'Viewers watch and reply with comments.' },
-  { n: 4, icon: '✅', tint: s.tintPink, title: 'Close faster', text: 'Move projects forward without meetings.' },
+  { Icon: Clapperboard, color: '#6366f1', tint: s.tintPurple, title: 'Record', text: 'Choose what to record and hit start.' },
+  { Icon: Link2, color: '#16a34a', tint: s.tintGreen, title: 'Share', text: 'Get your link instantly and share anywhere.' },
+  { Icon: MessageSquare, color: '#f59e0b', tint: s.tintAmber, title: 'Get feedback', text: 'Viewers watch and reply with comments.' },
+  { Icon: CheckCircle2, color: '#ec4899', tint: s.tintPink, title: 'Close faster', text: 'Move projects forward without meetings.' },
 ];
 
 function planRows(plan) {
-  const f = plan.features || {};
-  if (plan.slug === 'free') {
-    return ['Unlimited recordings', 'Up to 5 minutes per video', '720p quality', 'Shareable links', 'Screen + mic recording'];
-  }
-  return [
-    'Everything in Free',
-    `Up to ${Math.round((plan.recordingLimitMinutes || 120) / 60)}-hour recordings`,
-    `${plan.exportQuality || '1080p'} HD quality`,
-    'Remove VeoRec branding',
-    'Password-protected videos',
-    'Viewer analytics',
-    'Priority processing',
-  ];
+  if (plan.slug === 'free') return ['Unlimited recordings', 'Up to 5 minutes per video', '720p quality', 'Shareable links', 'Screen + mic recording'];
+  return ['Everything in Free', `Up to ${Math.round((plan.recordingLimitMinutes || 120) / 60)}-hour recordings`,
+    `${plan.exportQuality || '1080p'} HD quality`, 'Remove VeoRec branding', 'Password-protected videos', 'Viewer analytics', 'Priority processing'];
 }
 
 export default function Landing() {
@@ -53,10 +41,7 @@ export default function Landing() {
   const [cycle, setCycle] = useState('monthly');
 
   useEffect(() => {
-    fetch(`${API}/api/plans`)
-      .then((r) => r.json())
-      .then((d) => { if (d?.plans?.length) setPlans(d.plans); })
-      .catch(() => {});
+    fetch(`${API}/api/plans`).then((r) => r.json()).then((d) => { if (d?.plans?.length) setPlans(d.plans); }).catch(() => {});
   }, []);
 
   const free = plans.find((p) => p.slug === 'free') || FALLBACK[0];
@@ -71,6 +56,7 @@ export default function Landing() {
           <a href="#features">Product</a>
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
+          <Link to="/contact">Contact</Link>
         </nav>
         <div className={s.navCta}>
           <Link to="/login" className={s.signIn}>Sign in</Link>
@@ -81,20 +67,17 @@ export default function Landing() {
       {/* ── Hero ────────────────────────────────────────────────────────────── */}
       <section className={s.hero}>
         <div className={s.heroLeft}>
-          <span className={s.pill}>✨ The new standard for async communication</span>
+          <span className={s.pill}><Sparkles size={14} /> The new standard for async communication</span>
           <h1 className={s.h1}>Say it once.<br /><span className={s.accent}>Get it done.</span></h1>
-          <p className={s.heroSub}>
-            Record your screen, share instantly, and communicate with clarity.
-            No meetings. No back and forth.
-          </p>
+          <p className={s.heroSub}>Record your screen, share instantly, and communicate with clarity. No meetings. No back and forth.</p>
           <div className={s.heroBtns}>
             <Link to="/signup" className={s.primaryBtn}><span className={s.recDot} /> Start Recording Free</Link>
-            <a href="#how" className={s.secondaryBtn}>▶ Watch Demo</a>
+            <a href="#how" className={s.secondaryBtn}><Play size={16} fill="currentColor" /> Watch Demo</a>
           </div>
           <div className={s.trustBadges}>
-            <span>✓ No credit card</span>
-            <span>✓ Unlimited recordings</span>
-            <span>✓ Free forever</span>
+            <span><Check size={15} color="#16a34a" /> No credit card</span>
+            <span><Check size={15} color="#16a34a" /> Unlimited recordings</span>
+            <span><Check size={15} color="#16a34a" /> Free forever</span>
           </div>
         </div>
 
@@ -127,20 +110,19 @@ export default function Landing() {
                 </div>
               </div>
             </div>
-            {/* floating camera bubble + control bar */}
-            <div className={s.bubble}><div className={s.bubbleInner}>🙂</div></div>
+            <div className={s.bubble}><div className={s.bubbleInner}><Video size={30} color="#6366f1" /></div></div>
             <div className={s.controlBar}>
-              <div className={s.ctrl}><span>📹</span><small>Camera<br />On</small></div>
-              <div className={s.ctrl}><span>🎙️</span><small>Mic<br />On</small></div>
-              <div className={s.ctrl}><span>🎚️</span><small>Quality<br />1080p</small></div>
-              <div className={s.ctrl}><span>⏱️</span><small>Countdown<br />3 sec</small></div>
+              <div className={s.ctrl}><Video size={18} color="#6366f1" /><small>Camera<br />On</small></div>
+              <div className={s.ctrl}><Mic size={18} color="#6366f1" /><small>Mic<br />On</small></div>
+              <div className={s.ctrl}><Gauge size={18} color="#6366f1" /><small>Quality<br />1080p</small></div>
+              <div className={s.ctrl}><Timer size={18} color="#6366f1" /><small>Countdown<br />3 sec</small></div>
               <div className={s.recBtn} />
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── Trust strip (placeholder — swap for real proof) ─────────────────── */}
+      {/* ── Trust strip ─────────────────────────────────────────────────────── */}
       <section className={s.trust}>
         <p className={s.trustLabel}>BUILT FOR FREELANCERS, AGENCIES &amp; REMOTE TEAMS</p>
         <div className={s.trustRow}>
@@ -154,7 +136,7 @@ export default function Landing() {
         <div className={s.featureGrid}>
           {FEATURES.map((f, i) => (
             <div key={i} className={s.featureCard}>
-              <div className={`${s.featureIcon} ${f.tint}`}>{f.icon}</div>
+              <div className={`${s.featureIcon} ${f.tint}`}><f.Icon size={24} color={f.color} strokeWidth={2.2} /></div>
               <h3>{f.title}</h3>
               <p>{f.text}</p>
             </div>
@@ -168,8 +150,8 @@ export default function Landing() {
         <div className={s.steps}>
           {STEPS.map((st, i) => (
             <div key={i} className={s.step}>
-              <div className={`${s.stepIcon} ${st.tint}`}>{st.icon}</div>
-              <div className={s.stepNum}>{st.n}</div>
+              <div className={`${s.stepIcon} ${st.tint}`}><st.Icon size={26} color={st.color} strokeWidth={2.2} /></div>
+              <div className={s.stepNum}>{i + 1}</div>
               <h4>{st.title}</h4>
               <p>{st.text}</p>
               {i < STEPS.length - 1 && <div className={s.stepLine} />}
@@ -178,20 +160,14 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Testimonial (placeholder — replace with a real one) ─────────────── */}
+      {/* ── Testimonial (placeholder) ───────────────────────────────────────── */}
       <section className={s.section}>
         <div className={s.testimonial}>
-          <div className={s.quoteMark}>“</div>
-          <blockquote>
-            VeoRec replaced a dozen status meetings a week. I record a two-minute
-            walkthrough, drop the link, and everyone’s unblocked — on their own time.
-          </blockquote>
+          <div className={s.quoteMark}><Quote size={40} color="#6366f1" fill="#6366f1" /></div>
+          <blockquote>VeoRec replaced a dozen status meetings a week. I record a two-minute walkthrough, drop the link, and everyone’s unblocked — on their own time.</blockquote>
           <div className={s.author}>
             <div className={s.authorAvatar} />
-            <div>
-              <strong>Your customer here</strong>
-              <small>Add a real testimonial once you have one</small>
-            </div>
+            <div><strong>Your customer here</strong><small>Add a real testimonial once you have one</small></div>
           </div>
         </div>
       </section>
@@ -200,47 +176,38 @@ export default function Landing() {
       <section id="pricing" className={s.section}>
         <h2 className={s.h2}>Simple pricing. No surprises.</h2>
         <div className={s.cycleToggle}>
-          <button className={cycle === 'monthly' ? s.cycleActive : ''} onClick={() => setCycle('monthly')}>Monthly</button>
-          <button className={cycle === 'yearly' ? s.cycleActive : ''} onClick={() => setCycle('yearly')}>
-            Yearly <span className={s.save}>2 months free</span>
+          <button className={cycle === 'monthly' ? s.cycleActive : s.cycleBtn} onClick={() => setCycle('monthly')}>Monthly</button>
+          <button className={cycle === 'yearly' ? s.cycleActive : s.cycleBtn} onClick={() => setCycle('yearly')}>
+            Yearly <span className={s.save}>Save 17%</span>
           </button>
         </div>
 
         <div className={s.pricing}>
-          {/* Free */}
           <div className={s.priceCard}>
             <div className={s.priceName}>Free</div>
             <div className={s.priceAmt}>$0<span>forever</span></div>
-            <ul>{planRows(free).map((r, i) => <li key={i}>✓ {r}</li>)}</ul>
+            <div className={s.priceNote}> </div>
+            <ul>{planRows(free).map((r, i) => <li key={i}><Check size={16} className={s.liCheck} /> {r}</li>)}</ul>
             <Link to="/signup" className={s.priceBtnGhost}>Get Started</Link>
           </div>
 
-          {/* Pro */}
           <div className={`${s.priceCard} ${s.priceFeatured}`}>
             <span className={s.popular}>Most Popular</span>
             <div className={s.priceName}>Pro</div>
-            <div className={s.priceAmt}>
-              ${cycle === 'yearly' ? pro.yearlyPrice : pro.monthlyPrice}
-              <span>{cycle === 'yearly' ? 'per year' : 'per month'}</span>
-            </div>
-            <div className={s.priceNote}>
-              {cycle === 'yearly' ? `Just $${(pro.yearlyPrice / 12).toFixed(2)}/mo · 2 months free` : 'Billed monthly'}
-            </div>
-            <ul>{planRows(pro).map((r, i) => <li key={i}>✓ {r}</li>)}</ul>
+            <div className={s.priceAmt}>${cycle === 'yearly' ? pro.yearlyPrice : pro.monthlyPrice}<span>{cycle === 'yearly' ? 'per year' : 'per month'}</span></div>
+            <div className={s.priceNote}>{cycle === 'yearly' ? `Just $${(pro.yearlyPrice / 12).toFixed(2)}/mo · 2 months free` : 'Billed monthly'}</div>
+            <ul>{planRows(pro).map((r, i) => <li key={i}><Check size={16} className={s.liCheckPro} /> {r}</li>)}</ul>
             <Link to="/signup" className={s.priceBtnPrimary}>Upgrade to Pro</Link>
           </div>
 
-          {/* Business — coming soon (pre-architected) */}
           <div className={`${s.priceCard} ${s.priceSoon}`}>
             <div className={s.priceName}>Business <span className={s.soonTag}>Soon</span></div>
             <div className={s.priceAmt}>$24<span>per user / mo</span></div>
+            <div className={s.priceNote}> </div>
             <ul>
-              <li>✓ Everything in Pro</li>
-              <li>✓ Team workspaces</li>
-              <li>✓ Shared libraries</li>
-              <li>✓ Advanced analytics</li>
-              <li>✓ SSO (SAML)</li>
-              <li>✓ Admin controls</li>
+              {['Everything in Pro', 'Team workspaces', 'Shared libraries', 'Advanced analytics', 'SSO (SAML)', 'Admin controls'].map((r, i) => (
+                <li key={i}><Check size={16} className={s.liCheck} /> {r}</li>
+              ))}
             </ul>
             <button className={s.priceBtnGhost} disabled>Coming soon</button>
           </div>
@@ -264,10 +231,10 @@ export default function Landing() {
         <div className={s.footBrand}><img src="/logo.png" alt="" className={s.brandLogo} />VeoRec</div>
         <div className={s.footLinks}>
           <Link to="/pricing">Pricing</Link>
+          <Link to="/contact">Contact</Link>
           <Link to="/terms">Terms</Link>
           <Link to="/privacy">Privacy</Link>
           <Link to="/refund">Refund</Link>
-          <a href="mailto:codingclicks@gmail.com">Contact</a>
         </div>
         <div className={s.footCopy}>© {new Date().getFullYear()} VeoRec</div>
       </footer>

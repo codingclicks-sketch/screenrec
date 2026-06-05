@@ -16,6 +16,13 @@ const subscriptions = require('./subscriptions');
 function resolveSlug(user) {
   if (!user) return plans.DEFAULT_PLAN_SLUG;
 
+  // 1) Admin-granted (comped) plan — highest priority. Lets the owner make any
+  // user premium without payment. Optional expiry; null/absent = forever.
+  if (user.manualPlan && plans.getPlan(user.manualPlan)) {
+    const notExpired = !user.manualPlanExpires || user.manualPlanExpires > Date.now();
+    if (notExpired) return plans.getPlan(user.manualPlan).slug;
+  }
+
   const sub = subscriptions.getByUser(user.id);
   if (sub && subscriptions.isEntitled(sub)) {
     return sub.planSlug || 'pro';
@@ -52,10 +59,14 @@ function features(user) {
 function summary(user) {
   const plan = resolve(user);
   const sub = subscriptions.getByUser(user?.id);
+  const comped = !!(user?.manualPlan && (!user.manualPlanExpires || user.manualPlanExpires > Date.now())
+    && plans.getPlan(user.manualPlan).slug !== plans.DEFAULT_PLAN_SLUG);
   return {
     plan: plans.publicPlan(plan),
     planSlug: plan.slug,
     isPaid: plan.slug !== plans.DEFAULT_PLAN_SLUG,
+    source: comped ? 'comped' : (sub && subscriptions.isEntitled(sub) ? 'subscription' : 'free'),
+    comped,
     subscription: sub
       ? {
           status: sub.status,
