@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Video, Link2, LineChart, FolderOpen, Clapperboard, MessageSquare,
   CheckCircle2, Mic, Gauge, Timer, Sparkles, Play, Check, Quote,
+  Plus, PlaySquare, BarChart3, Monitor, AppWindow,
 } from 'lucide-react';
 import API from '../api';
 import s from './Landing.module.css';
@@ -81,44 +82,76 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* CSS product mockup */}
+        {/* CSS product mockup — recreates the VeoRec dashboard + floating panels */}
         <div className={s.heroRight}>
           <div className={s.mockup}>
             <div className={s.mockHeader}>
               <img src="/logo.png" alt="" className={s.mockLogo} />
               <span className={s.mockBrand}>VeoRec</span>
-              <div className={s.mockSearch}>Search recordings…</div>
+              <div className={s.mockSearch}>Search recordings… <span className={s.mockKbd}>⌘K</span></div>
+              <div className={s.mockRecord}><Plus size={12} /> Record</div>
             </div>
             <div className={s.mockBody}>
               <aside className={s.mockSidebar}>
-                <div className={`${s.mockNav} ${s.mockNavActive}`}>● Record</div>
-                <div className={s.mockNav}>▦ Library</div>
-                <div className={s.mockNav}>▭ Folders</div>
-                <div className={s.mockNav}>▤ Analytics</div>
-                <div className={s.mockNav}>⚙ Settings</div>
+                <div className={`${s.mockNav} ${s.mockNavActive}`}><PlaySquare size={13} /> Library</div>
+                <div className={s.mockNav}><FolderOpen size={13} /> Folders</div>
+                <div className={s.mockNav}><BarChart3 size={13} /> Analytics</div>
+                <div className={s.mockStorage}>
+                  <div className={s.mockStorageLabel}>Storage</div>
+                  <div className={s.mockStorageBar}><span style={{ width: '12%' }} /></div>
+                  <div className={s.mockStorageMeta}>1.2 / 10 GB</div>
+                </div>
+                <div className={s.mockUpgrade}><Sparkles size={12} color="#6366f1" /> Upgrade to Pro</div>
               </aside>
               <div className={s.mockGrid}>
-                <div className={s.mockLabel}>History</div>
+                <div className={s.mockLabel}>Library <span>24 videos</span></div>
                 <div className={s.mockCards}>
-                  {[['Product Walkthrough', '2 days ago'], ['Onboarding Flow', '3 days ago'], ['Feature Explainer', '2 days ago'], ['Bug Repro', '4 days ago'], ['Design Review', '5 days ago'], ['Sales Demo', '1 week ago']].map(([t, d], i) => (
+                  {[['Product Walkthrough', '2:34'], ['Onboarding Flow', '1:48'], ['Feature Explainer', '2:15'], ['Bug Report', '1:12'], ['Design Review', '3:06'], ['Quick Update', '0:56']].map(([t, dur], i) => (
                     <div key={i} className={s.mockCard}>
-                      <div className={s.mockThumb}><span className={s.mockDur}>3:00</span></div>
+                      <div className={s.mockThumb}><span className={s.mockDur}>{dur}</span></div>
                       <div className={s.mockCardTitle}>{t}</div>
-                      <div className={s.mockCardMeta}>{d}</div>
+                      <div className={s.mockCardMeta}>{[42, 18, 32, 9, 26, 14][i]} views</div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-            <div className={s.bubble}><div className={s.bubbleInner}><Video size={30} color="#6366f1" /></div></div>
-            <div className={s.controlBar}>
-              <div className={s.ctrl}><Video size={18} color="#6366f1" /><small>Camera<br />On</small></div>
-              <div className={s.ctrl}><Mic size={18} color="#6366f1" /><small>Mic<br />On</small></div>
-              <div className={s.ctrl}><Gauge size={18} color="#6366f1" /><small>Quality<br />1080p</small></div>
-              <div className={s.ctrl}><Timer size={18} color="#6366f1" /><small>Countdown<br />3 sec</small></div>
-              <div className={s.recBtn} />
+          </div>
+
+          {/* Floating record control panel (bottom-left) */}
+          <div className={s.recPanel}>
+            <div className={s.recTabs}>
+              <span className={s.recTabActive}><Monitor size={11} /> Entire Screen</span>
+              <span className={s.recTab}><AppWindow size={11} /> Browser Tab</span>
+              <span className={s.recTab}>Window</span>
+            </div>
+            {[[Video, 'Camera', 'On'], [Mic, 'Microphone', 'On'], [Gauge, 'Quality', '1080p'], [Timer, 'Countdown', '3 sec']].map(([Ic, label, val], i) => (
+              <div key={i} className={s.recRow}>
+                <span className={s.recRowIcon}><Ic size={14} color="#6366f1" /></span>
+                <span className={s.recRowLabel}>{label}</span>
+                <span className={s.recRowVal}>{val}</span>
+              </div>
+            ))}
+            <div className={s.recBtnBig} />
+          </div>
+
+          {/* Floating views stat card (bottom-right) */}
+          <div className={s.viewsCard}>
+            <div className={s.viewsTop}>
+              <span className={s.viewsLabel}>Views</span>
+              <span className={s.viewsNum}>12.4K</span>
+              <span className={s.viewsPct}>+28%</span>
+            </div>
+            <div className={s.viewsChart}>
+              <svg viewBox="0 0 120 40" preserveAspectRatio="none" className={s.viewsLine}>
+                <polyline points="0,32 20,28 40,30 60,18 80,22 100,8 120,12" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div className={s.viewsDonut} />
             </div>
           </div>
+
+          {/* 3D camera badge */}
+          <div className={s.camBadge}><Video size={28} color="#fff" /></div>
         </div>
       </section>
 
@@ -228,15 +261,41 @@ export default function Landing() {
 
       {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <footer className={s.footer}>
-        <div className={s.footBrand}><img src="/logo.png" alt="" className={s.brandLogo} />VeoRec</div>
-        <div className={s.footLinks}>
-          <Link to="/pricing">Pricing</Link>
-          <Link to="/contact">Contact</Link>
-          <Link to="/terms">Terms</Link>
-          <Link to="/privacy">Privacy</Link>
-          <Link to="/refund">Refund</Link>
+        <div className={s.footTop}>
+          <div className={s.footBrandCol}>
+            <div className={s.footBrand}><img src="/logo.png" alt="" className={s.brandLogo} />VeoRec</div>
+            <p className={s.footBlurb}>Record your screen, share instantly, and communicate with clarity — a simple, affordable Loom alternative.</p>
+            <div className={s.footBadges}>
+              <span>✓ No credit card</span>
+              <span>✓ Free forever plan</span>
+            </div>
+          </div>
+          <div className={s.footCols}>
+            <div className={s.footCol}>
+              <h4>Product</h4>
+              <a href="#features">Features</a>
+              <a href="#how">How it works</a>
+              <Link to="/pricing">Pricing</Link>
+              <Link to="/signup">Get started</Link>
+            </div>
+            <div className={s.footCol}>
+              <h4>Company</h4>
+              <Link to="/contact">Contact</Link>
+              <Link to="/login">Sign in</Link>
+              <a href="mailto:codingclicks@gmail.com">Support</a>
+            </div>
+            <div className={s.footCol}>
+              <h4>Legal</h4>
+              <Link to="/terms">Terms of Service</Link>
+              <Link to="/privacy">Privacy Policy</Link>
+              <Link to="/refund">Refund Policy</Link>
+            </div>
+          </div>
         </div>
-        <div className={s.footCopy}>© {new Date().getFullYear()} VeoRec</div>
+        <div className={s.footBottom}>
+          <span>© {new Date().getFullYear()} VeoRec. All rights reserved.</span>
+          <span>Payments processed securely by Paddle.</span>
+        </div>
       </footer>
     </div>
   );
