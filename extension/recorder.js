@@ -60,10 +60,20 @@ function elapsedSeconds() {
   return Math.floor((Date.now() - startTime - paused) / 1000);
 }
 
+// Send a message to the on-screen overlay (toolbar + camera bubble) on the tab.
+function overlayMsg(msg) {
+  const tabId = opts.bubbleTabId;
+  if (tabId != null && chrome.tabs && chrome.tabs.sendMessage) {
+    try { chrome.tabs.sendMessage(tabId, msg); } catch (e) {}
+  }
+}
+
 function updateTimer() {
   const s = elapsedSeconds();
   const m = String(Math.floor(s / 60)).padStart(2, '0');
-  timerEl.textContent = `${m}:${String(s % 60).padStart(2, '0')}`;
+  const text = `${m}:${String(s % 60).padStart(2, '0')}`;
+  timerEl.textContent = text;
+  overlayMsg({ type: 'SR_OVERLAY_TICK', text });
 
   // ── Plan recording-length limit (live countdown) ─────────────────────────
   const remaining = recordingLimitSec - s;
@@ -225,6 +235,12 @@ async function beginRecording() {
 
   chrome.storage.local.set({ recording: true, startTime });
   chrome.runtime.sendMessage({ type: 'RECORDER_STARTED', startTime });
+
+  // Hand control to the on-screen overlay and get out of the way: minimize this
+  // recorder window so the draggable toolbar + camera bubble are what the user
+  // sees (and what's captured). Recording continues while minimized.
+  overlayMsg({ type: 'SR_OVERLAY_STATE', state: 'recording' });
+  try { chrome.windows.getCurrent((w) => { if (w && w.id != null) chrome.windows.update(w.id, { state: 'minimized' }); }); } catch (e) {}
 }
 
 function togglePause() {
@@ -234,11 +250,13 @@ function togglePause() {
     pauseStartedAt = Date.now();
     pauseBtn.textContent = '▶ Resume';
     setStatus('⏸ Paused', 'uploading');
+    overlayMsg({ type: 'SR_OVERLAY_STATE', state: 'paused' });
   } else if (mediaRecorder.state === 'paused') {
     mediaRecorder.resume();
     if (pauseStartedAt) { pausedAccum += Date.now() - pauseStartedAt; pauseStartedAt = null; }
     pauseBtn.textContent = '⏸ Pause';
     setStatus('● Recording…', 'recording');
+    overlayMsg({ type: 'SR_OVERLAY_STATE', state: 'recording' });
   }
 }
 
@@ -306,6 +324,9 @@ function stopRecording() {
   previewWrap.classList.remove('show');
   setStatus('Uploading…', 'uploading');
   timerEl.classList.remove('show');
+  // Bring the recorder window back so upload progress is visible (it was
+  // minimized while the on-screen overlay drove the recording).
+  try { chrome.windows.getCurrent((w) => { if (w && w.id != null) chrome.windows.update(w.id, { state: 'normal', focused: true }); }); } catch (e) {}
 }
 
 // Discard the recording entirely — nothing is saved or uploaded — and close.
@@ -379,11 +400,14 @@ copyBtn.addEventListener('click', () => {
   });
 });
 
-// Popup can remotely stop
+// Remote controls — from the popup (STOP_RECORDING) and the on-screen overlay
+// toolbar (SR_PAUSE / SR_STOP / SR_CANCEL).
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'STOP_RECORDING' && mediaRecorder && mediaRecorder.state !== 'inactive') {
-    stopRecording();
-  }
+  if (!msg) return;
+  const active = mediaRecorder && mediaRecorder.state !== 'inactive';
+  if ((msg.type === 'STOP_RECORDING' || msg.type === 'SR_STOP') && active) stopRecording();
+  if (msg.type === 'SR_PAUSE' && active) togglePause();
+  if (msg.type === 'SR_CANCEL') cancelRecording();
 });
 
 // On load: read options carried from popup, then try to auto-start.
