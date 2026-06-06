@@ -408,7 +408,24 @@ chrome.runtime.onMessage.addListener((msg) => {
   if ((msg.type === 'STOP_RECORDING' || msg.type === 'SR_STOP') && active) stopRecording();
   if (msg.type === 'SR_PAUSE' && active) togglePause();
   if (msg.type === 'SR_CANCEL') cancelRecording();
+  if (msg.type === 'SR_RESTART') restartRecording();
 });
+
+// Discard the current take (no upload) and immediately start a fresh recording,
+// keeping the on-screen overlay in place. Triggered by the toolbar's Restart.
+function restartRecording() {
+  if (mediaRecorder) {
+    mediaRecorder.onstop = null;
+    if (mediaRecorder.state !== 'inactive') { try { mediaRecorder.stop(); } catch (e) {} }
+  }
+  clearInterval(timerInterval);
+  chunks = [];
+  cleanupStreams();
+  // Bring the window forward so the screen-share picker is usable, then re-record.
+  try { chrome.windows.getCurrent((w) => { if (w && w.id != null) chrome.windows.update(w.id, { state: 'normal', focused: true }); }); } catch (e) {}
+  setStatus('Restarting…');
+  beginRecording().catch(onStartError);
+}
 
 // On load: read options carried from popup, then try to auto-start.
 (async () => {
