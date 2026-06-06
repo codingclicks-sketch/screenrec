@@ -30,6 +30,9 @@ export default function Editor() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [drag, setDrag] = useState(null); // { segIndex, edge } while dragging a handle
+  const [exporting, setExporting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [exportMsg, setExportMsg] = useState('');
 
   useEffect(() => {
     authFetch(`${API}/api/recordings/${id}`).then((r) => r.json()).then((d) => {
@@ -134,18 +137,97 @@ export default function Editor() {
 
   const keptDuration = useMemo(() => segments.reduce((a, sg) => a + (sg.end - sg.start), 0), [segments]);
 
-  async function save() {
-    setSaving(true);
-    // If a single full-length segment, store as no edit; else store segments.
-    const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
-    const body = isFull
-      ? { segments: null, trimStart: null, trimEnd: null }
-      : { segments, trimStart: segments[0].start, trimEnd: segments[segments.length - 1].end };
-    const res = await authFetch(`${API}/api/recordings/${id}/meta`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  // Seek a media element and resolve once the frame is ready.
+  function seek(video, t) {
+    return new Promise((res) => {
+      const on = () => { video.removeEventListener('seeked', on); res(); };
+      video.addEventListener('seeked', on);
+      video.currentTime = Math.min(t, (video.duration || t));
     });
-    setSaving(false);
-    if (res.ok) { setSaved(true); setTimeout(() => navigate('/'), 900); }
+  }
+
+  // Physically re-render only the kept segments into a new WebM (real trim).
+  // Video via canvas.captureStream; audio routed through WebAudio to a stream
+  // destination (so nothing plays aloud) and recorded together.
+  async function renderTrimmed(srcUrl, segs, onProgress) {
+    const video = document.createElement('video');
+    video.crossOrigin = 'anonymous';
+    video.src = srcUrl; video.playsInline = true; video.muted = false; video.preload = 'auto';
+    await new Promise((res, rej) => { video.onloadedmetadata = res; video.onerror = () => rej(new Error('Could not load video')); });
+    const w = video.videoWidth || 1280, h = video.videoHeight || 720;
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const canvasStream = canvas.captureStream(30);
+
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ac = new AC();
+    let audioTracks = [];
+    try {
+      const srcNode = ac.createMediaElementSource(video);
+      const dest = ac.createMediaStreamDestination();
+      srcNode.connect(dest); // NOT connected to ac.destination → silent to user
+      audioTracks = dest.stream.getAudioTracks();
+    } catch { /* no audio — proceed video-only */ }
+
+    const stream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus'
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+
+    const total = segs.reduce((a, s) => a + (s.end - s.start), 0) || 1;
+    let done = 0, raf;
+    const draw = () => { try { ctx.drawImage(video, 0, 0, w, h); } catch {} raf = requestAnimationFrame(draw); };
+
+    const blob = await new Promise(async (resolve) => {
+      rec.onstop = () => { cancelAnimationFrame(raf); try { ac.close(); } catch {} resolve(new Blob(chunks, { type: 'video/webm' })); };
+      rec.start();
+      draw();
+      for (const sg of segs) {
+        await seek(video, sg.start);
+        try { await video.play(); } catch {}
+        await new Promise((res) => {
+          const check = () => {
+            if (!video.paused && (video.currentTime >= sg.end - 0.04 || video.ended)) { video.pause(); res(); }
+            else { onProgress(Math.min(0.99, (done + Math.max(0, video.currentTime - sg.start)) / total)); requestAnimationFrame(check); }
+          };
+          check();
+        });
+        done += (sg.end - sg.start);
+        onProgress(Math.min(0.99, done / total));
+      }
+      rec.stop();
+    });
+    return blob;
+  }
+
+  async function save() {
+    const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
+    if (isFull) {
+      setSaving(true);
+      await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments: null, trimStart: null, trimEnd: null }) });
+      setSaving(false); setSaved(true); setTimeout(() => navigate('/'), 900);
+      return;
+    }
+    // Real export: render the trimmed file and replace the original.
+    try { videoRef.current && videoRef.current.pause(); } catch {}
+    setExporting(true); setProgress(0); setExportMsg('Rendering your trimmed video… keep this tab open.');
+    try {
+      const blob = await renderTrimmed(rec.filename, segments, (p) => setProgress(p));
+      setProgress(1); setExportMsg('Uploading trimmed video…');
+      const form = new FormData();
+      form.append('video', blob, 'trimmed.webm');
+      form.append('duration', String(Math.round(keptDuration)));
+      const res = await authFetch(`${API}/api/recordings/${id}/replace`, { method: 'POST', body: form });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Upload failed'); }
+      setExportMsg('Saved ✓ Your video is trimmed.'); setTimeout(() => navigate('/'), 1000);
+    } catch (e) {
+      // Fallback: save virtual cuts so playback still respects them.
+      setExportMsg('Could not re-render (' + e.message + '). Saved as a virtual trim instead.');
+      await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments, trimStart: segments[0].start, trimEnd: segments[segments.length - 1].end }) }).catch(() => {});
+      setTimeout(() => setExporting(false), 2600);
+    }
   }
 
   if (!rec) return <div className={s.loading}>Loading editor…</div>;
@@ -208,6 +290,17 @@ export default function Editor() {
           <span>Final length: <strong>{fmt(keptDuration)}</strong></span>
         </div>
       </div>
+
+      {exporting && (
+        <div className={s.exportOverlay}>
+          <div className={s.exportCard}>
+            <div className={s.exportTitle}>{exportMsg}</div>
+            <div className={s.exportBar}><div className={s.exportFill} style={{ width: `${Math.round(progress * 100)}%` }} /></div>
+            <div className={s.exportPct}>{Math.round(progress * 100)}%</div>
+            <div className={s.exportNote}>Re-rendering happens in your browser and runs about as long as the trimmed video. Please keep this tab focused.</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
