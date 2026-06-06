@@ -234,6 +234,8 @@ async function beginRecording() {
   setStatus(cam === 'bubble' ? '● Recording… (camera bubble is on your tab)' : '● Recording…', 'recording');
 
   chrome.storage.local.set({ recording: true, startTime });
+  // Shared state the on-screen overlay (on any tab) reads to render the timer.
+  chrome.storage.local.set({ recState: { recording: true, startTime, paused: false, pausedAccum: 0, pauseStartedAt: null } });
   chrome.runtime.sendMessage({ type: 'RECORDER_STARTED', startTime });
 
   // Hand control to the on-screen overlay and get out of the way: minimize this
@@ -250,13 +252,13 @@ function togglePause() {
     pauseStartedAt = Date.now();
     pauseBtn.textContent = '▶ Resume';
     setStatus('⏸ Paused', 'uploading');
-    overlayMsg({ type: 'SR_OVERLAY_STATE', state: 'paused' });
+    chrome.storage.local.set({ recState: { recording: true, startTime, paused: true, pausedAccum, pauseStartedAt } });
   } else if (mediaRecorder.state === 'paused') {
     mediaRecorder.resume();
     if (pauseStartedAt) { pausedAccum += Date.now() - pauseStartedAt; pauseStartedAt = null; }
     pauseBtn.textContent = '⏸ Pause';
     setStatus('● Recording…', 'recording');
-    overlayMsg({ type: 'SR_OVERLAY_STATE', state: 'recording' });
+    chrome.storage.local.set({ recState: { recording: true, startTime, paused: false, pausedAccum, pauseStartedAt: null } });
   }
 }
 
@@ -320,6 +322,7 @@ function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   cleanupStreams();
   closeBubble();
+  chrome.storage.local.set({ recState: { recording: false } }); // overlays on all tabs self-remove
   controls.style.display = 'none';
   previewWrap.classList.remove('show');
   setStatus('Uploading…', 'uploading');
@@ -339,7 +342,7 @@ function cancelRecording() {
   chunks = [];
   cleanupStreams();
   closeBubble();
-  chrome.storage.local.set({ recording: false });
+  chrome.storage.local.set({ recording: false, recState: { recording: false } });
   closeWindow();
 }
 
