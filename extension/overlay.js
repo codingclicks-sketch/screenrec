@@ -127,7 +127,7 @@
   }, true);
 
   // ── Camera bubble (only when camera bubble mode is on) ───────────────────────
-  let bubble = null;
+  let bubble = null, bubbleVideo = null, cameraEnabled = false;
   function makeBubble() {
     if (bubble) return;
     bubble = document.createElement('div');
@@ -137,51 +137,78 @@
       'width:150px', 'height:150px', 'border-radius:50%', 'overflow:hidden',
       'box-shadow:0 8px 28px rgba(0,0,0,.45)', 'border:3px solid #7c5cfc', 'background:#000',
     ].join(';');
-    const v = document.createElement('video');
-    v.autoplay = true; v.muted = true; v.playsInline = true;
-    v.style.cssText = 'width:100%;height:100%;object-fit:cover;transform:scaleX(-1)';
+    bubbleVideo = document.createElement('video');
+    bubbleVideo.autoplay = true; bubbleVideo.muted = true; bubbleVideo.playsInline = true;
+    bubbleVideo.style.cssText = 'width:100%;height:100%;object-fit:cover;transform:scaleX(-1)';
     const x = document.createElement('div');
     x.setAttribute('data-no-drag', '1');
     x.textContent = '×';
     x.title = 'Hide camera';
     x.style.cssText = 'position:absolute;top:2px;right:12px;color:#fff;font-size:22px;cursor:pointer;text-shadow:0 1px 4px #000;z-index:1';
     x.addEventListener('click', (e) => { e.stopPropagation(); hideBubble(); });
-    bubble.append(v, x);
+    bubble.append(bubbleVideo, x);
     (document.body || document.documentElement).appendChild(bubble);
     makeDraggable(bubble, bubble);
-    navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 480 }, audio: false })
-      .then((s) => { camStream = s; v.srcObject = s; })
-      .catch(() => { v.style.display = 'none'; bubble.style.background = '#14141f';
-        bubble.insertAdjacentHTML('beforeend', '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font:600 12px Inter,sans-serif;text-align:center;padding:0 12px">Camera blocked on this site</div>'); });
+    if (!document.hidden) startCam();
   }
-  function hideBubble() {
+  function startCam() {
+    if (!bubble || camStream) return;
+    navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 480 }, audio: false })
+      .then((s) => { camStream = s; if (bubbleVideo) bubbleVideo.srcObject = s; })
+      .catch(() => { if (bubbleVideo) bubbleVideo.style.display = 'none'; if (bubble) { bubble.style.background = '#14141f';
+        bubble.insertAdjacentHTML('beforeend', '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font:600 12px Inter,sans-serif;text-align:center;padding:0 12px">Camera blocked on this site</div>'); } });
+  }
+  function stopCam() {
     try { if (camStream) camStream.getTracks().forEach((t) => t.stop()); } catch (e) {}
     camStream = null;
+  }
+  function hideBubble() {
+    stopCam();
     const el = document.getElementById('__sr_camera_bubble');
     if (el) el.remove();
-    bubble = null;
+    bubble = null; bubbleVideo = null; cameraEnabled = false;
   }
 
-  chrome.storage.local.get('recOptions', (d) => {
-    if (d && d.recOptions && d.recOptions.camera === 'bubble') makeBubble();
+  // Only the visible tab holds the webcam — release it when this tab is hidden so
+  // the tab you switch TO can acquire the camera, then re-acquire when visible.
+  document.addEventListener('visibilitychange', () => {
+    if (!cameraEnabled || !bubble) return;
+    if (document.hidden) stopCam(); else startCam();
   });
 
-  // ── Cleanup + incoming messages from the recorder window ─────────────────────
+  chrome.storage.local.get('recOptions', (d) => {
+    if (d && d.recOptions && d.recOptions.camera === 'bubble') { cameraEnabled = true; makeBubble(); }
+  });
+
+  // ── Self-syncing state (works across tab switches) ───────────────────────────
+  // Every tab's overlay reads the shared recState from storage and ticks its own
+  // timer + paused UI, and removes itself when recording ends. This is what makes
+  // the toolbar/bubble "follow" you when you switch tabs.
+  function setPausedUI(paused) {
+    const icon = pauseBtn.querySelector('svg');
+    if (icon) icon.outerHTML = paused ? SVG.play : SVG.pause;
+    timer.style.color = paused ? '#f59e0b' : '#fff';
+  }
   function cleanupAll() {
     hideBubble();
     if (bar && bar.parentNode) bar.remove();
     window.__srOverlayActive = false;
+    clearInterval(tickIv);
   }
+  function fmt(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+  const tickIv = setInterval(() => {
+    chrome.storage.local.get('recState', (d) => {
+      const st = d.recState || {};
+      if (!st.recording) { cleanupAll(); return; }
+      const now = Date.now();
+      const pausedExtra = st.paused && st.pauseStartedAt ? now - st.pauseStartedAt : 0;
+      const s = Math.max(0, Math.floor((now - st.startTime - (st.pausedAccum || 0) - pausedExtra) / 1000));
+      timer.textContent = fmt(s);
+      setPausedUI(!!st.paused);
+    });
+  }, 500);
+
   chrome.runtime.onMessage.addListener((msg) => {
-    if (!msg) return;
-    if (msg.type === 'SR_STOP_BUBBLE') cleanupAll();
-    if (msg.type === 'SR_OVERLAY_TICK') timer.textContent = msg.text;
-    if (msg.type === 'SR_OVERLAY_STATE') {
-      const paused = msg.state === 'paused';
-      // Swap the pause/play icon (first child node) without losing the tooltip.
-      const icon = pauseBtn.querySelector('svg');
-      if (icon) icon.outerHTML = paused ? SVG.play : SVG.pause;
-      timer.style.color = paused ? '#f59e0b' : '#fff';
-    }
+    if (msg && msg.type === 'SR_STOP_BUBBLE') cleanupAll();
   });
 })();
