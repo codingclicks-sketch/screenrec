@@ -41,56 +41,90 @@
     window.addEventListener('mouseup', () => { dragging = false; handle.style.cursor = 'grab'; });
   }
 
-  // ── Control toolbar ──────────────────────────────────────────────────────────
+  // Icons (inline SVG, stroke = currentColor)
+  const SVG = {
+    pause: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+    play: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+    restart: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+    trash: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>',
+  };
+
+  // ── Control toolbar (vertical) ───────────────────────────────────────────────
   const bar = document.createElement('div');
   bar.id = '__sr_toolbar';
   bar.style.cssText = [
-    'position:fixed', 'left:50%', 'bottom:28px', 'transform:translateX(-50%)',
-    `z-index:${Z}`, 'display:flex', 'align-items:center', 'gap:6px',
-    'background:#14141f', 'color:#fff', 'padding:8px 10px', 'border-radius:999px',
-    'box-shadow:0 10px 34px rgba(0,0,0,.45)', 'font-family:Inter,system-ui,sans-serif',
-    'user-select:none',
+    'position:fixed', 'left:24px', 'top:24px', `z-index:${Z}`,
+    'display:flex', 'flex-direction:column', 'align-items:center', 'gap:8px',
+    'background:#16161f', 'color:#fff', 'padding:12px 10px', 'border-radius:20px',
+    'box-shadow:0 12px 40px rgba(0,0,0,.5)', 'font-family:Inter,system-ui,sans-serif',
+    'user-select:none', 'width:64px',
   ].join(';');
 
-  const dot = document.createElement('span');
-  dot.style.cssText = 'width:10px;height:10px;border-radius:50%;background:#ff4b4b;margin:0 6px 0 8px;box-shadow:0 0 0 0 rgba(255,75,75,.6);animation:__srpulse 1.4s infinite';
-  const timer = document.createElement('span');
-  timer.id = '__sr_timer';
-  timer.textContent = '00:00';
-  timer.style.cssText = 'font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;min-width:48px;margin-right:6px';
+  // Big red Stop button on top
+  const stopBtn = document.createElement('button');
+  stopBtn.setAttribute('data-no-drag', '1');
+  stopBtn.innerHTML = '<span style="width:16px;height:16px;background:#fff;border-radius:4px;display:block"></span>';
+  stopBtn.style.cssText = 'border:none;cursor:pointer;width:46px;height:46px;border-radius:14px;background:#ff5436;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(255,84,54,.5)';
 
-  function tbtn(label, title, bg) {
+  const timer = document.createElement('div');
+  timer.id = '__sr_timer';
+  timer.textContent = '0:00';
+  timer.style.cssText = 'font-variant-numeric:tabular-nums;font-weight:800;font-size:15px;letter-spacing:.5px';
+
+  const sep = document.createElement('div');
+  sep.style.cssText = 'width:34px;height:1px;background:rgba(255,255,255,.12);margin:2px 0';
+
+  // A round icon button with a hover tooltip showing its keyboard shortcut.
+  function iconBtn(svg, label, keys, onClick) {
     const b = document.createElement('button');
     b.setAttribute('data-no-drag', '1');
-    b.title = title;
-    b.innerHTML = label;
-    b.style.cssText = [
-      'border:none', 'cursor:pointer', 'border-radius:999px', 'font-size:13px',
-      'font-weight:600', 'padding:8px 14px', 'color:#fff', 'font-family:inherit',
-      `background:${bg}`,
-    ].join(';');
+    b.innerHTML = svg;
+    b.style.cssText = 'position:relative;border:none;cursor:pointer;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.10);color:#fff;display:flex;align-items:center;justify-content:center;transition:background .15s';
+    b.addEventListener('mouseenter', () => { b.style.background = 'rgba(255,255,255,.20)'; tip.style.display = 'flex'; });
+    b.addEventListener('mouseleave', () => { b.style.background = 'rgba(255,255,255,.10)'; tip.style.display = 'none'; });
+    b.addEventListener('click', onClick);
+    // tooltip (to the right of the bar)
+    const tip = document.createElement('div');
+    tip.style.cssText = 'display:none;position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);align-items:center;gap:6px;background:#16161f;color:#fff;padding:7px 10px;border-radius:10px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:12.5px;font-weight:600';
+    let inner = `<span>${label}</span>`;
+    for (const k of keys) inner += `<span style="background:rgba(255,255,255,.16);border-radius:5px;padding:2px 6px;font-size:11px">${k}</span>`;
+    tip.innerHTML = inner;
+    b.appendChild(tip);
     return b;
   }
 
-  const pauseBtn = tbtn('❚❚ Pause', 'Pause / resume', 'rgba(255,255,255,.14)');
-  const stopBtn = tbtn('■ Stop', 'Stop & save', '#ff4b4b');
-  const cancelBtn = tbtn('✕', 'Discard recording', 'rgba(255,255,255,.14)');
-
-  pauseBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'SR_PAUSE' }));
+  // Stop tooltip
+  const stopWrap = document.createElement('div');
+  stopWrap.style.cssText = 'position:relative;display:flex';
+  stopBtn.addEventListener('mouseenter', () => { stopTip.style.display = 'flex'; });
+  stopBtn.addEventListener('mouseleave', () => { stopTip.style.display = 'none'; });
+  const stopTip = document.createElement('div');
+  stopTip.style.cssText = 'display:none;position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);align-items:center;gap:6px;background:#16161f;color:#fff;padding:7px 10px;border-radius:10px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:12.5px;font-weight:600';
+  stopTip.innerHTML = '<span>Stop &amp; save</span><span style="background:rgba(255,255,255,.16);border-radius:5px;padding:2px 6px;font-size:11px">Alt</span><span style="background:rgba(255,255,255,.16);border-radius:5px;padding:2px 6px;font-size:11px">Shift</span><span style="background:rgba(255,255,255,.16);border-radius:5px;padding:2px 6px;font-size:11px">X</span>';
+  stopBtn.appendChild(stopTip);
   stopBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'SR_STOP' }));
-  cancelBtn.addEventListener('click', () => { if (confirm('Discard this recording?')) chrome.runtime.sendMessage({ type: 'SR_CANCEL' }); });
 
-  const grip = document.createElement('span');
-  grip.textContent = '⠿';
-  grip.style.cssText = 'opacity:.5;font-size:16px;padding:0 4px;cursor:grab';
+  const pauseBtn = iconBtn(SVG.pause, 'Pause', ['Alt', 'Shift', 'S'], () => chrome.runtime.sendMessage({ type: 'SR_PAUSE' }));
+  const restartBtn = iconBtn(SVG.restart, 'Restart', ['Alt', 'Shift', 'R'], () => { if (confirm('Discard this take and start over?')) chrome.runtime.sendMessage({ type: 'SR_RESTART' }); });
+  const deleteBtn = iconBtn(SVG.trash, 'Delete', ['Alt', 'Shift', 'D'], () => { if (confirm('Discard this recording?')) chrome.runtime.sendMessage({ type: 'SR_CANCEL' }); });
 
-  bar.append(grip, dot, timer, pauseBtn, stopBtn, cancelBtn);
+  bar.append(stopBtn, timer, sep, pauseBtn, restartBtn, deleteBtn);
 
   const style = document.createElement('style');
   style.textContent = '@keyframes __srpulse{0%{box-shadow:0 0 0 0 rgba(255,75,75,.6)}70%{box-shadow:0 0 0 7px rgba(255,75,75,0)}100%{box-shadow:0 0 0 0 rgba(255,75,75,0)}}';
   document.documentElement.appendChild(style);
   (document.body || document.documentElement).appendChild(bar);
   makeDraggable(bar, bar); // drag from anywhere on the bar (buttons opt out via data-no-drag)
+
+  // ── Keyboard shortcuts (Alt+Shift+…) ─────────────────────────────────────────
+  window.addEventListener('keydown', (e) => {
+    if (!e.altKey || !e.shiftKey) return;
+    const k = e.key.toLowerCase();
+    if (k === 'x') { e.preventDefault(); chrome.runtime.sendMessage({ type: 'SR_STOP' }); }
+    else if (k === 's') { e.preventDefault(); chrome.runtime.sendMessage({ type: 'SR_PAUSE' }); }
+    else if (k === 'r') { e.preventDefault(); chrome.runtime.sendMessage({ type: 'SR_RESTART' }); }
+    else if (k === 'd') { e.preventDefault(); chrome.runtime.sendMessage({ type: 'SR_CANCEL' }); }
+  }, true);
 
   // ── Camera bubble (only when camera bubble mode is on) ───────────────────────
   let bubble = null;
@@ -143,9 +177,11 @@
     if (msg.type === 'SR_STOP_BUBBLE') cleanupAll();
     if (msg.type === 'SR_OVERLAY_TICK') timer.textContent = msg.text;
     if (msg.type === 'SR_OVERLAY_STATE') {
-      pauseBtn.innerHTML = msg.state === 'paused' ? '▶ Resume' : '❚❚ Pause';
-      dot.style.animationPlayState = msg.state === 'paused' ? 'paused' : 'running';
-      dot.style.background = msg.state === 'paused' ? '#f59e0b' : '#ff4b4b';
+      const paused = msg.state === 'paused';
+      // Swap the pause/play icon (first child node) without losing the tooltip.
+      const icon = pauseBtn.querySelector('svg');
+      if (icon) icon.outerHTML = paused ? SVG.play : SVG.pause;
+      timer.style.color = paused ? '#f59e0b' : '#fff';
     }
   });
 })();
