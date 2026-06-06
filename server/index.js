@@ -270,7 +270,8 @@ if (!USE_CLOUDINARY) {
   app.get('/api/recordings/:id', requireAuth, (req, res) => {
     const row = db.get(req.params.id);
     if (!row || row.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
-    res.json(row);
+    const m = meta.get(req.params.id);
+    res.json({ ...row, filename: `${process.env.PUBLIC_URL || ''}/uploads/${row.filename}`, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
   });
 
   app.delete('/api/recordings/:id', requireAuth, (req, res) => {
@@ -402,6 +403,7 @@ if (!USE_CLOUDINARY) {
       if (!result.resources.length) return res.status(404).json({ error: 'Not found' });
       const r = result.resources[0];
       const ctx = r.context?.custom || {};
+      const m = meta.get(req.params.id);
       res.json({
         id: req.params.id,
         title: ctx.title || 'Untitled Recording',
@@ -411,6 +413,7 @@ if (!USE_CLOUDINARY) {
         created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
         cloudinary: true,
         public_id: r.public_id,
+        trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments,
       });
     } catch (e) {
       res.status(404).json({ error: 'Not found' });
@@ -507,7 +510,7 @@ app.get('/api/watch/:id', async (req, res) => {
     if (m.privacy === 'password' && m.passwordHash) {
       return res.json({ id: video.id, title: video.title, requiresPassword: true });
     }
-    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd });
+    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -523,7 +526,7 @@ app.post('/api/watch/:id/unlock', async (req, res) => {
       const ok = await bcrypt.compare(req.body.password || '', m.passwordHash);
       if (!ok) return res.status(401).json({ error: 'Incorrect password' });
     }
-    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd });
+    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -585,7 +588,7 @@ app.get('/api/recordings/:id/analytics', requireAuth, async (req, res) => {
 app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
   const user = users.findById(req.userId);
-  const { title, description, cta, privacy, password, folder, trimStart, trimEnd, removeBranding } = req.body;
+  const { title, description, cta, privacy, password, folder, trimStart, trimEnd, removeBranding, segments } = req.body;
   const fields = {};
   if (typeof description === 'string') fields.description = description.slice(0, 5000);
   if (cta === null) fields.cta = null;
@@ -618,6 +621,16 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (folder === null || typeof folder === 'string') fields.folder = folder;
   if (trimStart === null || Number.isFinite(trimStart)) fields.trimStart = trimStart === null ? null : Math.max(0, Math.floor(trimStart));
   if (trimEnd === null || Number.isFinite(trimEnd)) fields.trimEnd = trimEnd === null ? null : Math.floor(trimEnd);
+  // Keep-segments from the editor (virtual split). Sanitize: numbers, ordered, in-range.
+  if (segments === null) fields.segments = null;
+  else if (Array.isArray(segments)) {
+    const clean = segments
+      .filter(s => s && Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
+      .map(s => ({ start: Math.max(0, +s.start), end: +s.end }))
+      .sort((a, b) => a.start - b.start)
+      .slice(0, 200);
+    fields.segments = clean.length ? clean : null;
+  }
 
   // Title lives in Cloudinary's context (the video record), not meta — update it there.
   if (typeof title === 'string' && title.trim() && USE_CLOUDINARY) {
@@ -632,7 +645,7 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
     title: typeof title === 'string' ? title.trim() : undefined,
     description: updated.description, cta: updated.cta, privacy: updated.privacy,
     folder: updated.folder, hasPassword: !!updated.passwordHash,
-    trimStart: updated.trimStart, trimEnd: updated.trimEnd,
+    trimStart: updated.trimStart, trimEnd: updated.trimEnd, segments: updated.segments,
   });
 });
 

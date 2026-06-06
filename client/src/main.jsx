@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import Dashboard from './pages/Dashboard';
 import Folders from './pages/Folders';
 import AnalyticsPage from './pages/AnalyticsPage';
+import Editor from './pages/Editor';
 import Landing from './pages/Landing';
 import Watch from './pages/Watch';
 import Login from './pages/Login';
@@ -56,6 +57,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/account" element={<PrivateRoute><Account /></PrivateRoute>} />
         <Route path="/folders" element={<PrivateRoute><Folders /></PrivateRoute>} />
         <Route path="/analytics" element={<PrivateRoute><AnalyticsPage /></PrivateRoute>} />
+        <Route path="/edit/:id" element={<PrivateRoute><Editor /></PrivateRoute>} />
         <Route path="/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
         <Route path="/dashboard/billing" element={<PrivateRoute><Billing /></PrivateRoute>} />
         <Route path="/admin" element={<PrivateRoute><Admin /></PrivateRoute>} />
