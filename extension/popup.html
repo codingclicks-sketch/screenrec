@@ -25,11 +25,24 @@
     .topbar { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
     .brand { display:flex; align-items:center; gap:11px; flex:1; }
     .brand-icon {
-      width:40px; height:40px; border-radius:12px;
-      background:linear-gradient(135deg,#7c7cff,#5b5bf6);
+      width:40px; height:40px; border-radius:12px; overflow:hidden;
       display:flex; align-items:center; justify-content:center;
       box-shadow:0 4px 12px rgba(91,91,246,.35);
     }
+    .brand-icon img { width:100%; height:100%; object-fit:cover; border-radius:12px; }
+    .brand:hover .brand-name { color:var(--accent); }
+
+    /* ── Option sub-panel (choices) ── */
+    .subpanel { background:var(--soft); border-top:1px solid var(--border); padding:6px; display:none; }
+    .subpanel.open { display:block; }
+    .choice { display:flex; align-items:center; justify-content:space-between; width:100%; text-align:left;
+      padding:10px 12px; border:none; background:none; cursor:pointer; border-radius:9px;
+      font-size:13.5px; font-weight:500; color:var(--text); font-family:inherit; }
+    .choice:hover { background:#fff; }
+    .choice.active { color:var(--accent); font-weight:700; }
+    .choice .tick { color:var(--accent); font-weight:800; opacity:0; }
+    .choice.active .tick { opacity:1; }
+    .opt.expanded { background:var(--soft); }
     .brand-name { font-size:21px; font-weight:700; letter-spacing:-.02em; }
     .top-actions { display:flex; align-items:center; gap:6px; }
     .avatar { width:34px; height:34px; border-radius:50%; background:var(--accent); color:#fff;
@@ -136,13 +149,15 @@
   <div class="app">
     <!-- Header -->
     <div class="topbar">
-      <div class="brand">
-        <div class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>
+      <a class="brand" id="brandLink" href="https://veorec.com" target="_blank" rel="noopener" title="Open VeoRec" style="text-decoration:none;color:inherit">
+        <div class="brand-icon"><img src="icon128.png" alt="VeoRec" /></div>
         <span class="brand-name">VeoRec</span>
-      </div>
+      </a>
       <div class="top-actions" id="topActions" style="display:none">
         <span class="avatar" id="userChip">?</span>
-        <button class="icon-btn" id="signOutBtn" title="Sign out" onclick="signOut()">⏻</button>
+        <button class="icon-btn" id="signOutBtn" title="Sign out" onclick="signOut()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
     </div>
 
@@ -200,21 +215,25 @@
           <div class="opt-text"><div class="opt-title">Camera</div><div class="opt-sub">Add your webcam</div></div>
           <div class="opt-val" id="cameraVal">Off</div><span class="chev">›</span>
         </div>
+        <div class="subpanel" id="cameraPanel"></div>
         <div class="opt" id="micRow">
           <div class="opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4"/></svg></div>
           <div class="opt-text"><div class="opt-title">Microphone</div><div class="opt-sub">Record your voice</div></div>
           <span class="pill on" id="micVal">On</span><span class="chev">›</span>
         </div>
+        <div class="subpanel" id="micPanel"></div>
         <div class="opt" id="qualityRow">
           <div class="opt-ic" style="font-size:13px">HD</div>
           <div class="opt-text"><div class="opt-title">Quality</div><div class="opt-sub">Video resolution</div></div>
           <div class="opt-val" id="qualityVal">1080p</div><span class="chev">›</span>
         </div>
+        <div class="subpanel" id="qualityPanel"></div>
         <div class="opt" id="countdownRow">
           <div class="opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6M18.5 6.5l1.5-1.5"/></svg></div>
           <div class="opt-text"><div class="opt-title">Countdown</div><div class="opt-sub">3-2-1 before start</div></div>
           <span class="pill on" id="countdownVal">On</span><span class="chev">›</span>
         </div>
+        <div class="subpanel" id="countdownPanel"></div>
       </div>
 
       <div class="timer" id="timer">00:00</div>

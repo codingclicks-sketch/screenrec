@@ -110,8 +110,9 @@ async function playStreamInVideo(stream) {
 
 function countdown() {
   if (!opts.countdown) return Promise.resolve();
+  // opts.countdown may be a number of seconds (3/5) or `true` (legacy = 3).
   return new Promise(resolve => {
-    let n = 3;
+    let n = typeof opts.countdown === 'number' ? opts.countdown : 3;
     countdownNum.textContent = n;
     countdownEl.classList.add('show');
     const iv = setInterval(() => {
@@ -387,10 +388,11 @@ async function handleStop() {
     });
     chrome.runtime.sendMessage({ type: 'UPLOAD_DONE', url: shareUrl, title });
 
-    // The shareable link is now in the extension popup's "Latest Recording"
-    // card, so close this recorder window automatically.
-    setStatus('Saved ✓  Find the link in the VeoRec popup.', 'done');
-    setTimeout(closeWindow, 1500);
+    // Open the saved video's preview/share page in a new tab, then close the
+    // recorder window. (Also still available in the popup's Latest Recording.)
+    setStatus('Saved ✓  Opening your video…', 'done');
+    try { chrome.tabs.create({ url: shareUrl }); } catch (e) { try { window.open(shareUrl, '_blank'); } catch (e2) {} }
+    setTimeout(closeWindow, 1200);
   } catch (e) {
     showStartButton('Upload failed: ' + e.message);
   }

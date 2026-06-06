@@ -42,35 +42,91 @@ let timerInterval = null;
 let elapsed = 0;
 let currentLink = null;
 
-const opts = { surface: 'monitor', camera: 'off', audio: true, quality: 'high', countdown: true };
-const CAMERA_LABELS = { off: 'Off', bubble: 'Bubble', only: 'Camera only' };
+const opts = { surface: 'monitor', camera: 'off', bubbleSize: 'md', audio: true, quality: 'high', countdown: 3 };
+
+// Panels under each option, mirroring the in-app option picker (Loom-style).
+const cameraPanel    = document.getElementById('cameraPanel');
+const micPanel       = document.getElementById('micPanel');
+const qualityPanel   = document.getElementById('qualityPanel');
+const countdownPanel = document.getElementById('countdownPanel');
+
+const CHOICES = {
+  camera: [
+    { label: 'Off', set: { camera: 'off' } },
+    { label: 'Camera bubble · Small', set: { camera: 'bubble', bubbleSize: 'sm' } },
+    { label: 'Camera bubble · Medium', set: { camera: 'bubble', bubbleSize: 'md' } },
+    { label: 'Camera bubble · Large', set: { camera: 'bubble', bubbleSize: 'lg' } },
+    { label: 'Camera only', set: { camera: 'only' } },
+  ],
+  audio: [ { label: 'On', set: { audio: true } }, { label: 'Off', set: { audio: false } } ],
+  quality: [
+    { label: '1080p (HD)', set: { quality: 'high' } },
+    { label: '720p', set: { quality: 'medium' } },
+    { label: '480p', set: { quality: 'low' } },
+  ],
+  countdown: [
+    { label: 'Off', set: { countdown: false } },
+    { label: '3 seconds', set: { countdown: 3 } },
+    { label: '5 seconds', set: { countdown: 5 } },
+  ],
+};
+
+function cameraLabel() {
+  if (opts.camera === 'off') return 'Off';
+  if (opts.camera === 'only') return 'Camera only';
+  return 'Bubble · ' + ({ sm: 'S', md: 'M', lg: 'L' }[opts.bubbleSize] || 'M');
+}
 const QUALITY_LABELS = { high: '1080p', medium: '720p', low: '480p' };
-const CAMERA_CYCLE = ['off', 'bubble', 'only'];
-const QUALITY_CYCLE = ['high', 'medium', 'low'];
 
 function render() {
-  cameraVal.textContent = CAMERA_LABELS[opts.camera];
+  cameraVal.textContent = cameraLabel();
   qualityVal.textContent = QUALITY_LABELS[opts.quality];
   micVal.textContent = opts.audio ? 'On' : 'Off';
   micVal.className = 'pill ' + (opts.audio ? 'on' : 'off');
-  countdownVal.textContent = opts.countdown ? 'On' : 'Off';
+  countdownVal.textContent = opts.countdown ? (opts.countdown + ' sec') : 'Off';
   countdownVal.className = 'pill ' + (opts.countdown ? 'on' : 'off');
   surfaceWrap.querySelectorAll('.surf').forEach(b => {
     b.classList.toggle('active', b.dataset.surface === opts.surface);
   });
 }
 
-// ── Option interactions ─────────────────────────────────────────────────────
-cameraRow.addEventListener('click', () => {
-  opts.camera = CAMERA_CYCLE[(CAMERA_CYCLE.indexOf(opts.camera) + 1) % CAMERA_CYCLE.length];
-  render();
-});
-qualityRow.addEventListener('click', () => {
-  opts.quality = QUALITY_CYCLE[(QUALITY_CYCLE.indexOf(opts.quality) + 1) % QUALITY_CYCLE.length];
-  render();
-});
-micRow.addEventListener('click', () => { opts.audio = !opts.audio; render(); });
-countdownRow.addEventListener('click', () => { opts.countdown = !opts.countdown; render(); });
+// A choice is active if every key in its `set` matches current opts.
+function isChoiceActive(choice) {
+  return Object.keys(choice.set).every(k => opts[k] === choice.set[k]);
+}
+
+function buildPanel(panelEl, key) {
+  panelEl.innerHTML = '';
+  CHOICES[key].forEach(choice => {
+    const b = document.createElement('button');
+    b.className = 'choice' + (isChoiceActive(choice) ? ' active' : '');
+    b.innerHTML = `<span>${choice.label}</span><span class="tick">✓</span>`;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      Object.assign(opts, choice.set);
+      render();
+      closeAllPanels();
+    });
+    panelEl.appendChild(b);
+  });
+}
+
+function closeAllPanels() {
+  [cameraPanel, micPanel, qualityPanel, countdownPanel].forEach(p => p.classList.remove('open'));
+  [cameraRow, micRow, qualityRow, countdownRow].forEach(r => r.classList.remove('expanded'));
+}
+
+function togglePanel(row, panel, key) {
+  const isOpen = panel.classList.contains('open');
+  closeAllPanels();
+  if (!isOpen) { buildPanel(panel, key); panel.classList.add('open'); row.classList.add('expanded'); }
+}
+
+// ── Option interactions (open a choice panel instead of cycling) ─────────────
+cameraRow.addEventListener('click', () => togglePanel(cameraRow, cameraPanel, 'camera'));
+micRow.addEventListener('click', () => togglePanel(micRow, micPanel, 'audio'));
+qualityRow.addEventListener('click', () => togglePanel(qualityRow, qualityPanel, 'quality'));
+countdownRow.addEventListener('click', () => togglePanel(countdownRow, countdownPanel, 'countdown'));
 surfaceWrap.querySelectorAll('.surf').forEach(b => {
   b.addEventListener('click', () => { opts.surface = b.dataset.surface; render(); });
 });
@@ -170,14 +226,14 @@ mainBtn.addEventListener('click', async () => {
     if (tab && tab.id && /^https?:/.test(tab.url || '')) {
       // Save options first so the overlay can read camera mode on inject.
       await chrome.storage.local.set({
-        recOptions: { audio: opts.audio, quality: opts.quality, camera: opts.camera, countdown: opts.countdown, surface: opts.surface, bubbleTabId: tab.id },
+        recOptions: { audio: opts.audio, quality: opts.quality, camera: opts.camera, bubbleSize: opts.bubbleSize, countdown: opts.countdown, surface: opts.surface, bubbleTabId: tab.id },
       });
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['overlay.js'] });
       bubbleTabId = tab.id;
     }
   } catch (e) {}
   await chrome.storage.local.set({
-    recOptions: { audio: opts.audio, quality: opts.quality, camera: opts.camera, countdown: opts.countdown, surface: opts.surface, bubbleTabId },
+    recOptions: { audio: opts.audio, quality: opts.quality, camera: opts.camera, bubbleSize: opts.bubbleSize, countdown: opts.countdown, surface: opts.surface, bubbleTabId },
   });
   chrome.windows.create({ url: chrome.runtime.getURL('recorder.html'), type: 'popup', width: 420, height: 560 });
   window.close();

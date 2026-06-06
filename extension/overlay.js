@@ -127,14 +127,15 @@
   }, true);
 
   // ── Camera bubble (only when camera bubble mode is on) ───────────────────────
-  let bubble = null, bubbleVideo = null, cameraEnabled = false;
+  let bubble = null, bubbleVideo = null, cameraEnabled = false, bubbleSize = 150;
+  const BUBBLE_SIZES = { sm: 110, md: 150, lg: 200 };
   function makeBubble() {
     if (bubble) return;
     bubble = document.createElement('div');
     bubble.id = '__sr_camera_bubble';
     bubble.style.cssText = [
       'position:fixed', 'left:24px', 'bottom:24px', `z-index:${Z}`,
-      'width:150px', 'height:150px', 'border-radius:50%', 'overflow:hidden',
+      `width:${bubbleSize}px`, `height:${bubbleSize}px`, 'border-radius:50%', 'overflow:hidden',
       'box-shadow:0 8px 28px rgba(0,0,0,.45)', 'border:3px solid #7c5cfc', 'background:#000',
     ].join(';');
     bubbleVideo = document.createElement('video');
@@ -177,7 +178,12 @@
   });
 
   chrome.storage.local.get('recOptions', (d) => {
-    if (d && d.recOptions && d.recOptions.camera === 'bubble') { cameraEnabled = true; makeBubble(); }
+    const o = d && d.recOptions;
+    if (o && o.camera === 'bubble') {
+      bubbleSize = BUBBLE_SIZES[o.bubbleSize] || BUBBLE_SIZES.md;
+      cameraEnabled = true;
+      makeBubble();
+    }
   });
 
   // ── Self-syncing state (works across tab switches) ───────────────────────────
@@ -196,15 +202,22 @@
     clearInterval(tickIv);
   }
   function fmt(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+  let started = false; // becomes true once recording actually begins
   const tickIv = setInterval(() => {
     chrome.storage.local.get('recState', (d) => {
       const st = d.recState || {};
-      if (!st.recording) { cleanupAll(); return; }
-      const now = Date.now();
-      const pausedExtra = st.paused && st.pauseStartedAt ? now - st.pauseStartedAt : 0;
-      const s = Math.max(0, Math.floor((now - st.startTime - (st.pausedAccum || 0) - pausedExtra) / 1000));
-      timer.textContent = fmt(s);
-      setPausedUI(!!st.paused);
+      if (st.recording) {
+        started = true;
+        const now = Date.now();
+        const pausedExtra = st.paused && st.pauseStartedAt ? now - st.pauseStartedAt : 0;
+        const s = Math.max(0, Math.floor((now - st.startTime - (st.pausedAccum || 0) - pausedExtra) / 1000));
+        timer.textContent = fmt(s);
+        setPausedUI(!!st.paused);
+      } else if (started) {
+        // Recording ended → remove the overlay on every tab.
+        cleanupAll();
+      }
+      // else: countdown / pre-start — keep the overlay visible showing 0:00
     });
   }, 500);
 
