@@ -161,17 +161,21 @@ mainBtn.addEventListener('click', async () => {
     setStatus('Processing…', 'uploading');
     return;
   }
-  // Inject floating camera bubble onto the active tab for "bubble" mode
+  // Inject the on-screen overlay (draggable control toolbar + camera bubble)
+  // onto the active tab so controls/camera are visible IN the recording. The
+  // recorder window drives MediaRecorder and talks to this overlay by tab id.
   let bubbleTabId = null;
-  if (opts.camera === 'bubble') {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab && tab.id && /^https?:/.test(tab.url || '')) {
-        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['bubble.js'] });
-        bubbleTabId = tab.id;
-      }
-    } catch (e) {}
-  }
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.id && /^https?:/.test(tab.url || '')) {
+      // Save options first so the overlay can read camera mode on inject.
+      await chrome.storage.local.set({
+        recOptions: { audio: opts.audio, quality: opts.quality, camera: opts.camera, countdown: opts.countdown, surface: opts.surface, bubbleTabId: tab.id },
+      });
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['overlay.js'] });
+      bubbleTabId = tab.id;
+    }
+  } catch (e) {}
   await chrome.storage.local.set({
     recOptions: { audio: opts.audio, quality: opts.quality, camera: opts.camera, countdown: opts.countdown, surface: opts.surface, bubbleTabId },
   });
