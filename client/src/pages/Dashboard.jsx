@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MoreHorizontal, Copy, Share2, BarChart2, Pencil, Trash2, Check,
-  LayoutGrid, List, Lock, Users as UsersIcon, Play, Film, FolderInput,
+  LayoutGrid, List, Lock, Users as UsersIcon, Play, Film, FolderInput, Scissors,
 } from 'lucide-react';
 import styles from './Dashboard.module.css';
 import API from '../api';
@@ -161,6 +161,7 @@ function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, o
           <button className={styles.menuItem} onClick={() => { setMenu(false); onCopy(); }}>{copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied!' : 'Copy link'}</button>
           <button className={styles.menuItem} onClick={() => { setMenu(false); onShare(); }}><Share2 size={15} /> Share settings</button>
           <button className={styles.menuItem} onClick={() => { setMenu(false); onStats(); }}><BarChart2 size={15} /> Analytics</button>
+          <Link className={styles.menuItem} to={`/edit/${r.id}`}><Scissors size={15} /> Edit / trim</Link>
           <button className={styles.menuItem} onClick={() => { setMenu(false); onRename(); }}><Pencil size={15} /> Rename</button>
           <div className={styles.menuSub}>
             <button className={styles.menuItem} onClick={() => setMoveOpen((o) => !o)}><FolderInput size={15} /> Move to folder</button>

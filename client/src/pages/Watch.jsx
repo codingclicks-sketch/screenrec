@@ -176,7 +176,8 @@ export default function Watch() {
             className={styles.video}
             onLoadedMetadata={(e) => {
               const v = e.target;
-              const start = Number(rec.trimStart) || 0;
+              const segs = Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null;
+              const start = segs ? segs[0].start : (Number(rec.trimStart) || 0);
               if (v.duration === Infinity || isNaN(v.duration)) {
                 v.currentTime = 1e101;
                 v.ontimeupdate = () => {
@@ -190,6 +191,18 @@ export default function Watch() {
             }}
             onTimeUpdate={(e) => {
               const v = e.target;
+              const segs = Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null;
+              if (segs) {
+                // Play only kept segments — skip cut gaps; loop at the end.
+                const t = v.currentTime;
+                const inSeg = segs.find((sg) => t >= sg.start - 0.05 && t < sg.end);
+                if (!inSeg) {
+                  const next = segs.find((sg) => sg.start > t);
+                  if (next) v.currentTime = next.start;
+                  else { v.pause(); v.currentTime = segs[0].start; }
+                }
+                return;
+              }
               const start = Number(rec.trimStart) || 0;
               if (rec.trimEnd != null && v.currentTime >= rec.trimEnd) {
                 v.pause();
