@@ -141,16 +141,57 @@
     bubbleVideo = document.createElement('video');
     bubbleVideo.autoplay = true; bubbleVideo.muted = true; bubbleVideo.playsInline = true;
     bubbleVideo.style.cssText = 'width:100%;height:100%;object-fit:cover;transform:scaleX(-1)';
-    const x = document.createElement('div');
-    x.setAttribute('data-no-drag', '1');
-    x.textContent = '×';
-    x.title = 'Hide camera';
-    x.style.cssText = 'position:absolute;top:2px;right:12px;color:#fff;font-size:22px;cursor:pointer;text-shadow:0 1px 4px #000;z-index:1';
-    x.addEventListener('click', (e) => { e.stopPropagation(); hideBubble(); });
-    bubble.append(bubbleVideo, x);
+    bubble.append(bubbleVideo);
     (document.body || document.documentElement).appendChild(bubble);
     makeDraggable(bubble, bubble);
+
+    // Live control bar under the bubble: close + size (S / M / L), like Loom.
+    const bar = document.createElement('div');
+    bar.id = '__sr_bubble_bar';
+    bar.setAttribute('data-no-drag', '1');
+    bar.style.cssText = [
+      'position:fixed', `z-index:${Z}`, 'display:flex', 'align-items:center', 'gap:4px',
+      'background:#16161f', 'border-radius:999px', 'padding:5px 7px',
+      'box-shadow:0 6px 20px rgba(0,0,0,.4)',
+    ].join(';');
+    function barBtn(html, title, onClick) {
+      const b = document.createElement('button');
+      b.setAttribute('data-no-drag', '1');
+      b.title = title; b.innerHTML = html;
+      b.style.cssText = 'border:none;background:transparent;color:#fff;cursor:pointer;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:inherit';
+      b.addEventListener('mouseenter', () => b.style.background = 'rgba(255,255,255,.16)');
+      b.addEventListener('mouseleave', () => b.style.background = 'transparent');
+      b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+      return b;
+    }
+    const sizeDot = (px) => `<span style="display:block;width:${px}px;height:${px}px;border-radius:50%;background:currentColor"></span>`;
+    bar.append(
+      barBtn('✕', 'Hide camera', hideBubble),
+      barBtn(sizeDot(8), 'Small', () => setBubbleSize('sm')),
+      barBtn(sizeDot(12), 'Medium', () => setBubbleSize('md')),
+      barBtn(sizeDot(16), 'Large', () => setBubbleSize('lg')),
+    );
+    (document.body || document.documentElement).appendChild(bar);
+    bubble.__bar = bar;
+    positionBar();
+    // keep the bar glued under the bubble while it's dragged
+    bubble.addEventListener('__srmoved', positionBar);
+    window.addEventListener('mousemove', () => { if (bubble) positionBar(); });
+
     if (!document.hidden) startCam();
+  }
+  function positionBar() {
+    if (!bubble || !bubble.__bar) return;
+    const r = bubble.getBoundingClientRect();
+    bubble.__bar.style.left = (r.left + r.width / 2 - 64) + 'px';
+    bubble.__bar.style.top = (r.bottom + 8) + 'px';
+  }
+  function setBubbleSize(key) {
+    if (!bubble) return;
+    bubbleSize = BUBBLE_SIZES[key] || BUBBLE_SIZES.md;
+    bubble.style.width = bubbleSize + 'px';
+    bubble.style.height = bubbleSize + 'px';
+    positionBar();
   }
   function startCam() {
     if (!bubble || camStream) return;
@@ -167,6 +208,8 @@
     stopCam();
     const el = document.getElementById('__sr_camera_bubble');
     if (el) el.remove();
+    const bar = document.getElementById('__sr_bubble_bar');
+    if (bar) bar.remove();
     bubble = null; bubbleVideo = null; cameraEnabled = false;
   }
 

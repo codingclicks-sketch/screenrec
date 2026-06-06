@@ -44,37 +44,30 @@ let currentLink = null;
 
 const opts = { surface: 'monitor', camera: 'off', bubbleSize: 'md', audio: true, quality: 'high', countdown: 3 };
 
-// Panels under each option, mirroring the in-app option picker (Loom-style).
+// Choice panels (camera mode + quality). Mic & countdown are simple toggles.
 const cameraPanel    = document.getElementById('cameraPanel');
-const micPanel       = document.getElementById('micPanel');
 const qualityPanel   = document.getElementById('qualityPanel');
-const countdownPanel = document.getElementById('countdownPanel');
 
+// Only options that present a real list get a dropdown. Camera = mode list
+// (size is changed live on the bubble while recording). Quality = resolution
+// list. Microphone & Countdown are simple on/off toggles (no dropdown).
 const CHOICES = {
   camera: [
     { label: 'Off', set: { camera: 'off' } },
-    { label: 'Camera bubble · Small', set: { camera: 'bubble', bubbleSize: 'sm' } },
-    { label: 'Camera bubble · Medium', set: { camera: 'bubble', bubbleSize: 'md' } },
-    { label: 'Camera bubble · Large', set: { camera: 'bubble', bubbleSize: 'lg' } },
+    { label: 'Camera bubble', set: { camera: 'bubble' } },
     { label: 'Camera only', set: { camera: 'only' } },
   ],
-  audio: [ { label: 'On', set: { audio: true } }, { label: 'Off', set: { audio: false } } ],
   quality: [
     { label: '1080p (HD)', set: { quality: 'high' } },
     { label: '720p', set: { quality: 'medium' } },
     { label: '480p', set: { quality: 'low' } },
-  ],
-  countdown: [
-    { label: 'Off', set: { countdown: false } },
-    { label: '3 seconds', set: { countdown: 3 } },
-    { label: '5 seconds', set: { countdown: 5 } },
   ],
 };
 
 function cameraLabel() {
   if (opts.camera === 'off') return 'Off';
   if (opts.camera === 'only') return 'Camera only';
-  return 'Bubble · ' + ({ sm: 'S', md: 'M', lg: 'L' }[opts.bubbleSize] || 'M');
+  return 'Bubble';
 }
 const QUALITY_LABELS = { high: '1080p', medium: '720p', low: '480p' };
 
@@ -112,8 +105,8 @@ function buildPanel(panelEl, key) {
 }
 
 function closeAllPanels() {
-  [cameraPanel, micPanel, qualityPanel, countdownPanel].forEach(p => p.classList.remove('open'));
-  [cameraRow, micRow, qualityRow, countdownRow].forEach(r => r.classList.remove('expanded'));
+  [cameraPanel, qualityPanel].forEach(p => p && p.classList.remove('open'));
+  [cameraRow, qualityRow].forEach(r => r && r.classList.remove('expanded'));
 }
 
 function togglePanel(row, panel, key) {
@@ -122,11 +115,11 @@ function togglePanel(row, panel, key) {
   if (!isOpen) { buildPanel(panel, key); panel.classList.add('open'); row.classList.add('expanded'); }
 }
 
-// ── Option interactions (open a choice panel instead of cycling) ─────────────
+// Camera & Quality open a choice list; Microphone & Countdown just toggle.
 cameraRow.addEventListener('click', () => togglePanel(cameraRow, cameraPanel, 'camera'));
-micRow.addEventListener('click', () => togglePanel(micRow, micPanel, 'audio'));
 qualityRow.addEventListener('click', () => togglePanel(qualityRow, qualityPanel, 'quality'));
-countdownRow.addEventListener('click', () => togglePanel(countdownRow, countdownPanel, 'countdown'));
+micRow.addEventListener('click', () => { opts.audio = !opts.audio; render(); });
+countdownRow.addEventListener('click', () => { opts.countdown = opts.countdown ? false : 3; render(); });
 surfaceWrap.querySelectorAll('.surf').forEach(b => {
   b.addEventListener('click', () => { opts.surface = b.dataset.surface; render(); });
 });

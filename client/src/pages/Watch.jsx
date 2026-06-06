@@ -37,6 +37,14 @@ export default function Watch() {
   const [commentName, setCommentName] = useState('');
   const [atTime, setAtTime] = useState(true);
   const [dur, setDur] = useState(0);                // real video duration (s)
+  const [isOwner, setIsOwner] = useState(false);    // show owner-only Edit button
+
+  // Determine ownership (owner-only endpoint 200s only for the owner).
+  useEffect(() => {
+    if (!user) { setIsOwner(false); return; }
+    fetch(`${API}/api/recordings/${id}`, { headers: authHeaders() })
+      .then(r => setIsOwner(r.ok)).catch(() => setIsOwner(false));
+  }, [user, id]);
 
   // reaction tallies for the bar
   const reactionCounts = useMemo(() => {
@@ -159,6 +167,7 @@ export default function Watch() {
       <header className={styles.header}>
         <Link to="/" className={styles.logo}><img src="/logo.png" className={styles.logoImg} alt="" />VeoRec</Link>
         <div className={styles.headerActions}>
+          {isOwner && <Link to={`/edit/${id}`} className="btn-ghost">✂ Edit / Trim</Link>}
           <button className="btn-primary" onClick={() => copy('link', window.location.href)}>
             {copied === 'link' ? '✓ Copied!' : '🔗 Copy link'}
           </button>

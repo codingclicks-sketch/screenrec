@@ -44,6 +44,9 @@ app.use(cors({ origin: '*' }));
 // Capture the raw body so we can verify Paddle webhook signatures.
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 
+// In-memory uploader for the editor's "replace with trimmed file" flow.
+const memUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+
 // ── Auth Routes (public) ─────────────────────────────────────────────────────
 // Serialize a user for client responses — never includes the password hash.
 function publicUser(u) {
@@ -647,6 +650,51 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
     folder: updated.folder, hasPassword: !!updated.passwordHash,
     trimStart: updated.trimStart, trimEnd: updated.trimEnd, segments: updated.segments,
   });
+});
+
+// ── Replace a recording's file with an edited (physically trimmed) version ────
+app.post('/api/recordings/:id/replace', requireAuth, memUpload.single('video'), async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const duration = parseInt(req.body.duration) || 0;
+  const sizeBytes = req.file?.size || req.file?.buffer?.length || 0;
+  if (!sizeBytes) return res.status(400).json({ error: 'No video provided' });
+
+  // Re-validate the recording-length limit on the trimmed result.
+  const user = users.findById(req.userId);
+  const recCheck = permissions.canRecord(user, duration);
+  if (!recCheck.allowed) return res.status(403).json({ error: recCheck.reason, upgradeRequired: true, code: 'recording_limit' });
+
+  try {
+    if (USE_CLOUDINARY) {
+      let oldBytes = 0;
+      try {
+        const r = await cloudinary.search.expression(`public_id=screenrec/${req.userId}/${req.params.id}`).max_results(1).execute();
+        if (r.resources.length) oldBytes = r.resources[0].bytes || 0;
+      } catch {}
+      const result = await new Promise((resolve, reject) => {
+        const s = cloudinary.uploader.upload_stream(
+          { resource_type: 'video', public_id: `screenrec/${req.userId}/${req.params.id}`, overwrite: true, invalidate: true,
+            context: `duration=${duration}|edited=1` },
+          (e, r) => (e ? reject(e) : resolve(r))
+        );
+        s.end(req.file.buffer);
+      });
+      usageService.updateUsage(req.userId, { bytes: (result.bytes || sizeBytes) - oldBytes });
+    } else {
+      const row = db.get(req.params.id);
+      if (row) {
+        const p = path.join(__dirname, 'uploads', row.filename);
+        fs.writeFileSync(p, req.file.buffer);
+        usageService.updateUsage(req.userId, { bytes: sizeBytes - (row.size || 0) });
+        db.update(req.params.id, { size: sizeBytes, duration });
+      }
+    }
+    // Physical trim applied → clear virtual edits.
+    meta.set(req.params.id, { segments: null, trimStart: null, trimEnd: null });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Folders (owner) ───────────────────────────────────────────────────────────
