@@ -717,13 +717,16 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
   if (!recCheck.allowed) return res.status(403).json({ error: recCheck.reason, upgradeRequired: true, code: 'recording_limit' });
 
   const publicId = `screenrec/${req.userId}/${req.params.id}`;
+  // Overlay public ids use ':' as the folder separator — ALL slashes must be
+  // converted (the SDK only converts the first, which breaks nested folders).
+  const overlayId = `video:${publicId.replace(/\//g, ':')}`;
   const r2 = (n) => Math.round(n * 100) / 100;
 
   // Build the splice transformation: base = first kept segment; each subsequent
   // kept segment is spliced (concatenated) onto the end.
   const transformation = [{ start_offset: r2(segments[0].start), end_offset: r2(segments[0].end) }];
   for (let i = 1; i < segments.length; i++) {
-    transformation.push({ overlay: { resource_type: 'video', public_id: publicId }, flags: 'splice', start_offset: r2(segments[i].start), end_offset: r2(segments[i].end) });
+    transformation.push({ overlay: overlayId, flags: 'splice', start_offset: r2(segments[i].start), end_offset: r2(segments[i].end) });
     transformation.push({ flags: 'layer_apply' });
   }
 

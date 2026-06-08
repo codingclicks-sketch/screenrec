@@ -189,15 +189,25 @@ export default function Editor() {
         await seek(video, sg.start);
         try { await video.play(); } catch {}
         await new Promise((res) => {
+          let settled = false;
+          const finish = () => { if (settled) return; settled = true; try { video.pause(); } catch {} res(); };
           const check = () => {
-            if (!video.paused && (video.currentTime >= sg.end - 0.04 || video.ended)) { video.pause(); res(); }
-            else { onProgress(Math.min(0.99, (done + Math.max(0, video.currentTime - sg.start)) / total)); requestAnimationFrame(check); }
+            if (settled) return;
+            // Resolve when we reach the segment end OR the video naturally ends
+            // (at the natural end the element is PAUSED, so this must be checked
+            // independently of paused state — that was the 99% stall bug).
+            if (video.ended || video.currentTime >= sg.end - 0.04) { finish(); return; }
+            onProgress(Math.min(0.99, (done + Math.max(0, video.currentTime - sg.start)) / total));
+            requestAnimationFrame(check);
           };
+          video.addEventListener('ended', finish, { once: true });
           check();
         });
         done += (sg.end - sg.start);
         onProgress(Math.min(0.99, done / total));
       }
+      // give the recorder a tick to flush the last frames, then stop
+      await new Promise((r) => setTimeout(r, 120));
       rec.stop();
     });
     return blob;
