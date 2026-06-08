@@ -63,6 +63,13 @@ function publicUser(u) {
   };
 }
 
+// Cloudinary context values must escape '=', '|' and '\' (and we strip newlines)
+// — otherwise a title like "Q1 | 2026" or "a=b" silently breaks the context
+// string and the rename fails. Build a safe context string from an object.
+function ctxValue(v) { return String(v == null ? '' : v).replace(/[\r\n]+/g, ' ').replace(/([=|\\])/g, '\\$1'); }
+function buildContext(obj) { return Object.entries(obj).map(([k, v]) => `${k}=${ctxValue(v)}`).join('|'); }
+function cleanTitle(t) { return String(t == null ? '' : t).replace(/[\r\n]+/g, ' ').trim().slice(0, 200); }
+
 // Admin allowlist via env (comma-separated emails). Server-side only.
 function isAdmin(u) {
   const list = (process.env.ADMIN_EMAILS || '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
@@ -290,8 +297,10 @@ if (!USE_CLOUDINARY) {
   app.patch('/api/recordings/:id', requireAuth, (req, res) => {
     const row = db.get(req.params.id);
     if (!row || row.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
-    db.update(req.params.id, { title: req.body.title });
-    res.json({ success: true });
+    const title = cleanTitle(req.body.title);
+    if (!title) return res.status(400).json({ error: 'Title cannot be empty' });
+    db.update(req.params.id, { title });
+    res.json({ success: true, title });
   });
 
 } else {
@@ -444,13 +453,16 @@ if (!USE_CLOUDINARY) {
   });
 
   app.patch('/api/recordings/:id', requireAuth, async (req, res) => {
+    const title = cleanTitle(req.body.title);
+    if (!title) return res.status(400).json({ error: 'Title cannot be empty' });
     try {
+      if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
       await cloudinary.uploader.add_context(
-        `title=${req.body.title}`,
+        buildContext({ title }),
         [`screenrec/${req.userId}/${req.params.id}`],
         { resource_type: 'video' }
       );
-      res.json({ success: true });
+      res.json({ success: true, title });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -638,7 +650,7 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   // Title lives in Cloudinary's context (the video record), not meta — update it there.
   if (typeof title === 'string' && title.trim() && USE_CLOUDINARY) {
     try {
-      await cloudinary.uploader.add_context(`title=${title.trim().slice(0, 200)}`,
+      await cloudinary.uploader.add_context(buildContext({ title: cleanTitle(title) }),
         [`screenrec/${req.userId}/${req.params.id}`], { resource_type: 'video' });
     } catch (e) {}
   }
@@ -737,21 +749,25 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
     // Bake it: generate the derivative to a temp asset, then swap it in. Using a
     // temp id avoids any self-overwrite race while Cloudinary fetches the source.
     const tmpId = `${publicId}__trim_${Date.now()}`;
-    let oldBytes = 0;
-    try { const s = await cloudinary.search.expression(`public_id=${publicId}`).max_results(1).execute(); if (s.resources.length) oldBytes = s.resources[0].bytes || 0; } catch {}
+    let oldBytes = 0, prevCtx = {};
+    try {
+      const s = await cloudinary.search.expression(`public_id=${publicId}`).with_field('context').max_results(1).execute();
+      if (s.resources.length) { oldBytes = s.resources[0].bytes || 0; prevCtx = s.resources[0].context?.custom || {}; }
+    } catch {}
+    const keepTitle = cleanTitle(prevCtx.title) || 'Screen recording';
+    const createdAt = prevCtx.created_at || Date.now();
 
     const uploaded = await cloudinary.uploader.upload(derivedUrl, {
       resource_type: 'video', public_id: tmpId, overwrite: true,
-      context: `duration=${keptDuration}|edited=1`,
     });
     // Replace original with the trimmed result.
     await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
     await cloudinary.uploader.rename(tmpId, publicId, { resource_type: 'video', overwrite: true, invalidate: true });
-    // Preserve the title/created context on the new asset.
-    const old = meta.get(req.params.id);
+    // Preserve title + metadata on the new (trimmed) asset (don't lose the name).
     try {
-      const ctxParts = [`duration=${keptDuration}`, `rec_id=${req.params.id}`, `user_id=${req.userId}`, `edited=1`];
-      await cloudinary.uploader.add_context(ctxParts.join('|'), [publicId], { resource_type: 'video' });
+      await cloudinary.uploader.add_context(
+        buildContext({ title: keepTitle, duration: keptDuration, created_at: createdAt, rec_id: req.params.id, user_id: req.userId, edited: 1 }),
+        [publicId], { resource_type: 'video' });
     } catch {}
 
     usageService.updateUsage(req.userId, { bytes: (uploaded.bytes || 0) - oldBytes });

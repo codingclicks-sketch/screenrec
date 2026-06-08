@@ -193,8 +193,9 @@
 }
 .title:hover { color: var(--accent); }
 .meta { font-size: 12px; color: var(--text2); margin-bottom: 13px; }
-.editRow { display: flex; gap: 6px; margin-bottom: 6px; }
-.editRow input { flex: 1; min-width: 0; }
+.editRow { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.editRow input { flex: 1; min-width: 0; border: 1px solid #c7c7e8; border-radius: 8px; padding: 7px 10px; font-size: 14px; font-family: inherit; outline: none; }
+.editRow input:focus { border-color: #5b5bf6; box-shadow: 0 0 0 3px #eef0ff; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* ── Modal (share settings / analytics / record hint) ── */
