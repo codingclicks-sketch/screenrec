@@ -33,6 +33,7 @@ export default function Editor() {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [exportMsg, setExportMsg] = useState('');
+  const [indeterminate, setIndeterminate] = useState(false);
 
   useEffect(() => {
     authFetch(`${API}/api/recordings/${id}`).then((r) => r.json()).then((d) => {
@@ -202,6 +203,18 @@ export default function Editor() {
     return blob;
   }
 
+  async function clientRender() {
+    // Fallback path: render in the browser and replace the original.
+    setIndeterminate(false); setProgress(0); setExportMsg('Rendering your trimmed video in your browser… keep this tab open.');
+    const blob = await renderTrimmed(rec.filename, segments, (p) => setProgress(p));
+    setProgress(1); setExportMsg('Uploading trimmed video…');
+    const form = new FormData();
+    form.append('video', blob, 'trimmed.webm');
+    form.append('duration', String(Math.round(keptDuration)));
+    const res = await authFetch(`${API}/api/recordings/${id}/replace`, { method: 'POST', body: form });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Upload failed'); }
+  }
+
   async function save() {
     const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
     if (isFull) {
@@ -210,23 +223,30 @@ export default function Editor() {
       setSaving(false); setSaved(true); setTimeout(() => navigate('/'), 900);
       return;
     }
-    // Real export: render the trimmed file and replace the original.
     try { videoRef.current && videoRef.current.pause(); } catch {}
-    setExporting(true); setProgress(0); setExportMsg('Rendering your trimmed video… keep this tab open.');
+    setExporting(true); setIndeterminate(true); setProgress(0);
+    setExportMsg('Trimming your video on our servers…');
     try {
-      const blob = await renderTrimmed(rec.filename, segments, (p) => setProgress(p));
-      setProgress(1); setExportMsg('Uploading trimmed video…');
-      const form = new FormData();
-      form.append('video', blob, 'trimmed.webm');
-      form.append('duration', String(Math.round(keptDuration)));
-      const res = await authFetch(`${API}/api/recordings/${id}/replace`, { method: 'POST', body: form });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Upload failed'); }
-      setExportMsg('Saved ✓ Your video is trimmed.'); setTimeout(() => navigate('/'), 1000);
+      // Fast path: let the server (Cloudinary) cut + splice the segments.
+      const res = await authFetch(`${API}/api/recordings/${id}/trim`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments }),
+      });
+      if (res.ok) { setIndeterminate(false); setProgress(1); setExportMsg('Saved ✓ Your video is trimmed.'); setTimeout(() => navigate('/'), 1000); return; }
+      // Server can't do it (e.g. local/dev) → render in the browser instead.
+      if (res.status === 501) { await clientRender(); setExportMsg('Saved ✓ Your video is trimmed.'); setTimeout(() => navigate('/'), 1000); return; }
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || 'Server trim failed');
     } catch (e) {
-      // Fallback: save virtual cuts so playback still respects them.
-      setExportMsg('Could not re-render (' + e.message + '). Saved as a virtual trim instead.');
-      await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments, trimStart: segments[0].start, trimEnd: segments[segments.length - 1].end }) }).catch(() => {});
-      setTimeout(() => setExporting(false), 2600);
+      // Last-resort: browser render; if that also fails, save a virtual trim.
+      try {
+        await clientRender();
+        setExportMsg('Saved ✓ Your video is trimmed.'); setTimeout(() => navigate('/'), 1000);
+      } catch (e2) {
+        setIndeterminate(false);
+        setExportMsg('Could not render (' + (e2.message || e.message) + '). Saved as a virtual trim instead.');
+        await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments, trimStart: segments[0].start, trimEnd: segments[segments.length - 1].end }) }).catch(() => {});
+        setTimeout(() => setExporting(false), 2800);
+      }
     }
   }
 
@@ -295,9 +315,15 @@ export default function Editor() {
         <div className={s.exportOverlay}>
           <div className={s.exportCard}>
             <div className={s.exportTitle}>{exportMsg}</div>
-            <div className={s.exportBar}><div className={s.exportFill} style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-            <div className={s.exportPct}>{Math.round(progress * 100)}%</div>
-            <div className={s.exportNote}>Re-rendering happens in your browser and runs about as long as the trimmed video. Please keep this tab focused.</div>
+            {indeterminate ? (
+              <div className={s.exportBar}><div className={s.exportIndet} /></div>
+            ) : (
+              <>
+                <div className={s.exportBar}><div className={s.exportFill} style={{ width: `${Math.round(progress * 100)}%` }} /></div>
+                <div className={s.exportPct}>{Math.round(progress * 100)}%</div>
+              </>
+            )}
+            <div className={s.exportNote}>{indeterminate ? 'Our servers are cutting and stitching your clip — this is usually quick.' : 'Re-rendering in your browser runs about as long as the trimmed video. Please keep this tab focused.'}</div>
           </div>
         </div>
       )}

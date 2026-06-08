@@ -371,7 +371,7 @@ if (!USE_CLOUDINARY) {
           title: ctx.title || 'Untitled Recording',
           filename: r.secure_url,
           // Cloudinary-generated poster image (fast thumbnail, no full video load)
-          thumbnail: r.secure_url.replace(/\.webm$/, '.jpg').replace('/upload/', '/upload/so_0/'),
+          thumbnail: r.secure_url.replace(/\.(webm|mp4|mov|mkv)$/, '.jpg').replace('/upload/', '/upload/so_0/'),
           size: r.bytes,
           // Prefer Cloudinary's own measured duration (reliable) over our stored value
           duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
@@ -475,7 +475,7 @@ async function findVideo(id) {
       id,
       title: ctx.title || 'Untitled Recording',
       filename: r.secure_url,
-      thumbnail: r.secure_url.replace(/\.webm$/, '.jpg').replace('/upload/', '/upload/so_0/'),
+      thumbnail: r.secure_url.replace(/\.(webm|mp4|mov|mkv)$/, '.jpg').replace('/upload/', '/upload/so_0/'),
       duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
       created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
       cloudinary: true,
@@ -694,6 +694,69 @@ app.post('/api/recordings/:id/replace', requireAuth, memUpload.single('video'), 
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Server-side trim/split via Cloudinary (fast — no client re-encode) ────────
+// Concatenates the kept segments using Cloudinary's video "splice" transform,
+// bakes it into a new asset, and overwrites the original. Returns 501 when
+// Cloudinary isn't configured so the client can fall back to in-browser render.
+app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  if (!USE_CLOUDINARY) return res.status(501).json({ error: 'Server-side trim unavailable' });
+
+  const segments = Array.isArray(req.body.segments) ? req.body.segments
+    .filter(s => s && Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
+    .map(s => ({ start: Math.max(0, +s.start), end: +s.end }))
+    .sort((a, b) => a.start - b.start) : [];
+  if (!segments.length) return res.status(400).json({ error: 'No segments' });
+
+  const user = users.findById(req.userId);
+  const keptDuration = Math.round(segments.reduce((a, s) => a + (s.end - s.start), 0));
+  const recCheck = permissions.canRecord(user, keptDuration);
+  if (!recCheck.allowed) return res.status(403).json({ error: recCheck.reason, upgradeRequired: true, code: 'recording_limit' });
+
+  const publicId = `screenrec/${req.userId}/${req.params.id}`;
+  const r2 = (n) => Math.round(n * 100) / 100;
+
+  // Build the splice transformation: base = first kept segment; each subsequent
+  // kept segment is spliced (concatenated) onto the end.
+  const transformation = [{ start_offset: r2(segments[0].start), end_offset: r2(segments[0].end) }];
+  for (let i = 1; i < segments.length; i++) {
+    transformation.push({ overlay: { resource_type: 'video', public_id: publicId }, flags: 'splice', start_offset: r2(segments[i].start), end_offset: r2(segments[i].end) });
+    transformation.push({ flags: 'layer_apply' });
+  }
+
+  try {
+    // The derived (transformed) URL of the current asset.
+    const derivedUrl = cloudinary.url(publicId, { resource_type: 'video', transformation, secure: true, format: 'mp4' });
+
+    // Bake it: generate the derivative to a temp asset, then swap it in. Using a
+    // temp id avoids any self-overwrite race while Cloudinary fetches the source.
+    const tmpId = `${publicId}__trim_${Date.now()}`;
+    let oldBytes = 0;
+    try { const s = await cloudinary.search.expression(`public_id=${publicId}`).max_results(1).execute(); if (s.resources.length) oldBytes = s.resources[0].bytes || 0; } catch {}
+
+    const uploaded = await cloudinary.uploader.upload(derivedUrl, {
+      resource_type: 'video', public_id: tmpId, overwrite: true,
+      context: `duration=${keptDuration}|edited=1`,
+    });
+    // Replace original with the trimmed result.
+    await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+    await cloudinary.uploader.rename(tmpId, publicId, { resource_type: 'video', overwrite: true, invalidate: true });
+    // Preserve the title/created context on the new asset.
+    const old = meta.get(req.params.id);
+    try {
+      const ctxParts = [`duration=${keptDuration}`, `rec_id=${req.params.id}`, `user_id=${req.userId}`, `edited=1`];
+      await cloudinary.uploader.add_context(ctxParts.join('|'), [publicId], { resource_type: 'video' });
+    } catch {}
+
+    usageService.updateUsage(req.userId, { bytes: (uploaded.bytes || 0) - oldBytes });
+    meta.set(req.params.id, { segments: null, trimStart: null, trimEnd: null });
+    res.json({ ok: true, duration: keptDuration });
+  } catch (e) {
+    console.error('[trim] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Trim failed' });
   }
 });
 
