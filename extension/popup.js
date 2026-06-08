@@ -284,6 +284,18 @@ chrome.runtime.onMessage.addListener((msg) => {
     chrome.storage.local.set({ recording: true, startTime: msg.startTime });
     isRecording = true; elapsed = 0; showRecordingUI();
   }
+  // Upload failed / was cancelled — unstick the popup back to the idle state.
+  if (msg.type === 'RECORDING_RESET') {
+    isRecording = false;
+    clearInterval(timerInterval); timerInterval = null;
+    mainBtn.className = 'btn-record';
+    mainBtn.innerHTML = '<span class="rdot"></span> Start Recording';
+    timerEl.style.display = 'none';
+    const optsEl = document.querySelector('.opts'); if (optsEl) optsEl.style.display = '';
+    surfaceWrap.style.display = '';
+    freeNote.style.display = '';
+    setStatus('');
+  }
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

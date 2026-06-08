@@ -239,11 +239,10 @@ async function beginRecording() {
   chrome.storage.local.set({ recState: { recording: true, startTime, paused: false, pausedAccum: 0, pauseStartedAt: null } });
   chrome.runtime.sendMessage({ type: 'RECORDER_STARTED', startTime });
 
-  // Hand control to the on-screen overlay and get out of the way: minimize this
-  // recorder window so the draggable toolbar + camera bubble are what the user
-  // sees (and what's captured). Recording continues while minimized.
+  // Let the on-screen overlay take over as the visible UI. We intentionally do
+  // NOT minimize this recorder window: a minimized (hidden) window gets frozen
+  // by Chrome, which can stall the upload after you stop. It just sits behind.
   overlayMsg({ type: 'SR_OVERLAY_STATE', state: 'recording' });
-  try { chrome.windows.getCurrent((w) => { if (w && w.id != null) chrome.windows.update(w.id, { state: 'minimized' }); }); } catch (e) {}
 }
 
 function togglePause() {
@@ -347,14 +346,32 @@ function cancelRecording() {
   closeWindow();
 }
 
+// Clear the "recording" flags so the popup never stays stuck on a failed upload.
+function resetRecordingState() {
+  try { chrome.storage.local.set({ recording: false, recState: { recording: false } }); } catch (e) {}
+  try { chrome.runtime.sendMessage({ type: 'RECORDING_RESET' }); } catch (e) {}
+}
+
 async function handleStop() {
   const duration = elapsedSeconds();
   const blob = new Blob(chunks, { type: 'video/webm' });
   chunks = [];
 
+  // Make sure this window is visible+focused (never frozen) during the upload.
+  try { chrome.windows.getCurrent((w) => { if (w && w.id != null) chrome.windows.update(w.id, { state: 'normal', focused: true }); }); } catch (e) {}
+
+  if (!blob.size) {
+    resetRecordingState();
+    showStartButton('Nothing was recorded — please try again.');
+    return;
+  }
+
   try {
     const { sr_token } = await chrome.storage.local.get('sr_token');
-    if (!sr_token) { showStartButton('Not logged in — please sign in via the extension popup.'); return; }
+    if (!sr_token) { resetRecordingState(); showStartButton('Not logged in — please sign in via the extension popup.'); return; }
+
+    const sizeMB = (blob.size / 1048576).toFixed(1);
+    setStatus(`Uploading… (${sizeMB} MB)`, 'uploading');
 
     const title = 'Screen recording';
     const form = new FormData();
@@ -362,15 +379,25 @@ async function handleStop() {
     form.append('title', title);
     form.append('duration', String(duration));
 
-    const res = await fetch(`${SERVER}/api/upload`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${sr_token}` },
-      body: form,
-    });
-    const data = await res.json();
+    // Hard timeout so a stalled connection never hangs the UI forever.
+    const ctrl = new AbortController();
+    const timeoutMs = Math.max(120000, blob.size / 1024); // ≥2 min, scales with size
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+    let res;
+    try {
+      res = await fetch(`${SERVER}/api/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${sr_token}` },
+        body: form,
+        signal: ctrl.signal,
+      });
+    } finally { clearTimeout(timer); }
+
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      resetRecordingState();
       if (res.status === 403 && data.upgradeRequired) {
-        // Plan limit hit server-side (storage or recording length).
         setStatus((data.error || 'Upgrade required to save this recording.') + ' ', 'uploading');
         showUpgradePrompt(data.error);
         return;
@@ -383,18 +410,20 @@ async function handleStop() {
     const shareUrl = `https://veorec.com/watch/${data.id}`;
 
     await chrome.storage.local.set({
-      shareLink: shareUrl, recording: false,
+      shareLink: shareUrl, recording: false, recState: { recording: false },
       lastRecording: { url: shareUrl, title, at: Date.now() },
     });
     chrome.runtime.sendMessage({ type: 'UPLOAD_DONE', url: shareUrl, title });
 
-    // Open the saved video's preview/share page in a new tab, then close the
-    // recorder window. (Also still available in the popup's Latest Recording.)
+    // Open the saved video's preview page in a new tab, then close this window.
     setStatus('Saved ✓  Opening your video…', 'done');
     try { chrome.tabs.create({ url: shareUrl }); } catch (e) { try { window.open(shareUrl, '_blank'); } catch (e2) {} }
     setTimeout(closeWindow, 1200);
   } catch (e) {
-    showStartButton('Upload failed: ' + e.message);
+    resetRecordingState();
+    showStartButton(e.name === 'AbortError'
+      ? 'Upload timed out — check your connection and try again.'
+      : 'Upload failed: ' + e.message);
   }
 }
 
