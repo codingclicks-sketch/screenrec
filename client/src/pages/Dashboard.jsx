@@ -56,9 +56,17 @@ export default function Dashboard() {
     });
   }
   async function saveTitle(id) {
-    await authFetch(`${API}/api/recordings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: editTitle }) });
-    setRecordings((r) => r.map((x) => (x.id === id ? { ...x, title: editTitle } : x)));
-    setEditingId(null);
+    const title = (editTitle || '').trim();
+    if (!title) { setEditingId(null); return; }  // don't save empty titles
+    const res = await authFetch(`${API}/api/recordings/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+    if (res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setRecordings((r) => r.map((x) => (x.id === id ? { ...x, title: d.title || title } : x)));
+      setEditingId(null);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || 'Could not rename the video. Please try again.');
+    }
   }
   function copyLink(id) { navigator.clipboard.writeText(`${CLIENT_BASE}/watch/${id}`); setCopied(id); setTimeout(() => setCopied(null), 2000); }
   async function moveToFolder(id, folderId) {

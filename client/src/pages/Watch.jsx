@@ -38,6 +38,8 @@ export default function Watch() {
   const [atTime, setAtTime] = useState(true);
   const [dur, setDur] = useState(0);                // real video duration (s)
   const [isOwner, setIsOwner] = useState(false);    // show owner-only Edit button
+  const [renaming, setRenaming] = useState(false);
+  const [renameVal, setRenameVal] = useState('');
 
   // Determine ownership (owner-only endpoint 200s only for the owner).
   useEffect(() => {
@@ -45,6 +47,16 @@ export default function Watch() {
     fetch(`${API}/api/recordings/${id}`, { headers: authHeaders() })
       .then(r => setIsOwner(r.ok)).catch(() => setIsOwner(false));
   }, [user, id]);
+
+  async function saveRename() {
+    const title = (renameVal || '').trim();
+    if (!title) { setRenaming(false); return; }
+    const res = await fetch(`${API}/api/recordings/${id}`, {
+      method: 'PATCH', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+    });
+    if (res.ok) { const d = await res.json().catch(() => ({})); setRec((r) => ({ ...r, title: d.title || title })); setRenaming(false); }
+    else { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not rename'); }
+  }
 
   // reaction tallies for the bar
   const reactionCounts = useMemo(() => {
@@ -246,7 +258,22 @@ export default function Watch() {
         )}
 
         <div className={styles.info}>
-          <h1 className={styles.title}>{rec.title}</h1>
+          {isOwner && renaming ? (
+            <div className={styles.renameRow}>
+              <input className={styles.renameInput} value={renameVal} autoFocus
+                onChange={(e) => setRenameVal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(false); }} />
+              <button className="btn-primary" onClick={saveRename}>Save</button>
+              <button className="btn-ghost" onClick={() => setRenaming(false)}>Cancel</button>
+            </div>
+          ) : (
+            <h1 className={styles.title}>
+              {rec.title}
+              {isOwner && (
+                <button className={styles.titleEdit} title="Rename" onClick={() => { setRenameVal(rec.title); setRenaming(true); }}>✏️</button>
+              )}
+            </h1>
+          )}
           <p className={styles.meta}>
             👁 {views} view{views === 1 ? '' : 's'} · {new Date(rec.created_at).toLocaleString()} · {fmt(rec.duration)}
           </p>

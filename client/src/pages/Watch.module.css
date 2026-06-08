@@ -70,7 +70,21 @@
   font-size: 22px;
   font-weight: 700;
   margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
+.titleEdit {
+  background: none; border: none; cursor: pointer; font-size: 15px; opacity: .55;
+  padding: 2px 4px; border-radius: 6px; line-height: 1;
+}
+.titleEdit:hover { opacity: 1; background: var(--surface2, #f5f6fa); }
+.renameRow { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.renameInput {
+  font-size: 20px; font-weight: 700; padding: 6px 10px; border: 1px solid #c7c7e8;
+  border-radius: 8px; outline: none; min-width: 240px; font-family: inherit;
+}
+.renameInput:focus { border-color: #5b5bf6; box-shadow: 0 0 0 3px #eef0ff; }
 
 .meta {
   font-size: 13px;
