@@ -47,6 +47,168 @@
   width: 100%;
 }
 
+/* ── Loom-style two-column layout ───────────────────────────────────────── */
+.layout {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+}
+.left { flex: 1 1 auto; min-width: 0; }
+.sidebar {
+  width: 372px;
+  flex: 0 0 372px;
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 1000px) {
+  .layout { flex-direction: column; padding: 20px 16px 48px; }
+  .sidebar { width: 100%; flex-basis: auto; position: static; }
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 5px;
+  margin-bottom: 16px;
+}
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 8px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.tab:hover { color: var(--text); }
+.tabActive { background: var(--accent); color: #fff; }
+.tabActive:hover { color: #fff; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+}
+.panelLabel {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text2);
+  margin-bottom: 12px;
+}
+
+/* Upsell card */
+.upsell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #5b5bf6, #7c5cf6);
+  color: #fff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  text-decoration: none;
+}
+.upsellIcon {
+  width: 38px; height: 38px; flex: 0 0 38px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.18); border-radius: 10px;
+}
+.upsellText { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.upsellText strong { font-size: 14px; font-weight: 700; }
+.upsellText span { font-size: 11.5px; opacity: .9; line-height: 1.35; }
+.upsellBtn {
+  background: #fff; color: #5b5bf6; font-size: 12.5px; font-weight: 700;
+  padding: 7px 12px; border-radius: 8px; white-space: nowrap;
+}
+
+/* Action rows ("Make edits" / "Take action") */
+.action {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 11px 12px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--text);
+  transition: background .14s, border-color .14s;
+}
+.action:hover { background: var(--surface2, #f5f6fa); border-color: var(--border); }
+.actionIcon {
+  width: 38px; height: 38px; flex: 0 0 38px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2, #f1f1fa); color: var(--accent);
+  border-radius: 10px;
+}
+.actionText { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.actionText > strong { font-size: 14px; font-weight: 600; }
+.actionText > span { font-size: 12px; color: var(--text2); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; }
+.proPill {
+  align-self: center;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .03em;
+  background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff;
+  padding: 3px 8px; border-radius: 999px;
+}
+
+/* CTA inline form */
+.ctaForm {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 6px 12px 12px; margin-bottom: 4px;
+}
+.ctaInput {
+  width: 100%; background: var(--surface2, #f5f6fa);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 11px; font-size: 13px; color: var(--text);
+  outline: none; font-family: inherit;
+}
+.ctaInput:focus { border-color: var(--accent); }
+.ctaFormActions { display: flex; justify-content: flex-end; gap: 10px; align-items: center; }
+.ctaRemove { background: none; border: none; color: #ef4444; font-size: 13px; cursor: pointer; }
+
+/* Settings rows */
+.settingRow {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13.5px; color: var(--text2);
+  padding: 8px 2px 14px;
+}
+.settingRow strong { color: var(--text); font-weight: 600; }
+
+/* Viewer "Made with VeoRec" card */
+.madeWith {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 16px; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; text-decoration: none; color: var(--text);
+  font-size: 13px; line-height: 1.4;
+}
+.madeWith:hover { border-color: var(--accent); }
+.madeWith strong { font-weight: 700; }
+
 .player {
   width: 100%;
   background: #000;

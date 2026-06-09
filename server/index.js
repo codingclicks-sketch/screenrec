@@ -364,39 +364,56 @@ if (!USE_CLOUDINARY) {
 
   app.get('/api/recordings', requireAuth, async (req, res) => {
     try {
-      const result = await cloudinary.search
-        .expression(`folder:screenrec/${req.userId} AND resource_type:video`)
-        .with_field('context')
-        .sort_by('created_at', 'desc')
-        .max_results(200)
-        .execute();
+      const prefix = `screenrec/${req.userId}/`;
+      // Cloudinary's Search API is rich but EVENTUALLY consistent — a freshly
+      // trimmed/created asset won't appear in it for a while, which made trimmed
+      // videos "disappear" from the library. The Admin API (list by prefix) is
+      // IMMEDIATELY consistent. Merge both: search gives reliable duration for
+      // settled assets; the Admin API surfaces brand-new ones right away.
+      const [searchRes, adminRes] = await Promise.all([
+        cloudinary.search
+          .expression(`folder:screenrec/${req.userId} AND resource_type:video`)
+          .with_field('context').sort_by('created_at', 'desc').max_results(200).execute()
+          .catch(() => ({ resources: [] })),
+        cloudinary.api
+          .resources({ resource_type: 'video', type: 'upload', prefix, max_results: 200, context: true })
+          .catch(() => ({ resources: [] })),
+      ]);
 
-      const rows = result.resources.map(r => {
-        const ctx = r.context?.custom || {};
-        const id = ctx.rec_id || r.public_id.split('/').pop();
-        const m = meta.get(id);
-        return {
-          id,
-          title: ctx.title || 'Untitled Recording',
-          filename: r.secure_url,
-          // Cloudinary-generated poster image (fast thumbnail, no full video load)
-          thumbnail: r.secure_url.replace(/\.(webm|mp4|mov|mkv)$/, '.jpg').replace('/upload/', '/upload/so_0/'),
-          size: r.bytes,
-          // Prefer Cloudinary's own measured duration (reliable) over our stored value
-          duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
-          created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
-          cloudinary: true,
-          public_id: r.public_id,
-          views: m.views,
-          description: m.description,
-          privacy: m.privacy,
-          cta: m.cta,
-          folder: m.folder,
-          trimStart: m.trimStart,
-          trimEnd: m.trimEnd,
-          commentCount: m.comments.length,
-        };
-      });
+      const byId = new Map();
+      for (const r of searchRes.resources) byId.set(r.public_id, r);
+      for (const r of adminRes.resources) if (!byId.has(r.public_id)) byId.set(r.public_id, r);
+
+      const rows = [...byId.values()]
+        .filter(r => !/__trim_\d+$/.test(r.public_id)) // skip in-flight trim temp artifacts
+        .map(r => {
+          const ctx = r.context?.custom || {};
+          const id = ctx.rec_id || r.public_id.split('/').pop();
+          const m = meta.get(id);
+          return {
+            id,
+            title: ctx.title || 'Untitled Recording',
+            filename: r.secure_url,
+            // Cloudinary-generated poster image (fast thumbnail, no full video load)
+            thumbnail: r.secure_url.replace(/\.(webm|mp4|mov|mkv)$/, '.jpg').replace('/upload/', '/upload/so_0/'),
+            size: r.bytes,
+            // Prefer Cloudinary's measured duration; fall back to the value we
+            // store in context (set on trim/copy, available before search indexes).
+            duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
+            created_at: parseInt(ctx.created_at) || new Date(r.created_at).getTime(),
+            cloudinary: true,
+            public_id: r.public_id,
+            views: m.views,
+            description: m.description,
+            privacy: m.privacy,
+            cta: m.cta,
+            folder: m.folder,
+            trimStart: m.trimStart,
+            trimEnd: m.trimEnd,
+            commentCount: m.comments.length,
+          };
+        })
+        .sort((a, b) => b.created_at - a.created_at);
       res.json(rows);
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -405,15 +422,22 @@ if (!USE_CLOUDINARY) {
 
   app.get('/api/recordings/:id', requireAuth, async (req, res) => {
     try {
+      const publicId = `screenrec/${req.userId}/${req.params.id}`;
       // Search across user's folder
       const result = await cloudinary.search
-        .expression(`folder:screenrec/${req.userId} AND resource_type:video AND public_id:screenrec/${req.userId}/${req.params.id}`)
+        .expression(`folder:screenrec/${req.userId} AND resource_type:video AND public_id:${publicId}`)
         .with_field('context')
         .max_results(1)
-        .execute();
+        .execute()
+        .catch(() => ({ resources: [] }));
 
-      if (!result.resources.length) return res.status(404).json({ error: 'Not found' });
-      const r = result.resources[0];
+      let r = result.resources[0];
+      // Search index lags right after a trim/copy — fall back to the immediately
+      // consistent Admin API so the owner can open/edit it without waiting.
+      if (!r) {
+        try { r = await cloudinary.api.resource(publicId, { resource_type: 'video', context: true }); } catch {}
+      }
+      if (!r) return res.status(404).json({ error: 'Not found' });
       const ctx = r.context?.custom || {};
       const m = meta.get(req.params.id);
       res.json({
@@ -676,8 +700,29 @@ app.post('/api/recordings/:id/replace', requireAuth, memUpload.single('video'), 
   const recCheck = permissions.canRecord(user, duration);
   if (!recCheck.allowed) return res.status(403).json({ error: recCheck.reason, upgradeRequired: true, code: 'recording_limit' });
 
+  const mode = req.body.mode === 'copy' ? 'copy' : 'overwrite';
+
   try {
     if (USE_CLOUDINARY) {
+      if (mode === 'copy') {
+        // Keep the original; upload the rendered trim as a new library video.
+        const newId = uuidv4();
+        let keepTitle = 'Screen recording';
+        try {
+          const s = await cloudinary.search.expression(`public_id=screenrec/${req.userId}/${req.params.id}`).with_field('context').max_results(1).execute();
+          if (s.resources.length) keepTitle = cleanTitle(s.resources[0].context?.custom?.title) || keepTitle;
+        } catch {}
+        const result = await new Promise((resolve, reject) => {
+          const st = cloudinary.uploader.upload_stream(
+            { resource_type: 'video', public_id: `screenrec/${req.userId}/${newId}`,
+              context: buildContext({ title: `${keepTitle} (trimmed)`, duration, created_at: Date.now(), rec_id: newId, user_id: req.userId, edited: 1 }) },
+            (e, r) => (e ? reject(e) : resolve(r))
+          );
+          st.end(req.file.buffer);
+        });
+        usageService.updateUsage(req.userId, { bytes: result.bytes || sizeBytes, videos: 1, seconds: duration });
+        return res.json({ ok: true, id: newId, mode: 'copy' });
+      }
       let oldBytes = 0;
       try {
         const r = await cloudinary.search.expression(`public_id=screenrec/${req.userId}/${req.params.id}`).max_results(1).execute();
@@ -742,13 +787,15 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
     transformation.push({ flags: 'layer_apply' });
   }
 
+  // Save mode: 'overwrite' replaces the original; 'copy' keeps the original and
+  // adds the trimmed result as a brand-new recording in the library.
+  const mode = req.body.mode === 'copy' ? 'copy' : 'overwrite';
+
   try {
     // The derived (transformed) URL of the current asset.
     const derivedUrl = cloudinary.url(publicId, { resource_type: 'video', transformation, secure: true, format: 'mp4' });
 
-    // Bake it: generate the derivative to a temp asset, then swap it in. Using a
-    // temp id avoids any self-overwrite race while Cloudinary fetches the source.
-    const tmpId = `${publicId}__trim_${Date.now()}`;
+    // Read the original's title/created_at up front (needed for both modes).
     let oldBytes = 0, prevCtx = {};
     try {
       const s = await cloudinary.search.expression(`public_id=${publicId}`).with_field('context').max_results(1).execute();
@@ -757,11 +804,25 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
     const keepTitle = cleanTitle(prevCtx.title) || 'Screen recording';
     const createdAt = prevCtx.created_at || Date.now();
 
+    if (mode === 'copy') {
+      // Bake the trim into a NEW asset; leave the original untouched.
+      const newId = uuidv4();
+      const newPublicId = `screenrec/${req.userId}/${newId}`;
+      const uploaded = await cloudinary.uploader.upload(derivedUrl, {
+        resource_type: 'video', public_id: newPublicId,
+        context: buildContext({ title: `${keepTitle} (trimmed)`, duration: keptDuration, created_at: Date.now(), rec_id: newId, user_id: req.userId, edited: 1 }),
+      });
+      usageService.updateUsage(req.userId, { bytes: uploaded.bytes || 0, videos: 1, seconds: keptDuration });
+      return res.json({ ok: true, id: newId, mode: 'copy', duration: keptDuration });
+    }
+
+    // Overwrite: bake to a temp asset, then atomically swap it in via rename
+    // (overwrite:true). No destroy-first — that left a window where a rename
+    // failure would lose the video entirely.
+    const tmpId = `${publicId}__trim_${Date.now()}`;
     const uploaded = await cloudinary.uploader.upload(derivedUrl, {
       resource_type: 'video', public_id: tmpId, overwrite: true,
     });
-    // Replace original with the trimmed result.
-    await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
     await cloudinary.uploader.rename(tmpId, publicId, { resource_type: 'video', overwrite: true, invalidate: true });
     // Preserve title + metadata on the new (trimmed) asset (don't lose the name).
     try {
@@ -772,7 +833,7 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
 
     usageService.updateUsage(req.userId, { bytes: (uploaded.bytes || 0) - oldBytes });
     meta.set(req.params.id, { segments: null, trimStart: null, trimEnd: null });
-    res.json({ ok: true, duration: keptDuration });
+    res.json({ ok: true, mode: 'overwrite', duration: keptDuration });
   } catch (e) {
     console.error('[trim] failed:', e.message);
     res.status(500).json({ error: e.message || 'Trim failed' });
