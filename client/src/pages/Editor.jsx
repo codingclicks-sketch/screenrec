@@ -34,6 +34,7 @@ export default function Editor() {
   const [progress, setProgress] = useState(0);
   const [exportMsg, setExportMsg] = useState('');
   const [indeterminate, setIndeterminate] = useState(false);
+  const [chooser, setChooser] = useState(false); // overwrite-vs-copy dialog
 
   useEffect(() => {
     authFetch(`${API}/api/recordings/${id}`).then((r) => r.json()).then((d) => {
@@ -213,19 +214,30 @@ export default function Editor() {
     return blob;
   }
 
-  async function clientRender() {
-    // Fallback path: render in the browser and replace the original.
+  async function clientRender(mode = 'overwrite') {
+    // Fallback path: render in the browser and replace (or copy) the original.
     setIndeterminate(false); setProgress(0); setExportMsg('Rendering your trimmed video in your browser… keep this tab open.');
     const blob = await renderTrimmed(rec.filename, segments, (p) => setProgress(p));
-    setProgress(1); setExportMsg('Uploading trimmed video…');
+    setProgress(1); setExportMsg(mode === 'copy' ? 'Uploading your trimmed copy…' : 'Uploading trimmed video…');
     const form = new FormData();
     form.append('video', blob, 'trimmed.webm');
     form.append('duration', String(Math.round(keptDuration)));
+    if (mode === 'copy') form.append('mode', 'copy');
     const res = await authFetch(`${API}/api/recordings/${id}/replace`, { method: 'POST', body: form });
     if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Upload failed'); }
   }
 
-  async function save() {
+  // The Save button: if there's an actual trim, ask how to save it; otherwise
+  // there's nothing to bake, so just clear any virtual edits.
+  function onSaveClick() {
+    const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
+    if (isFull) { save('overwrite'); return; }
+    setChooser(true);
+  }
+
+  async function save(mode = 'overwrite') {
+    setChooser(false);
+    const copy = mode === 'copy';
     const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
     if (isFull) {
       setSaving(true);
@@ -235,22 +247,23 @@ export default function Editor() {
     }
     try { videoRef.current && videoRef.current.pause(); } catch {}
     setExporting(true); setIndeterminate(true); setProgress(0);
-    setExportMsg('Trimming your video on our servers…');
+    setExportMsg(copy ? 'Creating a trimmed copy on our servers…' : 'Trimming your video on our servers…');
+    const doneMsg = copy ? 'Saved ✓ Trimmed copy added to your library.' : 'Saved ✓ Your video is trimmed.';
     try {
       // Fast path: let the server (Cloudinary) cut + splice the segments.
       const res = await authFetch(`${API}/api/recordings/${id}/trim`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments, mode }),
       });
-      if (res.ok) { setIndeterminate(false); setProgress(1); setExportMsg('Saved ✓ Your video is trimmed.'); setTimeout(() => navigate('/'), 1000); return; }
+      if (res.ok) { setIndeterminate(false); setProgress(1); setExportMsg(doneMsg); setTimeout(() => navigate('/'), 1100); return; }
       // Server can't do it (e.g. local/dev) → render in the browser instead.
-      if (res.status === 501) { await clientRender(); setExportMsg('Saved ✓ Your video is trimmed.'); setTimeout(() => navigate('/'), 1000); return; }
+      if (res.status === 501) { await clientRender(mode); setExportMsg(doneMsg); setTimeout(() => navigate('/'), 1100); return; }
       const d = await res.json().catch(() => ({}));
       throw new Error(d.error || 'Server trim failed');
     } catch (e) {
       // Last-resort: browser render; if that also fails, save a virtual trim.
       try {
-        await clientRender();
-        setExportMsg('Saved ✓ Your video is trimmed.'); setTimeout(() => navigate('/'), 1000);
+        await clientRender(mode);
+        setExportMsg(doneMsg); setTimeout(() => navigate('/'), 1100);
       } catch (e2) {
         setIndeterminate(false);
         setExportMsg('Could not render (' + (e2.message || e.message) + '). Saved as a virtual trim instead.');
@@ -270,7 +283,7 @@ export default function Editor() {
         <div className={s.title}>{rec.title}</div>
         <div className={s.topActions}>
           <button className={s.ghost} onClick={resetEdits}><RotateCcw size={15} /> Reset</button>
-          <button className={s.primary} onClick={save} disabled={saving}>
+          <button className={s.primary} onClick={onSaveClick} disabled={saving}>
             <Save size={15} /> {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
           </button>
         </div>
@@ -320,6 +333,30 @@ export default function Editor() {
           <span>Final length: <strong>{fmt(keptDuration)}</strong></span>
         </div>
       </div>
+
+      {chooser && (
+        <div className={s.exportOverlay} onClick={() => setChooser(false)}>
+          <div className={s.chooserCard} onClick={(e) => e.stopPropagation()}>
+            <div className={s.chooserTitle}>How do you want to save?</div>
+            <div className={s.chooserSub}>Trimmed length <strong>{fmt(keptDuration)}</strong> · original is {fmt(duration)}</div>
+            <button className={s.chooserOpt} onClick={() => save('overwrite')}>
+              <span className={s.chooserOptIcon}>♻️</span>
+              <span className={s.chooserOptText}>
+                <strong>Overwrite original</strong>
+                <em>Replace this video with the trimmed version.</em>
+              </span>
+            </button>
+            <button className={s.chooserOpt} onClick={() => save('copy')}>
+              <span className={s.chooserOptIcon}>➕</span>
+              <span className={s.chooserOptText}>
+                <strong>Save as a new copy</strong>
+                <em>Keep the original and add the trimmed clip to your library.</em>
+              </span>
+            </button>
+            <button className={s.chooserCancel} onClick={() => setChooser(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {exporting && (
         <div className={s.exportOverlay}>
