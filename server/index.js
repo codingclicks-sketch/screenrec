@@ -860,13 +860,13 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
 app.post('/api/recordings/:id/transcribe', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
   if (!transcription.isConfigured()) {
-    return res.status(501).json({ error: 'Transcription is not set up yet. Add a free Whisper (Groq) API key to enable it.', code: 'transcription_unconfigured' });
+    return res.status(501).json({ error: 'Transcription is not available on this server yet.', code: 'transcription_unconfigured' });
   }
   try {
     let audioUrl;
     if (USE_CLOUDINARY) {
-      // Cloudinary derives an mp3 audio track from the video on the fly — no
-      // ffmpeg needed on our side, and it keeps the upload small for Whisper.
+      // Cloudinary derives a small mp3 audio track from the video on the fly;
+      // whisper.cpp (self-hosted) then transcribes it server-side.
       audioUrl = cloudinary.url(`screenrec/${req.userId}/${req.params.id}`, { resource_type: 'video', format: 'mp3', secure: true });
     } else {
       const row = db.get(req.params.id);

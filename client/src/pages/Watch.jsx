@@ -441,7 +441,7 @@ export default function Watch() {
           <strong>No transcript yet</strong>
           {isOwner ? (
             transcript && transcript.configured === false ? (
-              <span>Transcription isn’t enabled yet. Add a free Whisper (Groq) API key on the server to turn it on.</span>
+              <span>Transcription isn’t available on this server yet — it’ll appear here once the latest deploy is live.</span>
             ) : (
               <>
                 <span>Generate a timestamped, searchable transcript with AI.</span>

@@ -1,84 +1,104 @@
-// ── Speech-to-text (Whisper) ──────────────────────────────────────────────────
-// Provider-agnostic, OpenAI-compatible transcription. Defaults to Groq's hosted
-// Whisper (genuinely free tier, very fast). Set WHISPER_API_KEY (a free Groq key
-// from https://console.groq.com/keys) to enable; without it the feature degrades
-// gracefully and the API returns a clear "not configured" response.
+// ── Speech-to-text (self-hosted whisper.cpp) ─────────────────────────────────
+// 100% free, unlimited, server-side transcription. No external API, no keys,
+// no per-use cost — whisper.cpp runs locally on this server. The Docker image
+// (see Dockerfile) compiles whisper.cpp and bakes in the ggml model + ffmpeg.
 //
-// Override the provider with WHISPER_API_URL / WHISPER_MODEL to point at OpenAI
-// (https://api.openai.com/v1/audio/transcriptions, model "whisper-1") or any
-// other OpenAI-compatible endpoint.
+// Pipeline per job: download the recording's audio (Cloudinary serves an mp3
+// derivative) → ffmpeg to 16 kHz mono WAV (what whisper.cpp wants) → whisper-cli
+// with JSON output → parse timestamped segments. Jobs run one-at-a-time through
+// a tiny queue so CPU/RAM (and therefore Railway cost) stay predictable.
 
-const WHISPER_API_URL = process.env.WHISPER_API_URL || 'https://api.groq.com/openai/v1/audio/transcriptions';
-const WHISPER_API_KEY = process.env.WHISPER_API_KEY || process.env.GROQ_API_KEY || '';
-const WHISPER_MODEL = process.env.WHISPER_MODEL || 'whisper-large-v3-turbo';
-const MAX_BYTES = 24 * 1024 * 1024; // Groq free tier caps uploads at 25MB.
+const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-function isConfigured() { return !!WHISPER_API_KEY; }
+const WHISPER_BIN = process.env.WHISPER_BIN || 'whisper-cli';
+const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
+const MODEL_PATH = process.env.WHISPER_MODEL_PATH || path.join(__dirname, 'models', 'ggml-base.en.bin');
+const THREADS = process.env.WHISPER_THREADS || '';      // empty → whisper.cpp default
+const LANGUAGE = process.env.WHISPER_LANGUAGE || '';     // e.g. 'auto' for multilingual models
 
-// Fetch an audio file (e.g. a Cloudinary mp3 derived from the video) and send it
-// to the Whisper endpoint. Returns { text, language, segments:[{start,end,text}] }.
-async function transcribeUrl(audioUrl) {
-  if (!WHISPER_API_KEY) throw Object.assign(new Error('Transcription is not configured'), { code: 'unconfigured' });
-
-  // Download the audio (server → Cloudinary). Allow generous time for Cloudinary
-  // to transcode the audio derivative on first request.
-  const ac = new AbortController();
-  const dlTimer = setTimeout(() => ac.abort(), 120_000);
-  let buf;
-  try {
-    const audioRes = await fetch(audioUrl, { signal: ac.signal });
-    if (!audioRes.ok) throw new Error(`Could not fetch audio (${audioRes.status})`);
-    buf = Buffer.from(await audioRes.arrayBuffer());
-  } finally { clearTimeout(dlTimer); }
-
-  if (!buf || !buf.length) throw new Error('Audio file was empty');
-  if (buf.length > MAX_BYTES) {
-    throw Object.assign(
-      new Error('This recording is too long to transcribe on the free tier (audio over ~25MB). Trim it first or upgrade the Whisper plan.'),
-      { code: 'too_large' }
-    );
-  }
-
-  const form = new FormData();
-  form.append('file', new Blob([buf], { type: 'audio/mpeg' }), 'audio.mp3');
-  form.append('model', WHISPER_MODEL);
-  form.append('response_format', 'verbose_json'); // includes timestamped segments
-  form.append('temperature', '0');
-
-  const ac2 = new AbortController();
-  const apiTimer = setTimeout(() => ac2.abort(), 180_000);
-  let data;
-  try {
-    const res = await fetch(WHISPER_API_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${WHISPER_API_KEY}` },
-      body: form,
-      signal: ac2.signal,
-    });
-    const raw = await res.text();
-    if (!res.ok) {
-      let msg = raw.slice(0, 300);
-      try { msg = JSON.parse(raw).error?.message || msg; } catch {}
-      throw new Error(`Transcription failed (${res.status}): ${msg}`);
-    }
-    data = JSON.parse(raw);
-  } finally { clearTimeout(apiTimer); }
-
-  const segments = Array.isArray(data.segments)
-    ? data.segments
-        .map(s => ({
-          start: Math.round((s.start || 0) * 100) / 100,
-          end: Math.round((s.end || 0) * 100) / 100,
-          text: String(s.text || '').trim(),
-        }))
-        .filter(s => s.text)
-    : [];
-
-  return {
-    text: (data.text || segments.map(s => s.text).join(' ')).trim(),
-    language: data.language || 'en',
-    segments,
-  };
+// Available whenever the compiled model is present (i.e. in the built image).
+// Lets the dev box (no model) degrade gracefully to a 501 instead of crashing.
+function isConfigured() {
+  try { return fs.existsSync(MODEL_PATH); } catch { return false; }
 }
 
-module.exports = { isConfigured, transcribeUrl, WHISPER_MODEL, WHISPER_API_URL };
+// Single-slot queue: one transcription at a time. Keeps memory/CPU bursts (and
+// cost) bounded and avoids OOM from concurrent jobs.
+let chain = Promise.resolve();
+function enqueue(task) {
+  const run = chain.then(task, task);
+  chain = run.then(() => {}, () => {});
+  return run;
+}
+
+function sh(cmd, args, { timeout } = {}) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '', err = '';
+    const timer = timeout ? setTimeout(() => { p.kill('SIGKILL'); reject(new Error(`${path.basename(cmd)} timed out`)); }, timeout) : null;
+    p.stdout.on('data', d => { out += d; });
+    p.stderr.on('data', d => { err += d; });
+    p.on('error', e => { if (timer) clearTimeout(timer); reject(e); });
+    p.on('close', code => {
+      if (timer) clearTimeout(timer);
+      code === 0 ? resolve({ out, err }) : reject(new Error(`${path.basename(cmd)} exited ${code}: ${err.slice(-400)}`));
+    });
+  });
+}
+
+async function transcribeSource(srcUrlOrPath) {
+  if (!isConfigured()) throw Object.assign(new Error('Transcription is not available on this server'), { code: 'unconfigured' });
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'veorec-stt-'));
+  const inPath = path.join(tmp, 'input');
+  const wavPath = path.join(tmp, 'audio.wav');
+  const outPrefix = path.join(tmp, 'out');
+  try {
+    // 1. Get the source audio bytes.
+    if (/^https?:\/\//i.test(srcUrlOrPath)) {
+      const ac = new AbortController();
+      const to = setTimeout(() => ac.abort(), 120_000);
+      let r;
+      try { r = await fetch(srcUrlOrPath, { signal: ac.signal }); } finally { clearTimeout(to); }
+      if (!r.ok) throw new Error(`Could not fetch audio (${r.status})`);
+      fs.writeFileSync(inPath, Buffer.from(await r.arrayBuffer()));
+    } else {
+      fs.copyFileSync(srcUrlOrPath, inPath);
+    }
+
+    // 2. Normalise to 16 kHz mono PCM WAV for whisper.cpp.
+    await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wavPath], { timeout: 120_000 });
+
+    // 3. Transcribe → JSON (writes `${outPrefix}.json`).
+    const args = ['-m', MODEL_PATH, '-f', wavPath, '-oj', '-of', outPrefix, '-np'];
+    if (THREADS) args.push('-t', String(THREADS));
+    if (LANGUAGE) args.push('-l', LANGUAGE);
+    await sh(WHISPER_BIN, args, { timeout: 1000 * 60 * 30 });
+
+    // 4. Parse segments (whisper.cpp gives offsets in milliseconds).
+    const j = JSON.parse(fs.readFileSync(`${outPrefix}.json`, 'utf8'));
+    const segments = (j.transcription || [])
+      .map(s => ({
+        start: Math.round(((s.offsets?.from ?? 0) / 1000) * 100) / 100,
+        end: Math.round(((s.offsets?.to ?? 0) / 1000) * 100) / 100,
+        text: String(s.text || '').trim(),
+      }))
+      .filter(s => s.text);
+
+    return {
+      text: segments.map(s => s.text).join(' ').trim(),
+      language: j.result?.language || j.params?.language || (MODEL_PATH.includes('.en') ? 'en' : 'auto'),
+      segments,
+    };
+  } finally {
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+  }
+}
+
+// Same signature the route already uses; accepts a URL or a local file path.
+function transcribeUrl(srcUrlOrPath) { return enqueue(() => transcribeSource(srcUrlOrPath)); }
+
+module.exports = { isConfigured, transcribeUrl, MODEL_PATH, WHISPER_BIN };
