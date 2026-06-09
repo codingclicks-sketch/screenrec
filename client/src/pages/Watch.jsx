@@ -43,6 +43,7 @@ export default function Watch() {
   const [atTime, setAtTime] = useState(true);
   const [dur, setDur] = useState(0);                // real video duration (s)
   const [isOwner, setIsOwner] = useState(false);    // show owner-only panels
+  const [canTranscribe, setCanTranscribe] = useState(true); // plan allows transcription
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState('');
 
@@ -65,7 +66,11 @@ export default function Watch() {
   useEffect(() => {
     if (!user) { setIsOwner(false); return; }
     fetch(`${API}/api/recordings/${id}`, { headers: authHeaders() })
-      .then(r => setIsOwner(r.ok)).catch(() => setIsOwner(false));
+      .then(async r => {
+        setIsOwner(r.ok);
+        if (r.ok) { const d = await r.json().catch(() => ({})); setCanTranscribe(d.canTranscribe !== false); }
+      })
+      .catch(() => setIsOwner(false));
   }, [user, id]);
 
   useEffect(() => { if (isOwner && !tabTouched) setTab('edit'); }, [isOwner, tabTouched]);
@@ -113,7 +118,12 @@ export default function Watch() {
     try {
       const res = await fetch(`${API}/api/recordings/${id}/transcribe`, { method: 'POST', headers: authHeaders() });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) { setTranscriptErr(d.error || 'Transcription failed'); setTranscript(t => ({ ...(t || {}), configured: d.code === 'transcription_unconfigured' ? false : (t?.configured ?? true) })); return; }
+      if (!res.ok) {
+        if (d.code === 'feature_locked') { setCanTranscribe(false); return; }
+        setTranscriptErr(d.error || 'Transcription failed');
+        setTranscript(t => ({ ...(t || {}), configured: d.code === 'transcription_unconfigured' ? false : (t?.configured ?? true) }));
+        return;
+      }
       setTranscript({ status: 'done', configured: true, segments: d.segments || [], text: d.text || '', language: d.language });
     } catch (e) {
       setTranscriptErr('Network error — please try again.');
@@ -440,7 +450,14 @@ export default function Watch() {
           <FileText size={26} />
           <strong>No transcript yet</strong>
           {isOwner ? (
-            transcript && transcript.configured === false ? (
+            !canTranscribe ? (
+              <>
+                <span>AI transcription is a <strong>Pro</strong> feature — auto-generate a timestamped, searchable transcript for every video.</span>
+                <Link to="/pricing" className="btn-primary" style={{ marginTop: 12 }}>
+                  <Crown size={15} /> Upgrade to Pro
+                </Link>
+              </>
+            ) : transcript && transcript.configured === false ? (
               <span>Transcription isn’t available on this server yet — it’ll appear here once the latest deploy is live.</span>
             ) : (
               <>

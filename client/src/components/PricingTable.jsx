@@ -11,6 +11,8 @@ function featureRows(plan) {
     { label: `Up to ${plan.recordingLimitMinutes >= 60 ? `${plan.recordingLimitMinutes / 60}-hour` : `${plan.recordingLimitMinutes}-min`} recordings`, on: true },
     { label: `${plan.storageLimitGB} GB storage`, on: true },
     { label: `${plan.exportQuality} exports`, on: true },
+    { label: 'Trim & edit videos', on: true },
+    { label: 'AI transcription & subtitles', on: !!f.transcriptionEnabled },
     { label: 'Remove VeoRec branding', on: !!f.removeBrandingEnabled },
     { label: 'Viewer analytics', on: !!f.analyticsEnabled },
     { label: 'Custom thumbnails', on: !!f.customThumbnailEnabled },

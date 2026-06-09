@@ -31,6 +31,7 @@ const env = (k) => process.env[k] || null;
  * @property {boolean} passwordProtectedVideosEnabled
  * @property {boolean} advancedSharingEnabled
  * @property {boolean} basicSharingEnabled
+ * @property {boolean} transcriptionEnabled
  */
 
 /** @type {Record<string, any>} */
@@ -57,6 +58,7 @@ const PLANS = {
       removeBrandingEnabled: false,
       priorityProcessingEnabled: false,
       passwordProtectedVideosEnabled: false,
+      transcriptionEnabled: false,
     },
     paddle: { monthlyPriceId: null, yearlyPriceId: null },
   },
@@ -86,6 +88,7 @@ const PLANS = {
       removeBrandingEnabled: true,
       priorityProcessingEnabled: true,
       passwordProtectedVideosEnabled: true,
+      transcriptionEnabled: true,
     },
     paddle: {
       monthlyPriceId: env('PADDLE_PRICE_PRO_MONTHLY') || env('PADDLE_PRICE_ID'), // back-compat
@@ -115,6 +118,7 @@ const PLANS = {
       removeBrandingEnabled: true,
       priorityProcessingEnabled: true,
       passwordProtectedVideosEnabled: true,
+      transcriptionEnabled: true,
       // room to grow: teamsEnabled, ssoEnabled, customDomainsEnabled, …
     },
     paddle: {
@@ -145,6 +149,7 @@ const PLANS = {
       removeBrandingEnabled: true,
       priorityProcessingEnabled: true,
       passwordProtectedVideosEnabled: true,
+      transcriptionEnabled: true,
     },
     paddle: { monthlyPriceId: null, yearlyPriceId: null },
   },

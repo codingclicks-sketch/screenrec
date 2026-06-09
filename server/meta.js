@@ -16,6 +16,7 @@ function saveJSON(file, data) { fs.writeFileSync(file, JSON.stringify(data, null
 // ── Per-recording metadata (engagement + sharing settings) ────────────────────
 function defaults() {
   return {
+    title: null,          // authoritative title (instant); Cloudinary context is a mirror
     views: 0,
     viewers: [],          // [{ name, at }]
     reactions: [],        // [{ emoji, t, at }]  — t = seconds into the video
