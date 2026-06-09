@@ -52,6 +52,11 @@ function canUseAdvancedSharing(user) {
     'Advanced sharing controls are a Pro feature. Upgrade to unlock them.');
 }
 
+function canUseTranscription(user) {
+  return gate(user, 'transcriptionEnabled',
+    'AI transcription is a Pro feature. Upgrade to auto-generate searchable transcripts.');
+}
+
 // ── Recording length ──────────────────────────────────────────────────────────
 /**
  * Validate a recording's duration against the plan limit.
@@ -61,8 +66,11 @@ function canUseAdvancedSharing(user) {
  */
 function canRecord(user, durationSeconds = 0) {
   const plan = entitlements.resolve(user);
+  // Small grace so a few seconds of encoder/timing jitter past the cap never
+  // rejects (and loses) a recording the client already auto-stopped at the limit.
+  const GRACE_SEC = 30;
   const limitSec = plan.recordingLimitMinutes * 60;
-  if (durationSeconds > limitSec) {
+  if (durationSeconds > limitSec + GRACE_SEC) {
     return DENY(
       `Recordings are limited to ${plan.recordingLimitMinutes} minutes on the ${plan.name} plan. Upgrade to Pro for up to 120-minute recordings.`,
       { limitMinutes: plan.recordingLimitMinutes, attemptedSeconds: Math.round(durationSeconds), plan: plan.slug }
@@ -110,4 +118,5 @@ module.exports = {
   canUsePriorityProcessing,
   canUsePasswordProtectedVideos,
   canUseAdvancedSharing,
+  canUseTranscription,
 };

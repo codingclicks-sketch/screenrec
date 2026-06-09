@@ -18,6 +18,7 @@ const countdownNum = document.getElementById('countdownNum');
 
 let mediaRecorder = null;
 let chunks = [];
+let lastBlob = null;       // last recorded blob — kept so a failed upload can be saved locally
 let startTime = null;
 let pausedAccum = 0;       // total paused ms
 let pauseStartedAt = null;
@@ -346,6 +347,29 @@ function cancelRecording() {
   closeWindow();
 }
 
+// Safety net: if an upload ever fails, the recording is NOT lost — offer a
+// one-click local save of the exact webm we captured.
+function showDownloadFallback() {
+  if (!lastBlob || !lastBlob.size) return;
+  let btn = document.getElementById('dlFallback');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'dlFallback';
+    btn.className = 'btn';
+    btn.style.marginTop = '10px';
+    btn.textContent = '⤓ Save recording to your device';
+    btn.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(lastBlob);
+      a.download = `veorec-recording-${Date.now()}.webm`;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch {} }, 4000);
+    });
+    (mainBtn.parentNode || document.body).insertBefore(btn, mainBtn.nextSibling);
+  }
+  btn.style.display = '';
+}
+
 // Clear the "recording" flags so the popup never stays stuck on a failed upload.
 function resetRecordingState() {
   try { chrome.storage.local.set({ recording: false, recState: { recording: false } }); } catch (e) {}
@@ -353,8 +377,13 @@ function resetRecordingState() {
 }
 
 async function handleStop() {
-  const duration = elapsedSeconds();
+  let duration = elapsedSeconds();
+  // The plan cap is enforced by auto-stop; clamp the reported duration to the
+  // limit so a sub-second timing overrun can't get the upload rejected (which
+  // used to lose the whole recording on free accounts at the 5-min mark).
+  if (limitReached && recordingLimitSec > 0) duration = Math.min(duration, recordingLimitSec);
   const blob = new Blob(chunks, { type: 'video/webm' });
+  lastBlob = blob;          // preserve so the user can always recover it
   chunks = [];
 
   // Make sure this window is visible+focused (never frozen) during the upload.
@@ -400,11 +429,13 @@ async function handleStop() {
       if (res.status === 403 && data.upgradeRequired) {
         setStatus((data.error || 'Upgrade required to save this recording.') + ' ', 'uploading');
         showUpgradePrompt(data.error);
+        showDownloadFallback();   // don't lose their recording
         return;
       }
       showStartButton(res.status === 401
         ? 'Session expired — please sign in again via the extension popup.'
         : 'Upload failed: ' + (data.error || res.status));
+      showDownloadFallback();
       return;
     }
     const shareUrl = `https://veorec.com/watch/${data.id}`;
@@ -424,6 +455,7 @@ async function handleStop() {
     showStartButton(e.name === 'AbortError'
       ? 'Upload timed out — check your connection and try again.'
       : 'Upload failed: ' + e.message);
+    showDownloadFallback();
   }
 }
 

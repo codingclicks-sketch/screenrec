@@ -393,7 +393,7 @@ if (!USE_CLOUDINARY) {
           const m = meta.get(id);
           return {
             id,
-            title: ctx.title || 'Untitled Recording',
+            title: m.title || ctx.title || 'Untitled Recording',
             filename: r.secure_url,
             // Cloudinary-generated poster image (fast thumbnail, no full video load)
             thumbnail: r.secure_url.replace(/\.(webm|mp4|mov|mkv)$/, '.jpg').replace('/upload/', '/upload/so_0/'),
@@ -443,7 +443,7 @@ if (!USE_CLOUDINARY) {
       const m = meta.get(req.params.id);
       res.json({
         id: req.params.id,
-        title: ctx.title || 'Untitled Recording',
+        title: m.title || ctx.title || 'Untitled Recording',
         filename: r.secure_url,
         size: r.bytes,
         duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
@@ -451,6 +451,7 @@ if (!USE_CLOUDINARY) {
         cloudinary: true,
         public_id: r.public_id,
         trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments,
+        canTranscribe: permissions.canUseTranscription(users.findById(req.userId)).allowed,
       });
     } catch (e) {
       res.status(404).json({ error: 'Not found' });
@@ -482,6 +483,10 @@ if (!USE_CLOUDINARY) {
     if (!title) return res.status(400).json({ error: 'Title cannot be empty' });
     try {
       if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+      // Source of truth for reads = meta.json (instant). Cloudinary context is
+      // updated too as a durable mirror, but its search index lags, so we never
+      // rely on it for display (that was the "rename reverts on refresh" bug).
+      meta.set(req.params.id, { title });
       await cloudinary.uploader.add_context(
         buildContext({ title }),
         [`screenrec/${req.userId}/${req.params.id}`],
@@ -545,12 +550,12 @@ app.get('/api/watch/:id', async (req, res) => {
     const m = meta.get(req.params.id);
 
     if (m.privacy === 'login' && !viewerFromAuth(req)) {
-      return res.status(401).json({ error: 'login_required', title: video.title });
+      return res.status(401).json({ error: 'login_required', title: m.title || video.title });
     }
     if (m.privacy === 'password' && m.passwordHash) {
-      return res.json({ id: video.id, title: video.title, requiresPassword: true });
+      return res.json({ id: video.id, title: m.title || video.title, requiresPassword: true });
     }
-    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -566,7 +571,7 @@ app.post('/api/watch/:id/unlock', async (req, res) => {
       const ok = await bcrypt.compare(req.body.password || '', m.passwordHash);
       if (!ok) return res.status(401).json({ error: 'Incorrect password' });
     }
-    res.json({ ...video, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -687,12 +692,15 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
     fields.segments = clean.length ? clean : null;
   }
 
-  // Title lives in Cloudinary's context (the video record), not meta — update it there.
-  if (typeof title === 'string' && title.trim() && USE_CLOUDINARY) {
-    try {
-      await cloudinary.uploader.add_context(buildContext({ title: cleanTitle(title) }),
-        [`screenrec/${req.userId}/${req.params.id}`], { resource_type: 'video' });
-    } catch (e) {}
+  // Title is authoritative in meta (instant); mirror to Cloudinary context too.
+  if (typeof title === 'string' && title.trim()) {
+    fields.title = cleanTitle(title);
+    if (USE_CLOUDINARY) {
+      try {
+        await cloudinary.uploader.add_context(buildContext({ title: cleanTitle(title) }),
+          [`screenrec/${req.userId}/${req.params.id}`], { resource_type: 'video' });
+      } catch (e) {}
+    }
   }
 
   const updated = meta.set(req.params.id, fields);
@@ -859,6 +867,12 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
 // ── Transcription (owner generates; Whisper via Groq free tier) ───────────────
 app.post('/api/recordings/:id/transcribe', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  // Pro feature gate (capability-based, enforced server-side).
+  const tCheck = permissions.canUseTranscription(users.findById(req.userId));
+  if (!tCheck.allowed) {
+    conversion.track({ userId: req.userId, userPlan: tCheck.meta?.plan, featureRequested: 'transcription', meta: tCheck.meta });
+    return res.status(403).json({ error: tCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'transcription' });
+  }
   if (!transcription.isConfigured()) {
     return res.status(501).json({ error: 'Transcription is not available on this server yet.', code: 'transcription_unconfigured' });
   }
