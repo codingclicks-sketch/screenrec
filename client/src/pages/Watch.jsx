@@ -355,7 +355,7 @@ export default function Watch() {
         <span className={styles.actionIcon}><FileText size={18} /></span>
         <span className={styles.actionText}>
           <strong>{segs.length ? 'View transcript' : 'Generate transcript'}</strong>
-          <span>{segs.length ? 'Timestamped, searchable transcript.' : 'AI transcribes your audio in seconds — free.'}</span>
+          <span>AI-generated, timestamped &amp; searchable.</span>
         </span>
       </button>
       <button className={styles.action} onClick={() => navigate('/pricing')}>
