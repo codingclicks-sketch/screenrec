@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Scissors, Sparkles, Link2, Download, Settings as SettingsIcon,
-  Activity as ActivityIcon, Pencil, Code2, Crown, Share2, Check } from 'lucide-react';
+  Activity as ActivityIcon, Pencil, Code2, Crown, Share2, Check,
+  FileText, Search, Loader2, RefreshCw } from 'lucide-react';
 import styles from './Watch.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
@@ -52,6 +53,13 @@ export default function Watch() {
   const [ctaOpen, setCtaOpen] = useState(false);
   const [ctaLabel, setCtaLabel] = useState('');
   const [ctaUrl, setCtaUrl] = useState('');
+  // Transcript
+  const [transcript, setTranscript] = useState(null); // { status, configured, segments, text, language }
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcriptErr, setTranscriptErr] = useState('');
+  const [tQuery, setTQuery] = useState('');
+  const [videoTime, setVideoTime] = useState(0);
+  const activeSegRef = useRef(null);
 
   // Determine ownership (owner-only endpoint 200s only for the owner).
   useEffect(() => {
@@ -91,6 +99,43 @@ export default function Watch() {
     });
     if (res.ok) { setRec((r) => ({ ...r, cta: null })); setCtaLabel(''); setCtaUrl(''); }
   }
+
+  // ── Transcript ──────────────────────────────────────────────────────────────
+  function loadTranscript() {
+    fetch(`${API}/api/watch/${id}/transcript`, { headers: authHeaders() })
+      .then(r => r.json()).then(setTranscript).catch(() => {});
+  }
+  // Lazy-load the transcript the first time the tab is opened.
+  useEffect(() => { if (tab === 'transcript' && !transcript) loadTranscript(); /* eslint-disable-next-line */ }, [tab]);
+
+  async function generateTranscript() {
+    setTranscribing(true); setTranscriptErr('');
+    try {
+      const res = await fetch(`${API}/api/recordings/${id}/transcribe`, { method: 'POST', headers: authHeaders() });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setTranscriptErr(d.error || 'Transcription failed'); setTranscript(t => ({ ...(t || {}), configured: d.code === 'transcription_unconfigured' ? false : (t?.configured ?? true) })); return; }
+      setTranscript({ status: 'done', configured: true, segments: d.segments || [], text: d.text || '', language: d.language });
+    } catch (e) {
+      setTranscriptErr('Network error — please try again.');
+    } finally { setTranscribing(false); }
+  }
+
+  const segs = transcript?.segments || [];
+  const filteredSegs = useMemo(() => {
+    const q = tQuery.trim().toLowerCase();
+    if (!q) return segs.map((s, i) => ({ ...s, i }));
+    return segs.map((s, i) => ({ ...s, i })).filter(s => s.text.toLowerCase().includes(q));
+  }, [segs, tQuery]);
+  const activeSegIdx = useMemo(() => {
+    if (!segs.length) return -1;
+    return segs.findIndex(s => videoTime >= s.start && videoTime < s.end);
+  }, [segs, videoTime]);
+  // Auto-scroll the active line into view while playing.
+  useEffect(() => {
+    if (tab === 'transcript' && activeSegRef.current) {
+      activeSegRef.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeSegIdx, tab]);
 
   // reaction tallies for the bar
   const reactionCounts = useMemo(() => {
@@ -291,11 +336,18 @@ export default function Watch() {
       </button>
 
       <div className={styles.panelLabel} style={{ marginTop: 20 }}>Take action</div>
+      <button className={styles.action} onClick={() => selectTab('transcript')}>
+        <span className={styles.actionIcon}><FileText size={18} /></span>
+        <span className={styles.actionText}>
+          <strong>{segs.length ? 'View transcript' : 'Generate transcript'}</strong>
+          <span>{segs.length ? 'Timestamped, searchable transcript.' : 'AI transcribes your audio in seconds — free.'}</span>
+        </span>
+      </button>
       <button className={styles.action} onClick={() => navigate('/pricing')}>
         <span className={styles.actionIcon}><Sparkles size={18} /></span>
         <span className={styles.actionText}>
           <strong>Generate documents with AI</strong>
-          <span>Turn your video into summaries, docs & transcripts.</span>
+          <span>Turn your video into summaries & docs.</span>
         </span>
         <span className={styles.proPill}>Pro</span>
       </button>
@@ -349,6 +401,64 @@ export default function Watch() {
     </div>
   );
 
+  const transcriptPanel = (
+    <div className={styles.panel}>
+      {segs.length > 0 ? (
+        <>
+          <div className={styles.tSearchRow}>
+            <Search size={15} />
+            <input className={styles.tSearch} placeholder="Search transcript…" value={tQuery} onChange={e => setTQuery(e.target.value)} />
+            {isOwner && (
+              <button className={styles.tRegen} title="Regenerate transcript" disabled={transcribing} onClick={generateTranscript}>
+                {transcribing ? <Loader2 size={15} className={styles.spin} /> : <RefreshCw size={15} />}
+              </button>
+            )}
+          </div>
+          <div className={styles.tList}>
+            {filteredSegs.length === 0 && <p className={styles.noComments}>No lines match “{tQuery}”.</p>}
+            {filteredSegs.map(seg => (
+              <button
+                key={seg.i}
+                ref={seg.i === activeSegIdx ? activeSegRef : null}
+                className={`${styles.tLine} ${seg.i === activeSegIdx ? styles.tLineActive : ''}`}
+                onClick={() => seekTo(seg.start)}
+              >
+                <span className={styles.tTime}>{clock(seg.start)}</span>
+                <span className={styles.tText}>{seg.text}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : transcribing ? (
+        <div className={styles.tEmpty}>
+          <Loader2 size={26} className={styles.spin} />
+          <strong>Transcribing your video…</strong>
+          <span>Whisper is listening — this usually takes a few seconds.</span>
+        </div>
+      ) : (
+        <div className={styles.tEmpty}>
+          <FileText size={26} />
+          <strong>No transcript yet</strong>
+          {isOwner ? (
+            transcript && transcript.configured === false ? (
+              <span>Transcription isn’t enabled yet. Add a free Whisper (Groq) API key on the server to turn it on.</span>
+            ) : (
+              <>
+                <span>Generate a timestamped, searchable transcript with AI.</span>
+                <button className="btn-primary" style={{ marginTop: 12 }} disabled={transcribing} onClick={generateTranscript}>
+                  <Sparkles size={15} /> Generate transcript
+                </button>
+              </>
+            )
+          ) : (
+            <span>The owner hasn’t added a transcript for this video yet.</span>
+          )}
+          {transcriptErr && <span className={styles.tErr}>{transcriptErr}</span>}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -389,6 +499,7 @@ export default function Watch() {
               }}
               onTimeUpdate={(e) => {
                 const v = e.target;
+                setVideoTime(v.currentTime);
                 const segs = Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null;
                 if (segs) {
                   const t = v.currentTime;
@@ -466,6 +577,9 @@ export default function Watch() {
             <button className={`${styles.tab} ${tab === 'activity' ? styles.tabActive : ''}`} onClick={() => selectTab('activity')} title="Activity">
               <ActivityIcon size={16} /> <span>Activity</span>
             </button>
+            <button className={`${styles.tab} ${tab === 'transcript' ? styles.tabActive : ''}`} onClick={() => selectTab('transcript')} title="Transcript">
+              <FileText size={16} /> <span>Transcript</span>
+            </button>
             {isOwner && (
               <button className={`${styles.tab} ${tab === 'settings' ? styles.tabActive : ''}`} onClick={() => selectTab('settings')} title="Settings">
                 <SettingsIcon size={16} /> <span>Settings</span>
@@ -475,6 +589,7 @@ export default function Watch() {
 
           {tab === 'edit' && isOwner && editPanel}
           {tab === 'activity' && activityPanel}
+          {tab === 'transcript' && transcriptPanel}
           {tab === 'settings' && isOwner && settingsPanel}
 
           {!isOwner && (

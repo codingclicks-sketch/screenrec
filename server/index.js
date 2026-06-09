@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const users = require('./users');
 const { meta, folders } = require('./meta');
+const transcription = require('./transcription');
 const { signToken, requireAuth, verifyToken } = require('./auth');
 
 // ── Monetization layer ────────────────────────────────────────────────────────
@@ -587,6 +588,21 @@ app.get('/api/watch/:id/engagement', (req, res) => {
   res.json({ views: m.views, reactions: m.reactions, comments: m.comments });
 });
 
+// Transcript for the watch page (public). `configured` tells the owner UI
+// whether "Generate transcript" can work; `status` is 'done' | 'none'.
+app.get('/api/watch/:id/transcript', (req, res) => {
+  const t = meta.get(req.params.id).transcript;
+  const done = t && Array.isArray(t.segments) && t.segments.length;
+  res.json({
+    status: done ? 'done' : 'none',
+    configured: transcription.isConfigured(),
+    language: done ? t.language : null,
+    text: done ? t.text : '',
+    segments: done ? t.segments : [],
+    created_at: done ? t.created_at : null,
+  });
+});
+
 app.post('/api/watch/:id/react', (req, res) => {
   const emoji = String(req.body.emoji || '').slice(0, 8);
   if (!emoji) return res.status(400).json({ error: 'emoji required' });
@@ -838,6 +854,43 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
     console.error('[trim] failed:', e.message);
     res.status(500).json({ error: e.message || 'Trim failed' });
   }
+});
+
+// ── Transcription (owner generates; Whisper via Groq free tier) ───────────────
+app.post('/api/recordings/:id/transcribe', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  if (!transcription.isConfigured()) {
+    return res.status(501).json({ error: 'Transcription is not set up yet. Add a free Whisper (Groq) API key to enable it.', code: 'transcription_unconfigured' });
+  }
+  try {
+    let audioUrl;
+    if (USE_CLOUDINARY) {
+      // Cloudinary derives an mp3 audio track from the video on the fly — no
+      // ffmpeg needed on our side, and it keeps the upload small for Whisper.
+      audioUrl = cloudinary.url(`screenrec/${req.userId}/${req.params.id}`, { resource_type: 'video', format: 'mp3', secure: true });
+    } else {
+      const row = db.get(req.params.id);
+      if (!row) return res.status(404).json({ error: 'Not found' });
+      audioUrl = `${req.protocol}://${req.get('host')}/uploads/${row.filename}`;
+    }
+
+    const result = await transcription.transcribeUrl(audioUrl);
+    if (!result.segments.length) return res.status(422).json({ error: 'No speech detected in this recording.' });
+
+    meta.set(req.params.id, { transcript: { ...result, status: 'done', created_at: Date.now() } });
+    res.json({ status: 'done', ...result });
+  } catch (e) {
+    const code = e.code === 'too_large' ? 413 : 500;
+    console.error('[transcribe] failed:', e.message);
+    res.status(code).json({ error: e.message || 'Transcription failed' });
+  }
+});
+
+// Owner can clear/regenerate
+app.delete('/api/recordings/:id/transcribe', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  meta.set(req.params.id, { transcript: null });
+  res.json({ ok: true });
 });
 
 // ── Folders (owner) ───────────────────────────────────────────────────────────

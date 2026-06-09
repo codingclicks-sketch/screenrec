@@ -28,6 +28,7 @@ function defaults() {
     trimStart: null,      // seconds — virtual trim (player only plays start..end)
     trimEnd: null,
     segments: null,       // [{start,end}] keep-ranges (virtual split); null = whole video
+    transcript: null,     // { status, language, text, segments:[{start,end,text}], created_at }
   };
 }
 
