@@ -588,9 +588,20 @@ app.post('/api/watch/:id/view', (req, res) => {
   res.json({ views: updated.views });
 });
 
+// Older recordings stored reactions as a tally object { emoji: count }; current
+// ones use an array [{emoji,t,at}]. Always hand the client an array.
+function normalizeReactions(r) {
+  if (Array.isArray(r)) return r;
+  if (r && typeof r === 'object') {
+    return Object.entries(r).flatMap(([emoji, n]) =>
+      Array.from({ length: Math.max(0, parseInt(n) || 0) }, () => ({ emoji, t: null, at: 0 })));
+  }
+  return [];
+}
+
 app.get('/api/watch/:id/engagement', (req, res) => {
   const m = meta.get(req.params.id);
-  res.json({ views: m.views, reactions: m.reactions, comments: m.comments });
+  res.json({ views: m.views, reactions: normalizeReactions(m.reactions), comments: Array.isArray(m.comments) ? m.comments : [] });
 });
 
 // Transcript for the watch page (public). `configured` tells the owner UI

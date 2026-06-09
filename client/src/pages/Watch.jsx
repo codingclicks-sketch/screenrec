@@ -147,18 +147,23 @@ export default function Watch() {
     }
   }, [activeSegIdx, tab]);
 
-  // reaction tallies for the bar
+  // reactions can be an array [{emoji,t,at}] (current) or a legacy tally object
+  // {emoji: count}. Normalise so the rest of the component is bulletproof.
+  const reactionsArr = Array.isArray(reactions) ? reactions : [];
   const reactionCounts = useMemo(() => {
-    const c = {};
-    (reactions || []).forEach(r => { c[r.emoji] = (c[r.emoji] || 0) + 1; });
-    return c;
+    if (Array.isArray(reactions)) {
+      const c = {};
+      reactions.forEach(r => { c[r.emoji] = (c[r.emoji] || 0) + 1; });
+      return c;
+    }
+    return reactions && typeof reactions === 'object' ? reactions : {};
   }, [reactions]);
 
   // markers on the timeline: comments + reactions that have a timestamp
   const markers = useMemo(() => {
     const m = [];
-    (comments || []).forEach(c => { if (c.t != null) m.push({ kind: 'comment', t: c.t, label: c.name + ': ' + c.text }); });
-    (reactions || []).forEach(r => { if (r.t != null) m.push({ kind: 'react', t: r.t, label: r.emoji, emoji: r.emoji }); });
+    (Array.isArray(comments) ? comments : []).forEach(c => { if (c.t != null) m.push({ kind: 'comment', t: c.t, label: c.name + ': ' + c.text }); });
+    reactionsArr.forEach(r => { if (r.t != null) m.push({ kind: 'react', t: r.t, label: r.emoji, emoji: r.emoji }); });
     return m.sort((a, b) => a.t - b.t);
   }, [comments, reactions]);
 
@@ -179,7 +184,7 @@ export default function Watch() {
     fetch(`${API}/api/watch/${id}/view`, { method: 'POST', headers: authHeaders() })
       .then(r => r.json()).then(d => setViews(d.views)).catch(() => {});
     fetch(`${API}/api/watch/${id}/engagement`)
-      .then(r => r.json()).then(d => { setViews(d.views); setReactions(d.reactions || {}); setComments(d.comments || []); })
+      .then(r => r.json()).then(d => { setViews(d.views); setReactions(d.reactions || []); setComments(d.comments || []); })
       .catch(() => {});
   }
 
