@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   MoreHorizontal, Copy, Share2, BarChart2, Pencil, Trash2, Check,
@@ -161,7 +162,6 @@ export default function Dashboard() {
             onDelete={() => deleteRec(r.id)}
             onDuplicate={() => duplicateRec(r.id)}
             onArchive={() => setArchived(r.id, !r.archived)}
-            onToggleAnimated={() => setAnimated(r.id, !(r.animatedThumbnail !== false))}
           />
         ))}
       </div>
@@ -171,6 +171,7 @@ export default function Dashboard() {
         <ShareSettings rec={settingsRec} folders={folders} authFetch={authFetch}
           onClose={() => setSettingsRec(null)}
           onUpgrade={(feature, reason) => { setSettingsRec(null); setUpgrade({ feature, reason }); }}
+          onAnimated={setAnimated}
           onSaved={(patch) => { setRecordings((rs) => rs.map((x) => (x.id === settingsRec.id ? { ...x, ...patch } : x))); setSettingsRec(null); }} />
       )}
       {analyticsRec && (
@@ -184,47 +185,59 @@ export default function Dashboard() {
 }
 
 /* ── Video card (grid + list) ─────────────────────────────────────────────── */
-function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, onStats, onRename, onRenameChange, onRenameSave, onRenameCancel, onMove, onDelete, onDuplicate, onArchive, onToggleAnimated }) {
+function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, onStats, onRename, onRenameChange, onRenameSave, onRenameCancel, onMove, onDelete, onDuplicate, onArchive }) {
   const [menu, setMenu] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) { setMenu(false); setMoveOpen(false); } }
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, []);
+  const [pos, setPos] = useState(null);   // fixed-position coords for the portal menu
+  const btnRef = useRef(null);
+
+  // Open into a body-level portal so the card's overflow:hidden can't clip us,
+  // and flip up/down depending on which side has room (fixes "cut from the top").
+  function openMenu() {
+    if (menu) { setMenu(false); setMoveOpen(false); return; }
+    const b = btnRef.current?.getBoundingClientRect() || { bottom: 0, top: 0, right: 0 };
+    const WIDTH = 232, EST_H = 360;
+    const right = Math.max(10, window.innerWidth - b.right);
+    const spaceBelow = window.innerHeight - b.bottom;
+    const p = { width: WIDTH, right, left: 'auto' };
+    if (spaceBelow >= EST_H || spaceBelow >= b.top) { p.top = Math.round(b.bottom + 6); p.bottom = 'auto'; }
+    else { p.bottom = Math.round(window.innerHeight - b.top + 6); p.top = 'auto'; }
+    setPos(p);
+    setMenu(true);
+  }
+  function close() { setMenu(false); setMoveOpen(false); }
 
   const menuEl = (
-    <div className={styles.cardMenuWrap} ref={ref}>
-      <button className={styles.menuBtn} onClick={() => setMenu((m) => !m)}><MoreHorizontal size={18} /></button>
-      {menu && (
-        <div className={styles.menu}>
-          <button className={styles.menuItem} onClick={() => { setMenu(false); onCopy(); }}>{copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied!' : 'Copy link'}</button>
-          <button className={styles.menuItem} onClick={() => { setMenu(false); onShare(); }}><Share2 size={15} /> Share settings</button>
-          <button className={styles.menuItem} onClick={() => { setMenu(false); onStats(); }}><BarChart2 size={15} /> Analytics</button>
-          <Link className={styles.menuItem} to={`/edit/${r.id}`}><Scissors size={15} /> Edit / trim</Link>
-          <button className={styles.menuItem} onClick={() => { setMenu(false); onRename(); }}><Pencil size={15} /> Rename</button>
-          <div className={styles.menuSub}>
-            <button className={styles.menuItem} onClick={() => setMoveOpen((o) => !o)}><FolderInput size={15} /> Move to folder</button>
-            {moveOpen && (
-              <div className={styles.subMenu}>
-                <button className={styles.menuItem} onClick={() => { setMenu(false); onMove(null); }}>No folder</button>
-                {folders.map((f) => <button key={f.id} className={styles.menuItem} onClick={() => { setMenu(false); onMove(f.id); }}>{f.name}</button>)}
-                {!folders.length && <span className={styles.menuEmpty}>No folders yet</span>}
-              </div>
-            )}
+    <div className={styles.cardMenuWrap}>
+      <button ref={btnRef} className={styles.menuBtn} onClick={openMenu}><MoreHorizontal size={18} /></button>
+      {menu && createPortal(
+        <>
+          <div className={styles.menuBackdrop} onClick={close} />
+          <div className={styles.menu} style={{ position: 'fixed', ...pos }}>
+            <button className={styles.menuItem} onClick={() => { close(); onCopy(); }}>{copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Copied!' : 'Copy link'}</button>
+            <button className={styles.menuItem} onClick={() => { close(); onShare(); }}><Share2 size={15} /> Share settings</button>
+            <button className={styles.menuItem} onClick={() => { close(); onStats(); }}><BarChart2 size={15} /> Analytics</button>
+            <Link className={styles.menuItem} to={`/edit/${r.id}`}><Scissors size={15} /> Edit / trim</Link>
+            <button className={styles.menuItem} onClick={() => { close(); onRename(); }}><Pencil size={15} /> Rename</button>
+            <div className={styles.menuSub}>
+              <button className={styles.menuItem} onClick={() => setMoveOpen((o) => !o)}><FolderInput size={15} /> Move to folder</button>
+              {moveOpen && (
+                <div className={styles.subMenu}>
+                  <button className={styles.menuItem} onClick={() => { close(); onMove(null); }}>No folder</button>
+                  {folders.map((f) => <button key={f.id} className={styles.menuItem} onClick={() => { close(); onMove(f.id); }}>{f.name}</button>)}
+                  {!folders.length && <span className={styles.menuEmpty}>No folders yet</span>}
+                </div>
+              )}
+            </div>
+            <div className={styles.menuDivider} />
+            <button className={styles.menuItem} onClick={() => { close(); onDuplicate(); }}><CopyPlus size={15} /> Duplicate</button>
+            <button className={styles.menuItem} onClick={() => { close(); onArchive(); }}>
+              {r.archived ? <><ArchiveRestore size={15} /> Unarchive</> : <><Archive size={15} /> Archive</>}
+            </button>
+            <button className={`${styles.menuItem} ${styles.menuDanger}`} onClick={() => { close(); onDelete(); }}><Trash2 size={15} /> Delete</button>
           </div>
-          <button className={styles.menuItem} onClick={() => { setMenu(false); onToggleAnimated(); }}>
-            <Film size={15} /> Animated thumbnail
-            <span className={styles.menuState}>{r.animatedThumbnail !== false ? 'On' : 'Off'}</span>
-          </button>
-          <div className={styles.menuDivider} />
-          <button className={styles.menuItem} onClick={() => { setMenu(false); onDuplicate(); }}><CopyPlus size={15} /> Duplicate</button>
-          <button className={styles.menuItem} onClick={() => { setMenu(false); onArchive(); }}>
-            {r.archived ? <><ArchiveRestore size={15} /> Unarchive</> : <><Archive size={15} /> Archive</>}
-          </button>
-          <button className={`${styles.menuItem} ${styles.menuDanger}`} onClick={() => { setMenu(false); onDelete(); }}><Trash2 size={15} /> Delete</button>
-        </div>
+        </>,
+        document.body
       )}
     </div>
   );
@@ -295,8 +308,14 @@ function Confirm({ state, onClose }) {
 }
 
 /* ── Share settings modal (unchanged behaviour) ───────────────────────────── */
-function ShareSettings({ rec, folders, authFetch, onClose, onSaved, onUpgrade }) {
+function ShareSettings({ rec, folders, authFetch, onClose, onSaved, onUpgrade, onAnimated }) {
   const [title, setTitle] = useState(rec.title || '');
+  const [animated, setAnimated] = useState(rec.animatedThumbnail !== false);
+  function toggleAnimated() {
+    const next = !animated;
+    setAnimated(next);            // instant visual
+    onAnimated?.(rec.id, next);   // PATCH + sync the library list immediately
+  }
   const [privacy, setPrivacy] = useState(rec.privacy || 'public');
   const [password, setPassword] = useState('');
   const [description, setDescription] = useState(rec.description || '');
@@ -356,6 +375,11 @@ function ShareSettings({ rec, folders, authFetch, onClose, onSaved, onUpgrade })
           <option value="">No folder</option>
           {folders.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
         </select>
+        <label className={styles.fieldLabel}>Animated thumbnail</label>
+        <button type="button" className={styles.switchRow} onClick={toggleAnimated}>
+          <span className={styles.switchText}>Play a short looping preview on hover and when shared</span>
+          <span className={`${styles.switch} ${animated ? styles.switchOn : ''}`}><span className={styles.knob} /></span>
+        </button>
         <label className={styles.fieldLabel}>Embed code</label>
         <code className={styles.embedCode}>{embed}</code>
         <button className={styles.ghostBtn} style={{ fontSize: 12, marginBottom: 8 }} onClick={() => { navigator.clipboard.writeText(embed); setCopiedEmbed(true); setTimeout(() => setCopiedEmbed(false), 2000); }}>{copiedEmbed ? '✓ Copied!' : 'Copy embed code'}</button>
