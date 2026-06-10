@@ -278,10 +278,22 @@
 .cardMenuWrap { position: relative; flex-shrink: 0; }
 .menuBtn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; border: none; background: transparent; color: #9090a0; cursor: pointer; }
 .menuBtn:hover { background: #f2f2f7; color: #14141f; }
-.menu { position: absolute; bottom: calc(100% + 6px); right: 0; min-width: 184px; background: #fff; border: 1px solid #ececf3; border-radius: 13px; box-shadow: 0 14px 40px rgba(20,20,40,.18); padding: 6px; z-index: 40; }
-.menuItem { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 11px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #14141f; background: transparent; border: none; cursor: pointer; text-align: left; font-family: inherit; }
+/* Rendered in a body-level portal (see Card) so the card's overflow:hidden
+   can't clip it. Position is set inline (fixed + flipped up/down). */
+.menuBackdrop { position: fixed; inset: 0; z-index: 999; }
+.menu { min-width: 200px; max-height: calc(100vh - 24px); overflow-y: auto; background: #fff; border: 1px solid #ececf3; border-radius: 13px; box-shadow: 0 14px 40px rgba(20,20,40,.18); padding: 6px; z-index: 1000; }
+.menuItem { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 11px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #14141f; background: transparent; border: none; cursor: pointer; text-align: left; font-family: inherit; white-space: nowrap; }
 .menuItem:hover { background: #f5f5fa; }
 .menuState { margin-left: auto; font-size: 11.5px; font-weight: 700; color: #5b5bf6; background: #efeffe; padding: 1px 8px; border-radius: 999px; }
+
+/* Settings-modal toggle (Animated thumbnail) */
+.switchRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; padding: 11px 13px; border: 1px solid #e2e2ea; border-radius: 11px; background: #fff; cursor: pointer; text-align: left; font-family: inherit; margin-bottom: 4px; }
+.switchRow:hover { border-color: #cfcfdb; }
+.switchText { font-size: 13px; color: #4a4a5e; line-height: 1.35; }
+.switch { flex: 0 0 auto; position: relative; width: 40px; height: 23px; border-radius: 999px; background: #d5d5e0; transition: background .16s; }
+.switchOn { background: #5b5bf6; }
+.knob { position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .16s; }
+.switchOn .knob { transform: translateX(17px); }
 .menuDanger { color: #dc2626; }
 .menuDanger:hover { background: #fef2f2; }
 .menuDivider { height: 1px; background: #f0f0f5; margin: 5px 0; }

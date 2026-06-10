@@ -4,7 +4,7 @@ import { Scissors, Sparkles, Link2, Download, Settings as SettingsIcon,
   Activity as ActivityIcon, Pencil, Code2, Crown, Share2, Check,
   FileText, Search, Loader2, RefreshCw, MoreHorizontal, Eye, X, MessageSquare,
   User as UserIcon, HelpCircle, BarChart3, LogOut, PlaySquare,
-  FolderInput, CopyPlus, Archive, ArchiveRestore, Film, Trash2 } from 'lucide-react';
+  FolderInput, CopyPlus, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import styles from './Watch.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
@@ -743,10 +743,6 @@ export default function Watch() {
                       </div>
                       <button className={styles.menuItem} onClick={duplicateVideo}>
                         <CopyPlus size={15} /> Duplicate
-                      </button>
-                      <button className={styles.menuItem} onClick={() => saveThumb(rec.animatedThumbnail === false)}>
-                        <Film size={15} /> Animated thumbnail
-                        <span className={styles.menuState}>{rec.animatedThumbnail !== false ? 'On' : 'Off'}</span>
                       </button>
                       <button className={styles.menuItem} onClick={() => { setMenuOpen(false); saveArchived(!rec.archived); }}>
                         {rec.archived ? <><ArchiveRestore size={15} /> Unarchive</> : <><Archive size={15} /> Archive</>}
