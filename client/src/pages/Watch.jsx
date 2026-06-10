@@ -606,7 +606,7 @@ export default function Watch() {
   );
 
   const transcriptPanel = (
-    <div className={`${styles.panel} ${styles.transcriptPanel}`}>
+    <div className={styles.panel}>
       {segs.length > 0 ? (
         <>
           <div className={styles.tSearchRow}>

@@ -130,11 +130,11 @@
 
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 5px;
+  padding: 4px;
   margin-bottom: 16px;
 }
 .tab {
@@ -144,7 +144,7 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 8px 5px;
+  padding: 9px 6px;
   border: none;
   background: none;
   border-radius: 8px;
@@ -155,7 +155,7 @@
   white-space: nowrap;
   transition: background .15s, color .15s;
 }
-.tab svg { flex: 0 0 auto; }
+.tab svg { flex: 0 0 auto; width: 15px; height: 15px; }
 .tab:hover { color: var(--text); }
 .tabActive { background: var(--accent); color: #fff; }
 .tabActive:hover { color: #fff; }
@@ -287,7 +287,6 @@
 .composerSend:disabled { opacity: .5; cursor: default; }
 
 /* ── Transcript tab ─────────────────────────────────────────────────────── */
-.transcriptPanel { padding: 18px 24px; }
 .tSearchRow {
   display: flex; align-items: center; gap: 8px;
   background: var(--surface2, #f5f6fa); border: 1px solid var(--border);
