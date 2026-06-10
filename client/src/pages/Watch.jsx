@@ -2,10 +2,12 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Scissors, Sparkles, Link2, Download, Settings as SettingsIcon,
   Activity as ActivityIcon, Pencil, Code2, Crown, Share2, Check,
-  FileText, Search, Loader2, RefreshCw, MoreHorizontal, Eye, X } from 'lucide-react';
+  FileText, Search, Loader2, RefreshCw, MoreHorizontal, Eye, X, MessageSquare } from 'lucide-react';
 import styles from './Watch.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
+import { useBilling } from '../hooks/useBilling';
+import VideoPlayer from '../components/VideoPlayer';
 
 const REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏'];
 
@@ -36,6 +38,7 @@ function authHeaders() {
 export default function Watch() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { isPaid } = useBilling();   // reflect the viewer's real plan in the UI
   const navigate = useNavigate();
   const videoRef = useRef(null);
 
@@ -337,13 +340,7 @@ export default function Watch() {
 
   const activityPanel = (
     <div className={styles.panel}>
-      {rec.audience?.reactions !== false && (
-        <>
-          <div className={styles.panelLabel}>React</div>
-          {reactionsBar}
-        </>
-      )}
-      <div className={styles.panelLabel} style={{ marginTop: rec.audience?.reactions !== false ? 22 : 0 }}>Comments ({comments.length})</div>
+      <div className={styles.panelLabel}>Comments ({comments.length})</div>
       {rec.audience?.comments !== false ? (
         <form onSubmit={addComment} className={styles.commentForm}>
           {!user && (
@@ -381,17 +378,35 @@ export default function Watch() {
     </div>
   );
 
+  // Pro-gated, not-yet-built features: free users see a "Pro" upsell, paid users
+  // see "Soon" (they're entitled — it just isn't shipped yet).
+  const proBadge = isPaid ? <span className={styles.soonPill}>Soon</span> : <span className={styles.proPill}>Pro</span>;
+  const onProClick = () => { if (!isPaid) navigate('/pricing'); };
+  const ProRow = ({ title, sub }) => isPaid ? (
+    <div className={styles.audRow}>
+      <div className={styles.audText}><strong>{title}</strong><span>{sub}</span></div>
+      <span className={styles.soonPill}>Soon</span>
+    </div>
+  ) : (
+    <Link to="/pricing" className={styles.audRowLink}>
+      <div className={styles.audText}><strong>{title}</strong><span>{sub}</span></div>
+      <span className={styles.proPill}>Pro</span>
+    </Link>
+  );
+
   const editPanel = (
     <div className={styles.panel}>
-      {/* Upsell */}
-      <Link to="/pricing" className={styles.upsell}>
-        <div className={styles.upsellIcon}><Crown size={18} /></div>
-        <div className={styles.upsellText}>
-          <strong>Get VeoRec Pro + AI</strong>
-          <span>Remove branding, longer recordings, AI summaries & transcripts.</span>
-        </div>
-        <span className={styles.upsellBtn}>Upgrade</span>
-      </Link>
+      {/* Upsell — only for free users */}
+      {!isPaid && (
+        <Link to="/pricing" className={styles.upsell}>
+          <div className={styles.upsellIcon}><Crown size={18} /></div>
+          <div className={styles.upsellText}>
+            <strong>Get VeoRec Pro + AI</strong>
+            <span>Remove branding, longer recordings, AI summaries & transcripts.</span>
+          </div>
+          <span className={styles.upsellBtn}>Upgrade</span>
+        </Link>
+      )}
 
       <div className={styles.panelLabel}>Make edits</div>
       <button className={styles.action} onClick={() => navigate(`/edit/${id}`)}>
@@ -401,13 +416,13 @@ export default function Watch() {
           <span>Trim, split and cut parts of your recording.</span>
         </span>
       </button>
-      <button className={styles.action} onClick={() => navigate('/pricing')}>
+      <button className={styles.action} onClick={onProClick}>
         <span className={styles.actionIcon}><Sparkles size={18} /></span>
         <span className={styles.actionText}>
           <strong>Remove silences &amp; filler words</strong>
           <span>Auto-clean your recording in one click.</span>
         </span>
-        <span className={styles.proPill}>Pro</span>
+        {proBadge}
       </button>
 
       <div className={styles.panelLabel} style={{ marginTop: 20 }}>Take action</div>
@@ -418,13 +433,13 @@ export default function Watch() {
           <span>AI-generated, timestamped &amp; searchable.</span>
         </span>
       </button>
-      <button className={styles.action} onClick={() => navigate('/pricing')}>
+      <button className={styles.action} onClick={onProClick}>
         <span className={styles.actionIcon}><Sparkles size={18} /></span>
         <span className={styles.actionText}>
           <strong>Generate documents with AI</strong>
           <span>Turn your video into summaries & docs.</span>
         </span>
-        <span className={styles.proPill}>Pro</span>
+        {proBadge}
       </button>
       <button className={styles.action} onClick={() => { setCtaOpen(o => !o); if (rec.cta) { setCtaLabel(rec.cta.label || ''); setCtaUrl(rec.cta.url || ''); } }}>
         <span className={styles.actionIcon}><Link2 size={18} /></span>
@@ -443,13 +458,15 @@ export default function Watch() {
           </div>
         </div>
       )}
-      <a className={styles.action} href={src} download={rec.title + '.webm'}>
-        <span className={styles.actionIcon}><Download size={18} /></span>
-        <span className={styles.actionText}>
-          <strong>Download video</strong>
-          <span>Save the original file to your device.</span>
-        </span>
-      </a>
+      {rec.audience?.download !== false && (
+        <a className={styles.action} href={src} download={rec.title + '.webm'}>
+          <span className={styles.actionIcon}><Download size={18} /></span>
+          <span className={styles.actionText}>
+            <strong>Download video</strong>
+            <span>Save the original file to your device.</span>
+          </span>
+        </a>
+      )}
     </div>
   );
 
@@ -512,18 +529,9 @@ export default function Watch() {
             <div className={styles.audText}><strong>Animated thumbnail</strong><span>Auto-generated preview when shared</span></div>
             <span className={styles.audOn}>On</span>
           </div>
-          <Link to="/pricing" className={styles.audRowLink}>
-            <div className={styles.audText}><strong>Custom thumbnail</strong><span>Upload your own cover image</span></div>
-            <span className={styles.proPill}>Pro</span>
-          </Link>
-          <Link to="/pricing" className={styles.audRowLink}>
-            <div className={styles.audText}><strong>Background noise filter</strong><span>Clean up audio automatically</span></div>
-            <span className={styles.proPill}>Pro</span>
-          </Link>
-          <Link to="/pricing" className={styles.audRowLink}>
-            <div className={styles.audText}><strong>Remove silences &amp; filler words</strong><span>Auto-tighten your recording</span></div>
-            <span className={styles.proPill}>Pro</span>
-          </Link>
+          <ProRow title="Custom thumbnail" sub="Upload your own cover image" />
+          <ProRow title="Background noise filter" sub="Clean up audio automatically" />
+          <ProRow title="Remove silences & filler words" sub="Auto-tighten your recording" />
         </>
       )}
     </div>
@@ -623,7 +631,7 @@ export default function Watch() {
                       <Scissors size={15} /> Edit / Trim
                     </button>
                   )}
-                  {(isOwner || rec.audience?.download !== false) && (
+                  {rec.audience?.download !== false && (
                     <a className={styles.menuItem} href={src} download={rec.title + '.webm'} onClick={() => setMenuOpen(false)}>
                       <Download size={15} /> Download
                     </a>
@@ -672,66 +680,37 @@ export default function Watch() {
             <div className={styles.viewsPill}><Eye size={15} /> {views} view{views === 1 ? '' : 's'}</div>
           </div>
 
-          <div className={styles.player}>
-            <video
-              ref={videoRef}
-              src={src}
-              controls
-              autoPlay
-              className={styles.video}
-              onLoadedMetadata={(e) => {
-                const v = e.target;
-                if (rec.recommendedSpeed) { try { v.playbackRate = rec.recommendedSpeed; } catch {} }
-                const segs = Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null;
-                const start = segs ? segs[0].start : (Number(rec.trimStart) || 0);
-                if (v.duration === Infinity || isNaN(v.duration)) {
-                  v.currentTime = 1e101;
-                  v.ontimeupdate = () => {
-                    v.ontimeupdate = null; v.currentTime = start;
-                    if (Number.isFinite(v.duration)) setDur(v.duration);
-                  };
-                } else {
-                  if (start) v.currentTime = start;
-                  setDur(v.duration);
-                }
-              }}
-              onTimeUpdate={(e) => {
-                const v = e.target;
-                setVideoTime(v.currentTime);
-                const segs = Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null;
-                if (segs) {
-                  const t = v.currentTime;
-                  const inSeg = segs.find((sg) => t >= sg.start - 0.05 && t < sg.end);
-                  if (!inSeg) {
-                    const next = segs.find((sg) => sg.start > t);
-                    if (next) v.currentTime = next.start;
-                    else { v.pause(); v.currentTime = segs[0].start; }
-                  }
-                  return;
-                }
-                const start = Number(rec.trimStart) || 0;
-                if (rec.trimEnd != null && v.currentTime >= rec.trimEnd) {
-                  v.pause();
-                  v.currentTime = start;
-                }
-              }}
-            />
-          </div>
+          {/* Custom player — reaction/comment markers sit ON the progress bar */}
+          <VideoPlayer
+            videoRef={videoRef}
+            src={src}
+            segments={Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null}
+            trimStart={rec.trimStart}
+            trimEnd={rec.trimEnd}
+            recommendedSpeed={rec.recommendedSpeed}
+            markers={markers.filter(m => m.kind === 'comment'
+              ? rec.audience?.comments !== false
+              : rec.audience?.reactions !== false)}
+            captions={(isOwner || rec.audience?.transcript !== false) ? (transcript?.segments || []) : []}
+            onMarkerClick={seekTo}
+            onTime={setVideoTime}
+          />
 
-          {/* Timeline markers (comments + reactions) */}
-          {markers.length > 0 && (dur || rec.duration) > 0 && (
-            <div className={styles.timeline} title="Comments & reactions">
-              {markers.map((m, i) => (
-                <button
-                  key={i}
-                  className={m.kind === 'comment' ? styles.markerComment : styles.markerReact}
-                  style={{ left: `${Math.min(99, (m.t / (dur || rec.duration)) * 100)}%` }}
-                  title={m.label}
-                  onClick={() => seekTo(m.t)}
-                >
-                  {m.kind === 'comment' ? '💬' : m.emoji}
+          {/* Loom-style floating reaction dock */}
+          {(rec.audience?.reactions !== false || rec.audience?.comments !== false) && (
+            <div className={styles.reactionDock}>
+              {rec.audience?.reactions !== false && (
+                <div className={styles.reactionPill}>
+                  {REACTIONS.map(e => (
+                    <button key={e} className={styles.reactDockBtn} title="React at this moment" onClick={() => react(e)}>{e}</button>
+                  ))}
+                </div>
+              )}
+              {rec.audience?.comments !== false && (
+                <button className={styles.commentDock} onClick={() => selectTab('activity')}>
+                  <MessageSquare size={17} /> Comment
                 </button>
-              ))}
+              )}
             </div>
           )}
 
