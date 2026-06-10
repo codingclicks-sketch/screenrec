@@ -45,9 +45,10 @@ const PLANS = {
     order: 0,
     monthlyPrice: 0,
     yearlyPrice: 0,
-    storageLimitGB: 2,
-    storageLimitBytes: 2 * GB,
-    recordingLimitMinutes: 5,
+    maxVideos: 30,               // free is gated by video COUNT, not storage size
+    storageLimitGB: 20,          // generous so the 30-video count is the binding limit
+    storageLimitBytes: 20 * GB,
+    recordingLimitMinutes: 10,
     exportQuality: '720p',
     branding: true,              // VeoRec watermark/branding ON
     features: {
@@ -75,9 +76,10 @@ const PLANS = {
     monthlyPrice: 7.99,
     yearlyPrice: 79,
     yearlyBadge: '2 Months Free',
-    storageLimitGB: 100,
-    storageLimitBytes: 100 * GB,
-    recordingLimitMinutes: 120,
+    maxVideos: null,             // unlimited videos
+    storageLimitGB: 1024,        // effectively unlimited storage
+    storageLimitBytes: 1024 * GB,
+    recordingLimitMinutes: 600,  // effectively unlimited recording length
     exportQuality: '1080p',
     branding: false,
     features: {
@@ -263,6 +265,7 @@ function publicPlan(plan) {
     monthlyPrice: plan.monthlyPrice,
     yearlyPrice: plan.yearlyPrice,
     storageLimitGB: plan.storageLimitGB,
+    maxVideos: plan.maxVideos ?? null,
     recordingLimitMinutes: plan.recordingLimitMinutes,
     exportQuality: plan.exportQuality,
     branding: plan.branding,

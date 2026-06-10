@@ -15,7 +15,7 @@ import s from './AppShell.module.css';
 // Library, Folders and Analytics pages so the navigation stays consistent.
 export default function AppShell({ active = 'library', search, onSearch, headerRight, children }) {
   const { user, logout, token } = useAuth();
-  const { usage, isPaid } = useBilling();
+  const { usage, isPaid, plan } = useBilling();
   const navigate = useNavigate();
   const [recordOpen, setRecordOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -100,10 +100,19 @@ export default function AppShell({ active = 'library', search, onSearch, headerR
 
         <div className={s.sidebarFoot}>
           {usage && (
-            <div className={s.storageBox}>
-              <div className={s.storageLabel}>Storage</div>
-              <StorageMeter usage={usage} isPaid={isPaid} showUpgradeHint={false} />
-            </div>
+            plan && plan.maxVideos != null ? (
+              <div className={s.storageBox}>
+                <div className={s.storageLabel}>{usage.videoCount || 0} / {plan.maxVideos} videos</div>
+                <div style={{ height: 6, background: 'var(--surface2,#ececf5)', borderRadius: 999, overflow: 'hidden', marginTop: 6 }}>
+                  <div style={{ height: '100%', width: `${Math.min(100, ((usage.videoCount || 0) / plan.maxVideos) * 100)}%`, background: '#5b5bf6', borderRadius: 999 }} />
+                </div>
+              </div>
+            ) : (
+              <div className={s.storageBox}>
+                <div className={s.storageLabel}>Storage</div>
+                <StorageMeter usage={usage} isPaid={isPaid} showUpgradeHint={false} />
+              </div>
+            )
           )}
           <Link to="/billing" className={s.navItem}><CreditCard size={18} /> Billing &amp; plan</Link>
           {!isPaid && (

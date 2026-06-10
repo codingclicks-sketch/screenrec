@@ -6,10 +6,10 @@ import s from './Paywall.module.css';
 // `features` map + limits returned by /api/plans — nothing hardcoded per plan.
 function featureRows(plan) {
   const f = plan.features || {};
+  const limited = plan.maxVideos != null;
   return [
-    { label: 'Unlimited videos', on: true },
-    { label: `Up to ${plan.recordingLimitMinutes >= 60 ? `${plan.recordingLimitMinutes / 60}-hour` : `${plan.recordingLimitMinutes}-min`} recordings`, on: true },
-    { label: `${plan.storageLimitGB} GB storage`, on: true },
+    { label: limited ? `Up to ${plan.maxVideos} videos` : 'Unlimited videos', on: true },
+    { label: limited ? `${plan.recordingLimitMinutes}-min recordings` : 'Unlimited recording length', on: true },
     { label: `${plan.exportQuality} exports`, on: true },
     { label: 'Trim & edit videos', on: true },
     { label: 'AI transcription & subtitles', on: !!f.transcriptionEnabled },

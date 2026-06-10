@@ -109,8 +109,26 @@ function canUploadVideo(user, incomingBytes = 0) {
   return ALLOW({ usedBytes: used, limitBytes: limit, projectedBytes: projected, plan: plan.slug });
 }
 
+/**
+ * Can the user add another video? Free is gated by video COUNT (not storage).
+ * Unlimited when the plan has no maxVideos.
+ */
+function canCreateVideo(user) {
+  const plan = entitlements.resolve(user);
+  if (plan.maxVideos == null) return ALLOW({ plan: plan.slug });
+  const count = usageService.get(user.id).videoCount || 0;
+  if (count >= plan.maxVideos) {
+    return DENY(
+      `You've reached the ${plan.maxVideos}-video limit on the ${plan.name} plan. Upgrade to Pro for unlimited videos.`,
+      { videoCount: count, maxVideos: plan.maxVideos, plan: plan.slug }
+    );
+  }
+  return ALLOW({ videoCount: count, maxVideos: plan.maxVideos, plan: plan.slug });
+}
+
 module.exports = {
   canUploadVideo,
+  canCreateVideo,
   canRecord,
   canUseAnalytics,
   canUploadThumbnail,

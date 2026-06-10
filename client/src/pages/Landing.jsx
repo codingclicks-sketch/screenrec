@@ -11,10 +11,10 @@ import s from './Landing.module.css';
 const FALLBACK = [
   { slug: 'free', name: 'Free', monthlyPrice: 0, yearlyPrice: 0, badge: null,
     features: { removeBrandingEnabled: false, analyticsEnabled: false, customThumbnailEnabled: false, passwordProtectedVideosEnabled: false, priorityProcessingEnabled: false, transcriptionEnabled: false },
-    recordingLimitMinutes: 5, storageLimitGB: 2, exportQuality: '720p' },
+    maxVideos: 30, recordingLimitMinutes: 10, storageLimitGB: 20, exportQuality: '720p' },
   { slug: 'pro', name: 'Pro', monthlyPrice: 7.99, yearlyPrice: 79, badge: 'Most Popular', yearlyBadge: '2 Months Free',
     features: { removeBrandingEnabled: true, analyticsEnabled: true, customThumbnailEnabled: true, passwordProtectedVideosEnabled: true, priorityProcessingEnabled: true, transcriptionEnabled: true },
-    recordingLimitMinutes: 120, storageLimitGB: 100, exportQuality: '1080p' },
+    maxVideos: null, recordingLimitMinutes: 600, storageLimitGB: 1024, exportQuality: '1080p' },
 ];
 
 const FEATURES = [
