@@ -325,7 +325,14 @@ if (!USE_CLOUDINARY) {
           featureRequested: conversion.TRIGGERS.RECORDING_LIMIT, meta: recCheck.meta });
         return res.status(403).json({ error: recCheck.reason, upgradeRequired: true, code: 'recording_limit', meta: recCheck.meta });
       }
-      // 2) Storage limit (primary free-plan limiter).
+      // 2) Video-count limit (primary free-plan limiter — 30 videos).
+      const countCheck = permissions.canCreateVideo(user);
+      if (!countCheck.allowed) {
+        conversion.track({ userId: user.id, userPlan: countCheck.meta?.plan,
+          featureRequested: conversion.TRIGGERS.STORAGE_FULL, meta: countCheck.meta });
+        return res.status(403).json({ error: countCheck.reason, upgradeRequired: true, code: 'video_limit', meta: countCheck.meta });
+      }
+      // 3) Storage size (generous safety cap).
       const storeCheck = permissions.canUploadVideo(user, sizeBytes);
       if (!storeCheck.allowed) {
         conversion.track({ userId: user.id, userPlan: storeCheck.meta?.plan,
