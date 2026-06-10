@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Scissors, Sparkles, Link2, Download, Settings as SettingsIcon,
   Activity as ActivityIcon, Pencil, Code2, Crown, Share2, Check,
-  FileText, Search, Loader2, RefreshCw } from 'lucide-react';
+  FileText, Search, Loader2, RefreshCw, MoreHorizontal } from 'lucide-react';
 import styles from './Watch.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
@@ -34,6 +34,7 @@ export default function Watch() {
   const [pw, setPw] = useState('');
   const [pwErr, setPwErr] = useState('');
   const [copied, setCopied] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);   // header "more" (⋯) menu
 
   const [views, setViews] = useState(0);
   const [reactions, setReactions] = useState([]);   // [{emoji, t, at}]
@@ -486,11 +487,47 @@ export default function Watch() {
       <header className={styles.header}>
         <Link to="/" className={styles.logo}><img src="/logo.png" className={styles.logoImg} alt="" />VeoRec</Link>
         <div className={styles.headerActions}>
-          {isOwner && <Link to={`/edit/${id}`} className="btn-ghost"><Scissors size={14} /> Edit / Trim</Link>}
-          <a href={src} download={rec.title + '.webm'} className="btn-ghost"><Download size={14} /> Download</a>
-          <button className="btn-primary" onClick={() => copy('link', shareUrl)}>
-            {copied === 'link' ? <><Check size={15} /> Copied!</> : <><Share2 size={15} /> Share</>}
-          </button>
+          {/* Segmented Share button (label + attached copy-link icon) */}
+          <div className={styles.shareGroup}>
+            <button className={styles.shareBtn} onClick={() => copy('link', shareUrl)}>
+              {copied === 'link' ? <><Check size={15} /> Copied!</> : <><Share2 size={15} /> Share</>}
+            </button>
+            <button className={styles.shareIcon} title="Copy link" onClick={() => copy('link', shareUrl)}>
+              <Link2 size={15} />
+            </button>
+          </div>
+
+          {/* More (⋯) menu */}
+          <div className={styles.moreWrap}>
+            <button className={styles.iconBtn} title="More" aria-label="More options" onClick={() => setMenuOpen(o => !o)}>
+              <MoreHorizontal size={18} />
+            </button>
+            {menuOpen && (
+              <>
+                <div className={styles.menuBackdrop} onClick={() => setMenuOpen(false)} />
+                <div className={styles.menu}>
+                  {isOwner && (
+                    <button className={styles.menuItem} onClick={() => { setMenuOpen(false); navigate(`/edit/${id}`); }}>
+                      <Scissors size={15} /> Edit / Trim
+                    </button>
+                  )}
+                  <a className={styles.menuItem} href={src} download={rec.title + '.webm'} onClick={() => setMenuOpen(false)}>
+                    <Download size={15} /> Download
+                  </a>
+                  <button className={styles.menuItem} onClick={() => { setMenuOpen(false); copy('embed', embedCode); }}>
+                    <Code2 size={15} /> Copy embed code
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Account avatar (signed-in only) */}
+          {user && (
+            <Link to="/" className={styles.avatar} title={user.name || user.email || 'Your library'}>
+              {(user.name || user.email || 'U').charAt(0).toUpperCase()}
+            </Link>
+          )}
         </div>
       </header>
 

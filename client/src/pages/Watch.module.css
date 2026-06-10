@@ -36,6 +36,62 @@
   align-items: center;
 }
 
+/* ── Loom-style header: segmented Share + ⋯ menu + avatar ────────────────── */
+.shareGroup {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(20, 20, 40, .12);
+}
+.shareBtn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--accent); color: #fff; border: none;
+  font-size: 14px; font-weight: 600; padding: 8px 14px;
+  cursor: pointer; font-family: inherit; transition: background .15s;
+}
+.shareBtn:hover { background: #4a4ae0; }
+.shareIcon {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff; border: none;
+  border-left: 1px solid rgba(255, 255, 255, .28);
+  padding: 0 11px; cursor: pointer; transition: background .15s;
+}
+.shareIcon:hover { background: #4a4ae0; }
+
+.iconBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 9px;
+  background: none; border: 1px solid var(--border); color: var(--text2);
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.iconBtn:hover { background: var(--surface2, #f5f6fa); color: var(--text); }
+
+.moreWrap { position: relative; }
+.menuBackdrop { position: fixed; inset: 0; z-index: 40; }
+.menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 41;
+  background: var(--surface, #fff); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(20, 20, 40, .16);
+  padding: 6px; min-width: 200px; display: flex; flex-direction: column;
+}
+.menuItem {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 11px; border-radius: 8px; border: none; background: none;
+  font-size: 14px; color: var(--text); cursor: pointer; text-decoration: none;
+  width: 100%; text-align: left; font-family: inherit;
+}
+.menuItem:hover { background: var(--surface2, #f5f6fa); }
+.menuItem svg { color: var(--text2); flex: 0 0 auto; }
+
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 14px; font-weight: 700;
+  text-decoration: none; flex: 0 0 auto;
+}
+.avatar:hover { opacity: .9; }
+
 .main {
   flex: 1;
   display: flex;
