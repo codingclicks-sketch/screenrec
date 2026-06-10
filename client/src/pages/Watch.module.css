@@ -109,15 +109,15 @@
   display: flex;
   align-items: flex-start;
   gap: 28px;
-  max-width: 1280px;
+  max-width: 1340px;
   width: 100%;
   margin: 0 auto;
   padding: 28px 24px 60px;
 }
 .left { flex: 1 1 auto; min-width: 0; }
 .sidebar {
-  width: 372px;
-  flex: 0 0 372px;
+  width: 440px;
+  flex: 0 0 440px;
   position: sticky;
   top: 20px;
   display: flex;
@@ -143,19 +143,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 9px 6px;
+  gap: 6px;
+  padding: 9px 10px;
   border: none;
   background: none;
   border-radius: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text2);
   cursor: pointer;
   white-space: nowrap;
   transition: background .15s, color .15s;
 }
-.tab svg { flex: 0 0 auto; width: 15px; height: 15px; }
+.tab svg { flex: 0 0 auto; }
 .tab:hover { color: var(--text); }
 .tabActive { background: var(--accent); color: #fff; }
 .tabActive:hover { color: #fff; }
