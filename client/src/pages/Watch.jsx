@@ -69,6 +69,7 @@ export default function Watch() {
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState('');
   const [autoTitling, setAutoTitling] = useState(false);
+  const [commentDockOpen, setCommentDockOpen] = useState(false);
 
   // Sidebar tabs (Loom-style). Owners default to "Make edits"; viewers see Activity.
   const [tab, setTab] = useState('activity');
@@ -121,6 +122,21 @@ export default function Watch() {
     const d = await res.json().catch(() => ({}));
     if (res.ok && d.id) navigate(`/watch/${d.id}`); else alert(d.error || 'Could not duplicate this video.');
   }
+  function openCommentDock() {
+    try { videoRef.current?.pause(); } catch {}
+    setCommentDockOpen(true);
+  }
+  async function postDockComment() {
+    if (!commentText.trim()) return;
+    const t = Math.floor(videoTime);
+    const res = await fetch(`${API}/api/watch/${id}/comment`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ text: commentText, name: commentName, t }),
+    });
+    const c = await res.json().catch(() => ({}));
+    if (res.ok && c.id) { setComments(cs => [...cs, c]); setCommentText(''); setCommentDockOpen(false); }
+    else alert(c.error || 'Could not post comment.');
+  }
   function loadViewers() {
     fetch(`${API}/api/recordings/${id}/analytics`, { headers: authHeaders() })
       .then(r => (r.ok ? r.json() : null))
@@ -169,6 +185,10 @@ export default function Watch() {
     setRec(r => ({ ...r, recommendedSpeed: v }));
     if (videoRef.current) try { videoRef.current.playbackRate = v || 1; } catch {}
     patchMeta({ recommendedSpeed: v }).catch(() => {});
+  }
+  function saveThumb(on) {
+    setRec(r => ({ ...r, animatedThumbnail: on }));
+    patchMeta({ animatedThumbnail: on }).catch(() => {});
   }
   function saveSummary(text) {
     const t = (text || '').trim();
@@ -254,7 +274,7 @@ export default function Watch() {
   const markers = useMemo(() => {
     const m = [];
     (Array.isArray(comments) ? comments : []).forEach(c => { if (c.t != null) m.push({ kind: 'comment', t: c.t, label: c.name + ': ' + c.text }); });
-    reactionsArr.forEach(r => { if (r.t != null) m.push({ kind: 'react', t: r.t, label: r.emoji, emoji: r.emoji }); });
+    reactionsArr.forEach(r => { if (r.t != null) m.push({ kind: 'react', t: r.t, label: r.name ? `${r.name} reacted ${r.emoji}` : r.emoji, emoji: r.emoji }); });
     return m.sort((a, b) => a.t - b.t);
   }, [comments, reactions]);
 
@@ -570,7 +590,7 @@ export default function Watch() {
         <>
           <div className={styles.audRow}>
             <div className={styles.audText}><strong>Animated thumbnail</strong><span>Auto-generated preview when shared</span></div>
-            <span className={styles.audOn}>On</span>
+            <Toggle on={rec.animatedThumbnail !== false} onClick={() => saveThumb(rec.animatedThumbnail === false)} />
           </div>
           <ProRow title="Custom thumbnail" sub="Upload your own cover image" />
           <ProRow title="Background noise filter" sub="Clean up audio automatically" />
@@ -581,7 +601,7 @@ export default function Watch() {
   );
 
   const transcriptPanel = (
-    <div className={styles.panel}>
+    <div className={`${styles.panel} ${styles.transcriptPanel}`}>
       {segs.length > 0 ? (
         <>
           <div className={styles.tSearchRow}>
@@ -809,10 +829,30 @@ export default function Watch() {
                 </div>
               )}
               {rec.audience?.comments !== false && (
-                <button className={styles.commentDock} onClick={() => selectTab('activity')}>
+                <button className={styles.commentDock} onClick={openCommentDock}>
                   <MessageSquare size={17} /> Comment
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Inline comment composer (Loom-style) */}
+          {commentDockOpen && rec.audience?.comments !== false && (
+            <div className={styles.composer}>
+              {!user && (
+                <input className={styles.composerName} value={commentName}
+                  onChange={e => setCommentName(e.target.value)} placeholder="Your name (optional)" />
+              )}
+              <textarea className={styles.composerInput} value={commentText} autoFocus rows={2}
+                placeholder="Add a comment…"
+                onChange={e => setCommentText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) postDockComment(); if (e.key === 'Escape') setCommentDockOpen(false); }} />
+              <div className={styles.composerActions}>
+                <button className={styles.composerCancel} onClick={() => { setCommentDockOpen(false); setCommentText(''); }}>Cancel</button>
+                <button className={styles.composerSend} onClick={postDockComment} disabled={!commentText.trim()}>
+                  Comment at {clock(Math.floor(videoTime || 0))}
+                </button>
+              </div>
             </div>
           )}
 

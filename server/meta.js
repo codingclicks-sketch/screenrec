@@ -39,6 +39,7 @@ function defaults() {
       transcript: true,   // viewers can open the transcript
     },
     recommendedSpeed: null, // suggested playback speed (e.g. 1.5); null = normal
+    animatedThumbnail: true, // show the animated preview thumbnail when shared
   };
 }
 
