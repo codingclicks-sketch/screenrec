@@ -555,7 +555,7 @@ app.get('/api/watch/:id', async (req, res) => {
     if (m.privacy === 'password' && m.passwordHash) {
       return res.json({ id: video.id, title: m.title || video.title, requiresPassword: true });
     }
-    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -571,7 +571,7 @@ app.post('/api/watch/:id/unlock', async (req, res) => {
       const ok = await bcrypt.compare(req.body.password || '', m.passwordHash);
       if (!ok) return res.status(401).json({ error: 'Incorrect password' });
     }
-    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -620,6 +620,7 @@ app.get('/api/watch/:id/transcript', (req, res) => {
 });
 
 app.post('/api/watch/:id/react', (req, res) => {
+  if (meta.get(req.params.id).audience?.reactions === false) return res.status(403).json({ error: 'Reactions are turned off for this video.' });
   const emoji = String(req.body.emoji || '').slice(0, 8);
   if (!emoji) return res.status(400).json({ error: 'emoji required' });
   const t = Number(req.body.t);
@@ -632,6 +633,7 @@ app.post('/api/watch/:id/react', (req, res) => {
 });
 
 app.post('/api/watch/:id/comment', (req, res) => {
+  if (meta.get(req.params.id).audience?.comments === false) return res.status(403).json({ error: 'Comments are turned off for this video.' });
   const text = String(req.body.text || '').trim().slice(0, 2000);
   if (!text) return res.status(400).json({ error: 'Comment text required' });
   let name = String(req.body.name || '').trim().slice(0, 80) || 'Anonymous';
@@ -659,9 +661,26 @@ app.get('/api/recordings/:id/analytics', requireAuth, async (req, res) => {
 app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
   const user = users.findById(req.userId);
-  const { title, description, cta, privacy, password, folder, trimStart, trimEnd, removeBranding, segments } = req.body;
+  const { title, description, cta, privacy, password, folder, trimStart, trimEnd, removeBranding, segments, tags, audience, recommendedSpeed } = req.body;
   const fields = {};
   if (typeof description === 'string') fields.description = description.slice(0, 5000);
+
+  // Tags (owner-defined).
+  if (Array.isArray(tags)) {
+    fields.tags = [...new Set(tags.map(t => String(t).trim().slice(0, 40)).filter(Boolean))].slice(0, 20);
+  }
+  // Audience controls — merge over existing so a partial update is safe.
+  if (audience && typeof audience === 'object') {
+    const cur = meta.get(req.params.id).audience || {};
+    const next = { ...cur };
+    for (const k of ['comments', 'reactions', 'download', 'transcript']) {
+      if (typeof audience[k] === 'boolean') next[k] = audience[k];
+    }
+    fields.audience = next;
+  }
+  // Recommended playback speed (null = normal).
+  if (recommendedSpeed === null) fields.recommendedSpeed = null;
+  else if (Number.isFinite(recommendedSpeed) && recommendedSpeed >= 0.25 && recommendedSpeed <= 4) fields.recommendedSpeed = recommendedSpeed;
   if (cta === null) fields.cta = null;
   else if (cta && typeof cta.url === 'string' && cta.url) fields.cta = { label: String(cta.label || 'Learn more').slice(0, 60), url: cta.url.slice(0, 500) };
 
@@ -720,6 +739,7 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
     description: updated.description, cta: updated.cta, privacy: updated.privacy,
     folder: updated.folder, hasPassword: !!updated.passwordHash,
     trimStart: updated.trimStart, trimEnd: updated.trimEnd, segments: updated.segments,
+    tags: updated.tags, audience: updated.audience, recommendedSpeed: updated.recommendedSpeed,
   });
 });
 

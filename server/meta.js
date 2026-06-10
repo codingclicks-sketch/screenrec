@@ -30,6 +30,15 @@ function defaults() {
     trimEnd: null,
     segments: null,       // [{start,end}] keep-ranges (virtual split); null = whole video
     transcript: null,     // { status, language, text, segments:[{start,end,text}], created_at }
+    tags: [],             // owner-defined tags [string]
+    // Audience controls (Loom-style) — what viewers are allowed to do.
+    audience: {
+      comments: true,     // viewers can comment
+      reactions: true,    // viewers can react
+      download: true,     // show the download option to viewers
+      transcript: true,   // viewers can open the transcript
+    },
+    recommendedSpeed: null, // suggested playback speed (e.g. 1.5); null = normal
   };
 }
 

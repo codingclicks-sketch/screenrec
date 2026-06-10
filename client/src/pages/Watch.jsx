@@ -35,6 +35,7 @@ export default function Watch() {
   const [pwErr, setPwErr] = useState('');
   const [copied, setCopied] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);   // header "more" (⋯) menu
+  const [settingsSub, setSettingsSub] = useState('audience'); // Settings: 'audience' | 'enhancements'
 
   const [views, setViews] = useState(0);
   const [reactions, setReactions] = useState([]);   // [{emoji, t, at}]
@@ -99,6 +100,26 @@ export default function Watch() {
     if (res.ok) { const d = await res.json().catch(() => ({})); setRec((r) => ({ ...r, cta: d.cta })); setCtaOpen(false); }
     else { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not save link'); }
   }
+  // ── Owner: audience / sharing settings (optimistic) ─────────────────────────
+  function patchMeta(body) {
+    return fetch(`${API}/api/recordings/${id}/meta`, {
+      method: 'PATCH', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+  }
+  function saveAudience(partial) {
+    setRec(r => ({ ...r, audience: { ...(r.audience || {}), ...partial } }));
+    patchMeta({ audience: partial }).catch(() => {});
+  }
+  function savePrivacy(privacy) {
+    setRec(r => ({ ...r, privacy }));
+    patchMeta({ privacy }).catch(() => {});
+  }
+  function saveSpeed(v) {
+    setRec(r => ({ ...r, recommendedSpeed: v }));
+    if (videoRef.current) try { videoRef.current.playbackRate = v || 1; } catch {}
+    patchMeta({ recommendedSpeed: v }).catch(() => {});
+  }
+
   async function removeCta() {
     const res = await fetch(`${API}/api/recordings/${id}/meta`, {
       method: 'PATCH', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ cta: null }),
@@ -286,24 +307,32 @@ export default function Watch() {
 
   const activityPanel = (
     <div className={styles.panel}>
-      <div className={styles.panelLabel}>React</div>
-      {reactionsBar}
-      <div className={styles.panelLabel} style={{ marginTop: 22 }}>Comments ({comments.length})</div>
-      <form onSubmit={addComment} className={styles.commentForm}>
-        {!user && (
-          <input className={styles.commentName} value={commentName}
-            onChange={e => setCommentName(e.target.value)} placeholder="Your name (optional)" />
-        )}
-        <textarea className={styles.commentInput} value={commentText}
-          onChange={e => setCommentText(e.target.value)} placeholder="Add a comment…" rows={2} />
-        <div className={styles.commentActions}>
-          <label className={styles.atLabel}>
-            <input type="checkbox" checked={atTime} onChange={e => setAtTime(e.target.checked)} />
-            Tag current time
-          </label>
-          <button className="btn-primary" type="submit" style={{ fontSize: 13 }}>Comment</button>
-        </div>
-      </form>
+      {rec.audience?.reactions !== false && (
+        <>
+          <div className={styles.panelLabel}>React</div>
+          {reactionsBar}
+        </>
+      )}
+      <div className={styles.panelLabel} style={{ marginTop: rec.audience?.reactions !== false ? 22 : 0 }}>Comments ({comments.length})</div>
+      {rec.audience?.comments !== false ? (
+        <form onSubmit={addComment} className={styles.commentForm}>
+          {!user && (
+            <input className={styles.commentName} value={commentName}
+              onChange={e => setCommentName(e.target.value)} placeholder="Your name (optional)" />
+          )}
+          <textarea className={styles.commentInput} value={commentText}
+            onChange={e => setCommentText(e.target.value)} placeholder="Add a comment…" rows={2} />
+          <div className={styles.commentActions}>
+            <label className={styles.atLabel}>
+              <input type="checkbox" checked={atTime} onChange={e => setAtTime(e.target.checked)} />
+              Tag current time
+            </label>
+            <button className="btn-primary" type="submit" style={{ fontSize: 13 }}>Comment</button>
+          </div>
+        </form>
+      ) : (
+        <p className={styles.noComments}>Comments are turned off for this video.</p>
+      )}
       <div className={styles.commentList}>
         {comments.length === 0 && <p className={styles.noComments}>No comments yet — be the first.</p>}
         {comments.map(c => (
@@ -394,26 +423,79 @@ export default function Watch() {
     </div>
   );
 
+  const aud = rec.audience || { comments: true, reactions: true, download: true, transcript: true };
+  const SPEEDS = [{ v: null, l: 'Normal' }, { v: 1.25, l: '1.25×' }, { v: 1.5, l: '1.5×' }, { v: 1.75, l: '1.75×' }, { v: 2, l: '2×' }];
+  const Toggle = ({ on, onClick }) => (
+    <button type="button" role="switch" aria-checked={on} onClick={onClick}
+      className={`${styles.switch} ${on ? styles.switchOn : ''}`}><span className={styles.switchKnob} /></button>
+  );
+
   const settingsPanel = (
     <div className={styles.panel}>
-      <div className={styles.panelLabel}>Sharing</div>
-      <div className={styles.settingRow}>
-        <span>Who can view</span>
-        <strong>{privacyLabel}</strong>
+      <div className={styles.subTabs}>
+        <button className={`${styles.subTab} ${settingsSub === 'enhancements' ? styles.subTabActive : ''}`} onClick={() => setSettingsSub('enhancements')}>Enhancements</button>
+        <button className={`${styles.subTab} ${settingsSub === 'audience' ? styles.subTabActive : ''}`} onClick={() => setSettingsSub('audience')}>Audience</button>
       </div>
-      <button className={styles.action} onClick={() => copy('link', shareUrl)}>
-        <span className={styles.actionIcon}><Link2 size={18} /></span>
-        <span className={styles.actionText}>
-          <strong>{copied === 'link' ? 'Link copied ✓' : 'Copy share link'}</strong>
-          <span>{shareUrl}</span>
-        </span>
-      </button>
 
-      <div className={styles.panelLabel} style={{ marginTop: 20 }}>Embed</div>
-      <code className={styles.embedCode}>{embedCode}</code>
-      <button className="btn-ghost" style={{ width: '100%' }} onClick={() => copy('embed', embedCode)}>
-        {copied === 'embed' ? '✓ Copied!' : <><Code2 size={14} /> Copy embed code</>}
-      </button>
+      {settingsSub === 'audience' ? (
+        <>
+          <div className={styles.audRow}>
+            <div className={styles.audText}><strong>Who can view</strong><span>Control who can open this link</span></div>
+            <select className={styles.audSelect} value={rec.privacy || 'public'} onChange={e => savePrivacy(e.target.value)}>
+              <option value="public">Anyone with the link</option>
+              <option value="login">Signed-in users only</option>
+            </select>
+          </div>
+          <div className={styles.audRow}>
+            <div className={styles.audText}><strong>Recommended playback speed</strong><span>Suggest a viewing speed</span></div>
+            <select className={styles.audSelect} value={rec.recommendedSpeed ?? ''} onChange={e => saveSpeed(e.target.value === '' ? null : Number(e.target.value))}>
+              {SPEEDS.map(s => <option key={s.l} value={s.v ?? ''}>{s.l}</option>)}
+            </select>
+          </div>
+          <div className={styles.audDivider} />
+          <div className={styles.audRow}>
+            <div className={styles.audText}><strong>Comments</strong><span>Allow viewers to add comments</span></div>
+            <Toggle on={aud.comments !== false} onClick={() => saveAudience({ comments: aud.comments === false })} />
+          </div>
+          <div className={styles.audRow}>
+            <div className={styles.audText}><strong>Emoji reactions</strong><span>Allow viewers to react</span></div>
+            <Toggle on={aud.reactions !== false} onClick={() => saveAudience({ reactions: aud.reactions === false })} />
+          </div>
+          <div className={styles.audRow}>
+            <div className={styles.audText}><strong>Download</strong><span>Allow viewers to download the video</span></div>
+            <Toggle on={aud.download !== false} onClick={() => saveAudience({ download: aud.download === false })} />
+          </div>
+          <div className={styles.audRow}>
+            <div className={styles.audText}><strong>Transcript</strong><span>Allow viewers to open the transcript</span></div>
+            <Toggle on={aud.transcript !== false} onClick={() => saveAudience({ transcript: aud.transcript === false })} />
+          </div>
+          <div className={styles.audDivider} />
+          <div className={styles.panelLabel}>Embed</div>
+          <code className={styles.embedCode}>{embedCode}</code>
+          <button className="btn-ghost" style={{ width: '100%' }} onClick={() => copy('embed', embedCode)}>
+            {copied === 'embed' ? '✓ Copied!' : <><Code2 size={14} /> Copy embed code</>}
+          </button>
+        </>
+      ) : (
+        <>
+          <div className={styles.audRow}>
+            <div className={styles.audText}><strong>Animated thumbnail</strong><span>Auto-generated preview when shared</span></div>
+            <span className={styles.audOn}>On</span>
+          </div>
+          <Link to="/pricing" className={styles.audRowLink}>
+            <div className={styles.audText}><strong>Custom thumbnail</strong><span>Upload your own cover image</span></div>
+            <span className={styles.proPill}>Pro</span>
+          </Link>
+          <Link to="/pricing" className={styles.audRowLink}>
+            <div className={styles.audText}><strong>Background noise filter</strong><span>Clean up audio automatically</span></div>
+            <span className={styles.proPill}>Pro</span>
+          </Link>
+          <Link to="/pricing" className={styles.audRowLink}>
+            <div className={styles.audText}><strong>Remove silences &amp; filler words</strong><span>Auto-tighten your recording</span></div>
+            <span className={styles.proPill}>Pro</span>
+          </Link>
+        </>
+      )}
     </div>
   );
 
@@ -511,9 +593,11 @@ export default function Watch() {
                       <Scissors size={15} /> Edit / Trim
                     </button>
                   )}
-                  <a className={styles.menuItem} href={src} download={rec.title + '.webm'} onClick={() => setMenuOpen(false)}>
-                    <Download size={15} /> Download
-                  </a>
+                  {(isOwner || rec.audience?.download !== false) && (
+                    <a className={styles.menuItem} href={src} download={rec.title + '.webm'} onClick={() => setMenuOpen(false)}>
+                      <Download size={15} /> Download
+                    </a>
+                  )}
                   <button className={styles.menuItem} onClick={() => { setMenuOpen(false); copy('embed', embedCode); }}>
                     <Code2 size={15} /> Copy embed code
                   </button>
@@ -543,6 +627,7 @@ export default function Watch() {
               className={styles.video}
               onLoadedMetadata={(e) => {
                 const v = e.target;
+                if (rec.recommendedSpeed) { try { v.playbackRate = rec.recommendedSpeed; } catch {} }
                 const segs = Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null;
                 const start = segs ? segs[0].start : (Number(rec.trimStart) || 0);
                 if (v.duration === Infinity || isNaN(v.duration)) {
@@ -636,9 +721,11 @@ export default function Watch() {
             <button className={`${styles.tab} ${tab === 'activity' ? styles.tabActive : ''}`} onClick={() => selectTab('activity')} title="Activity">
               <ActivityIcon size={16} /> <span>Activity</span>
             </button>
-            <button className={`${styles.tab} ${tab === 'transcript' ? styles.tabActive : ''}`} onClick={() => selectTab('transcript')} title="Transcript">
-              <FileText size={16} /> <span>Transcript</span>
-            </button>
+            {(isOwner || rec.audience?.transcript !== false) && (
+              <button className={`${styles.tab} ${tab === 'transcript' ? styles.tabActive : ''}`} onClick={() => selectTab('transcript')} title="Transcript">
+                <FileText size={16} /> <span>Transcript</span>
+              </button>
+            )}
             {isOwner && (
               <button className={`${styles.tab} ${tab === 'settings' ? styles.tabActive : ''}`} onClick={() => selectTab('settings')} title="Settings">
                 <SettingsIcon size={16} /> <span>Settings</span>
