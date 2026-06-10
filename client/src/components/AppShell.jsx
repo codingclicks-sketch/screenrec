@@ -152,7 +152,6 @@ export default function AppShell({ active = 'library', search, onSearch, headerR
               <button className={s.recordChevron} onClick={() => setRecordOpen((o) => !o)}><ChevronDown size={16} /></button>
               {recordOpen && (
                 <div className={s.dropdown} style={{ right: 0, minWidth: 220 }}>
-                  <button className={s.dropItem} onClick={() => { setRecordOpen(false); setHint(true); }}><Video size={16} /> Record a screen video</button>
                   <button className={s.dropItem} onClick={pickUpload}><Upload size={16} /> Upload a video</button>
                 </div>
               )}
