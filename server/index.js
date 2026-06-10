@@ -513,9 +513,11 @@ async function findVideo(id) {
     if (!result.resources.length) return null;
     const r = result.resources[0];
     const ctx = r.context?.custom || {};
+    const ownerId = ctx.user_id || (r.public_id || '').split('/')[1];
     return {
       id,
       title: ctx.title || 'Untitled Recording',
+      author: (ownerId && users.findById(ownerId)?.name) || null,
       filename: r.secure_url,
       thumbnail: r.secure_url.replace(/\.(webm|mp4|mov|mkv)$/, '.jpg').replace('/upload/', '/upload/so_0/'),
       duration: Math.round(r.duration || parseInt(ctx.duration) || 0),

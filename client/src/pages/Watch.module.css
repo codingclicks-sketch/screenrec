@@ -405,6 +405,49 @@
   color: var(--text2);
 }
 
+/* ── Title block (above the video, Loom-style) ──────────────────────────── */
+.titleTop {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 16px;
+}
+.titleMain { min-width: 0; flex: 1; }
+.byline { font-size: 13px; color: var(--text2); margin-top: 4px; }
+.viewsPill {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  background: var(--surface, #fff); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 13px; font-size: 13px; font-weight: 600;
+  color: var(--text2); white-space: nowrap;
+}
+
+/* ── Below-video blocks: Summary + Tags ─────────────────────────────────── */
+.belowBlock { margin-top: 22px; }
+.blockTitle { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+.blockEmpty { font-size: 13px; color: var(--text2); }
+.summaryInput {
+  width: 100%; background: var(--surface, #fff); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 13px; font-size: 14px; color: var(--text);
+  outline: none; font-family: inherit; resize: vertical; line-height: 1.5;
+}
+.summaryInput:focus { border-color: var(--accent); }
+.tagRow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tagChip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--surface2, #f1f1fa); color: var(--text2);
+  border-radius: 999px; padding: 5px 11px; font-size: 13px; font-weight: 600;
+}
+.tagX {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer; color: var(--text2);
+  padding: 0; margin-left: 1px; border-radius: 50%;
+}
+.tagX:hover { color: #ef4444; }
+.tagInput {
+  border: 1px dashed var(--border); background: none; border-radius: 999px;
+  padding: 5px 12px; font-size: 13px; color: var(--text); outline: none;
+  font-family: inherit; width: 120px;
+}
+.tagInput:focus { border-color: var(--accent); border-style: solid; }
+
 .timeline {
   position: relative;
   width: 100%;
