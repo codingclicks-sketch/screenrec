@@ -1,6 +1,6 @@
 # VeoRec — Chrome Web Store Submission Guide
 
-Upload file (project root): **`veorec-extension-v1.7.0.zip`**
+Upload file (project root): **`veorec-extension-v1.7.0-final.zip`**  ← the clean, ready-to-submit package (10 runtime files, manifest at root, dev scripts excluded)
 
 ---
 
@@ -11,7 +11,7 @@ I can't create accounts or enter payment on your behalf — you do these steps:
 1. Go to the **Chrome Web Store Developer Dashboard**: https://chrome.google.com/webstore/devconsole
 2. Sign in with your Google account (`codingclicks@gmail.com` for consistency).
 3. Pay the **$5 one-time** registration fee (covers up to 20 extensions, forever).
-4. Click **"Add new item"** and upload `veorec-extension-v1.7.0.zip`.
+4. Click **"Add new item"** and upload `veorec-extension-v1.7.0-final.zip`.
 5. Fill in the listing using the copy below.
 6. Click **Submit for review** (typically a few hours to a few days).
 
@@ -59,8 +59,9 @@ clients, teammates, or students.
 3. Click "Stop" — your video uploads automatically
 4. Copy the link and share it anywhere
 
-Free plan includes 5-minute recordings and 2GB storage. Upgrade to Pro for
-2-hour recordings, 100GB, AI transcription, no branding, and analytics.
+The free plan lets you keep up to 30 videos of up to 10 minutes each. Upgrade to
+Pro for unlimited videos, unlimited recording length, AI transcription, no
+VeoRec branding, and viewer analytics.
 
 The extension never reads your browsing history or the content of the sites you
 visit. Recording starts only when you explicitly click record and pick a screen.
@@ -148,6 +149,12 @@ host_permissions (http/https) — the camera-bubble overlay can be injected on
 - [ ] Submitted for review — **your step**
 
 ## 🔁 Updating later
-1. Bump `"version"` in `extension/manifest.json`.
-2. Re-zip runtime files (`manifest.json`, `*.js`, `*.html`, `icon*.png`) — exclude `make-icons.cjs`, `*.zip`, `store-icon-512.png`.
+1. Bump `"version"` in `extension/manifest.json` (Chrome requires a higher number each upload).
+2. Re-zip **only these 10 runtime files**, with `manifest.json` at the zip root:
+   `manifest.json`, `background.js`, `popup.html`, `popup.js`, `recorder.html`,
+   `recorder.js`, `overlay.js`, `icon16.png`, `icon48.png`, `icon128.png`.
+   Exclude dev/listing files: `make-icons.cjs`, `bubble.js` (orphan), `store-icon-512.png`, `*.zip`.
 3. Dashboard → your item → **Package** → **Upload new package** → Submit.
+
+> The current `veorec-extension-v1.7.0-final.zip` was already built this way, so for
+> the first submission you can upload it as-is — no re-zipping needed.
