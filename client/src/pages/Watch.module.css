@@ -263,22 +263,23 @@
 }
 .settingRow strong { color: var(--text); font-weight: 600; }
 
-/* Loom-style inline comment composer (under the video) */
+/* Inline comment composer (under the video) — light, matches the cards */
 .composer {
-  background: #1b1b26; border-radius: 12px; padding: 14px; margin-top: 14px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+  background: var(--surface, #fff); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px; margin-top: 14px;
+  box-shadow: 0 6px 22px rgba(20, 20, 40, .08);
 }
 .composerName {
-  width: 100%; background: #2a2a3a; border: 1px solid #3a3a4f; border-radius: 8px;
-  color: #fff; padding: 8px 11px; font-size: 13px; margin-bottom: 8px; outline: none; font-family: inherit;
+  width: 100%; background: var(--surface2, #f5f6fa); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); padding: 8px 11px; font-size: 13px; margin-bottom: 8px; outline: none; font-family: inherit;
 }
 .composerInput {
-  width: 100%; background: none; border: none; color: #fff; font-size: 15px;
+  width: 100%; background: none; border: none; color: var(--text); font-size: 15px;
   outline: none; resize: none; font-family: inherit; line-height: 1.5;
 }
-.composerInput::placeholder { color: #8a8aa0; }
+.composerInput::placeholder { color: var(--text2); }
 .composerActions { display: flex; justify-content: flex-end; align-items: center; gap: 14px; margin-top: 8px; }
-.composerCancel { background: none; border: none; color: #b8b8c8; font-size: 14px; cursor: pointer; }
+.composerCancel { background: none; border: none; color: var(--text2); font-size: 14px; cursor: pointer; }
 .composerSend {
   background: var(--accent, #5b5bf6); color: #fff; border: none; border-radius: 8px;
   padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
@@ -286,7 +287,7 @@
 .composerSend:disabled { opacity: .5; cursor: default; }
 
 /* ── Transcript tab ─────────────────────────────────────────────────────── */
-.transcriptPanel { padding: 18px 20px 18px 24px; }
+.transcriptPanel { padding: 18px 24px; }
 .tSearchRow {
   display: flex; align-items: center; gap: 8px;
   background: var(--surface2, #f5f6fa); border: 1px solid var(--border);
@@ -306,7 +307,7 @@
 
 .tList {
   display: flex; flex-direction: column; gap: 2px;
-  max-height: 460px; overflow-y: auto; margin: 0 -6px; padding: 0 6px;
+  max-height: 460px; overflow-y: auto;
 }
 .tLine {
   display: flex; gap: 12px; align-items: baseline;

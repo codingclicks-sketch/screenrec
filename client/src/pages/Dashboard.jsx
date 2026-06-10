@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MoreHorizontal, Copy, Share2, BarChart2, Pencil, Trash2, Check,
-  LayoutGrid, List, Lock, Users as UsersIcon, Play, Film, FolderInput, Scissors,
+  LayoutGrid, List, Lock, Users as UsersIcon, Play, Film, FolderInput, Scissors, CopyPlus,
 } from 'lucide-react';
 import styles from './Dashboard.module.css';
 import API from '../api';
@@ -54,6 +54,11 @@ export default function Dashboard() {
       danger: true, confirmLabel: 'Delete',
       onConfirm: async () => { await authFetch(`${API}/api/recordings/${id}`, { method: 'DELETE' }); setRecordings((r) => r.filter((x) => x.id !== id)); },
     });
+  }
+  async function duplicateRec(id) {
+    const res = await authFetch(`${API}/api/recordings/${id}/duplicate`, { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.id) load(); else alert(d.error || 'Could not duplicate this video.');
   }
   async function saveTitle(id) {
     const title = (editTitle || '').trim();
@@ -129,6 +134,7 @@ export default function Dashboard() {
             onRenameCancel={() => setEditingId(null)}
             onMove={(fid) => moveToFolder(r.id, fid)}
             onDelete={() => deleteRec(r.id)}
+            onDuplicate={() => duplicateRec(r.id)}
           />
         ))}
       </div>
@@ -151,7 +157,7 @@ export default function Dashboard() {
 }
 
 /* ── Video card (grid + list) ─────────────────────────────────────────────── */
-function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, onStats, onRename, onRenameChange, onRenameSave, onRenameCancel, onMove, onDelete }) {
+function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, onStats, onRename, onRenameChange, onRenameSave, onRenameCancel, onMove, onDelete, onDuplicate }) {
   const [menu, setMenu] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const ref = useRef(null);
@@ -182,6 +188,7 @@ function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, o
             )}
           </div>
           <div className={styles.menuDivider} />
+          <button className={styles.menuItem} onClick={() => { setMenu(false); onDuplicate(); }}><CopyPlus size={15} /> Duplicate</button>
           <button className={`${styles.menuItem} ${styles.menuDanger}`} onClick={() => { setMenu(false); onDelete(); }}><Trash2 size={15} /> Delete</button>
         </div>
       )}

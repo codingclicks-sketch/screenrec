@@ -278,16 +278,21 @@ export default function Watch() {
     return m.sort((a, b) => a.t - b.t);
   }, [comments, reactions]);
 
-  function loadVideo() {
+  function loadVideo(attempt = 0) {
     fetch(`${API}/api/watch/${id}`, { headers: authHeaders() })
       .then(async r => {
         const data = await r.json().catch(() => ({}));
         if (r.status === 401 && data.error === 'login_required') { setRec(data); setState('login'); return; }
-        if (!r.ok) { setState('notfound'); return; }
+        if (!r.ok) {
+          // Just-uploaded videos can lag Cloudinary's index for a few seconds —
+          // retry a few times before giving up so the page doesn't need a manual refresh.
+          if (r.status === 404 && attempt < 6) { setTimeout(() => loadVideo(attempt + 1), 1500); return; }
+          setState('notfound'); return;
+        }
         if (data.requiresPassword) { setRec(data); setState('password'); return; }
         setRec(data); setState('ok'); afterLoad();
       })
-      .catch(() => setState('notfound'));
+      .catch(() => { if (attempt < 6) setTimeout(() => loadVideo(attempt + 1), 1500); else setState('notfound'); });
   }
 
   function afterLoad() {
@@ -322,8 +327,8 @@ export default function Watch() {
   async function react(emoji) {
     const t = videoRef.current ? Math.floor(videoRef.current.currentTime) : null;
     const res = await fetch(`${API}/api/watch/${id}/react`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emoji, t }),
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ emoji, t, name: commentName }),
     });
     const d = await res.json();
     if (res.ok) setReactions(d.reactions);
