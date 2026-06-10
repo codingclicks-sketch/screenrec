@@ -458,6 +458,12 @@
 .menuDanger svg { color: #ef4444; }
 .menuDanger:hover { background: #fef2f2; }
 
+/* ⋯ "Move to folder" submenu + inline toggle state */
+.menuSub { position: relative; }
+.subMenu { margin: 2px 0 2px 12px; border-left: 2px solid var(--border); padding-left: 4px; max-height: 180px; overflow-y: auto; }
+.menuEmpty { display: block; padding: 8px 11px; font-size: 12.5px; color: var(--text2); }
+.menuState { margin-left: auto; font-size: 11.5px; font-weight: 700; color: var(--accent); background: var(--surface2, #efeffe); padding: 1px 8px; border-radius: 999px; }
+
 /* Views / Insights popup */
 .viewsPopup {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 41;

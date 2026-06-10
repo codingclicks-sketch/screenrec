@@ -246,6 +246,15 @@
 .viewBtn:hover { color: #14141f; }
 .viewActive { background: #fff; color: #5b5bf6; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 
+.archiveToggle, .archiveToggleActive {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: #fff; border: 1px solid #e2e2ea; border-radius: 10px;
+  padding: 9px 13px; font-size: 13.5px; font-weight: 600; color: #4a4a5e;
+  cursor: pointer; font-family: inherit;
+}
+.archiveToggle:hover { border-color: #cfcfdb; color: #14141f; }
+.archiveToggleActive { background: #efeffe; border-color: #d7d7fb; color: #5b5bf6; }
+
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
 .list { display: flex; flex-direction: column; gap: 4px; }
 .listRow { display: flex; align-items: center; gap: 16px; padding: 12px; border-radius: 14px; }
@@ -272,6 +281,7 @@
 .menu { position: absolute; bottom: calc(100% + 6px); right: 0; min-width: 184px; background: #fff; border: 1px solid #ececf3; border-radius: 13px; box-shadow: 0 14px 40px rgba(20,20,40,.18); padding: 6px; z-index: 40; }
 .menuItem { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 11px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #14141f; background: transparent; border: none; cursor: pointer; text-align: left; font-family: inherit; }
 .menuItem:hover { background: #f5f5fa; }
+.menuState { margin-left: auto; font-size: 11.5px; font-weight: 700; color: #5b5bf6; background: #efeffe; padding: 1px 8px; border-radius: 999px; }
 .menuDanger { color: #dc2626; }
 .menuDanger:hover { background: #fef2f2; }
 .menuDivider { height: 1px; background: #f0f0f5; margin: 5px 0; }

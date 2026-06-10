@@ -419,6 +419,8 @@ if (!USE_CLOUDINARY) {
             trimStart: m.trimStart,
             trimEnd: m.trimEnd,
             commentCount: m.comments.length,
+            animatedThumbnail: m.animatedThumbnail,
+            archived: !!m.archived,
           };
         })
         .sort((a, b) => b.created_at - a.created_at);
@@ -564,7 +566,7 @@ app.get('/api/watch/:id', async (req, res) => {
     if (m.privacy === 'password' && m.passwordHash) {
       return res.json({ id: video.id, title: m.title || video.title, requiresPassword: true });
     }
-    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail, archived: !!m.archived, folder: m.folder });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -580,7 +582,7 @@ app.post('/api/watch/:id/unlock', async (req, res) => {
       const ok = await bcrypt.compare(req.body.password || '', m.passwordHash);
       if (!ok) return res.status(401).json({ error: 'Incorrect password' });
     }
-    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail, archived: !!m.archived, folder: m.folder });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -778,6 +780,7 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (recommendedSpeed === null) fields.recommendedSpeed = null;
   else if (Number.isFinite(recommendedSpeed) && recommendedSpeed >= 0.25 && recommendedSpeed <= 4) fields.recommendedSpeed = recommendedSpeed;
   if (typeof req.body.animatedThumbnail === 'boolean') fields.animatedThumbnail = req.body.animatedThumbnail;
+  if (typeof req.body.archived === 'boolean') fields.archived = req.body.archived;
   if (cta === null) fields.cta = null;
   else if (cta && typeof cta.url === 'string' && cta.url) fields.cta = { label: String(cta.label || 'Learn more').slice(0, 60), url: cta.url.slice(0, 500) };
 
@@ -837,6 +840,7 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
     folder: updated.folder, hasPassword: !!updated.passwordHash,
     trimStart: updated.trimStart, trimEnd: updated.trimEnd, segments: updated.segments,
     tags: updated.tags, audience: updated.audience, recommendedSpeed: updated.recommendedSpeed,
+    animatedThumbnail: updated.animatedThumbnail, archived: !!updated.archived,
   });
 });
 
