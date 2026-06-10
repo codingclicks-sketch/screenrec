@@ -59,6 +59,8 @@
 .modalText { font-size: 14.5px; color: #5b5b6b; line-height: 1.6; margin: 0 0 22px; }
 .primaryBtn { width: 100%; background: #5b5bf6; color: #fff; border: none; border-radius: 12px; padding: 13px; font-size: 15px; font-weight: 700; cursor: pointer; }
 .primaryBtn:hover { background: #4848d6; }
+.spin { animation: shellspin 1s linear infinite; }
+@keyframes shellspin { to { transform: rotate(360deg); } }
 
 @media (max-width: 760px) {
   .sidebar { width: 70px; padding: 18px 10px; }
