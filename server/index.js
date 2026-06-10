@@ -557,7 +557,7 @@ app.get('/api/watch/:id', async (req, res) => {
     if (m.privacy === 'password' && m.passwordHash) {
       return res.json({ id: video.id, title: m.title || video.title, requiresPassword: true });
     }
-    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -573,7 +573,7 @@ app.post('/api/watch/:id/unlock', async (req, res) => {
       const ok = await bcrypt.compare(req.body.password || '', m.passwordHash);
       if (!ok) return res.status(401).json({ error: 'Incorrect password' });
     }
-    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -626,9 +626,10 @@ app.post('/api/watch/:id/react', (req, res) => {
   const emoji = String(req.body.emoji || '').slice(0, 8);
   if (!emoji) return res.status(400).json({ error: 'emoji required' });
   const t = Number(req.body.t);
+  const name = (viewerFromAuth(req)?.name) || String(req.body.name || '').trim().slice(0, 80) || 'Anonymous';
   const updated = meta.update(req.params.id, m => {
     if (!Array.isArray(m.reactions)) m.reactions = [];
-    m.reactions.push({ emoji, t: Number.isFinite(t) ? Math.floor(t) : null, at: Date.now() });
+    m.reactions.push({ emoji, name, t: Number.isFinite(t) ? Math.floor(t) : null, at: Date.now() });
     return m;
   });
   res.json({ reactions: updated.reactions });
@@ -683,6 +684,7 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   // Recommended playback speed (null = normal).
   if (recommendedSpeed === null) fields.recommendedSpeed = null;
   else if (Number.isFinite(recommendedSpeed) && recommendedSpeed >= 0.25 && recommendedSpeed <= 4) fields.recommendedSpeed = recommendedSpeed;
+  if (typeof req.body.animatedThumbnail === 'boolean') fields.animatedThumbnail = req.body.animatedThumbnail;
   if (cta === null) fields.cta = null;
   else if (cta && typeof cta.url === 'string' && cta.url) fields.cta = { label: String(cta.label || 'Learn more').slice(0, 60), url: cta.url.slice(0, 500) };
 
