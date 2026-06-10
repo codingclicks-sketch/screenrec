@@ -2,7 +2,9 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Scissors, Sparkles, Link2, Download, Settings as SettingsIcon,
   Activity as ActivityIcon, Pencil, Code2, Crown, Share2, Check,
-  FileText, Search, Loader2, RefreshCw, MoreHorizontal, Eye, X, MessageSquare } from 'lucide-react';
+  FileText, Search, Loader2, RefreshCw, MoreHorizontal, Eye, X, MessageSquare,
+  User as UserIcon, HelpCircle, BarChart3, LogOut, PlaySquare,
+  FolderInput, CopyPlus, Archive, Trash2 } from 'lucide-react';
 import styles from './Watch.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
@@ -37,7 +39,7 @@ function authHeaders() {
 
 export default function Watch() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { isPaid } = useBilling();   // reflect the viewer's real plan in the UI
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -48,6 +50,9 @@ export default function Watch() {
   const [pwErr, setPwErr] = useState('');
   const [copied, setCopied] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);   // header "more" (⋯) menu
+  const [avatarOpen, setAvatarOpen] = useState(false); // account dropdown
+  const [viewsOpen, setViewsOpen] = useState(false);   // views/insights popup
+  const [viewers, setViewers] = useState(null);        // analytics viewers list
   const [settingsSub, setSettingsSub] = useState('audience'); // Settings: 'audience' | 'enhancements'
   const [summaryDraft, setSummaryDraft] = useState(null);     // editable Summary (owner)
   const [tagInput, setTagInput] = useState('');
@@ -103,6 +108,24 @@ export default function Watch() {
     });
     if (res.ok) { const d = await res.json().catch(() => ({})); setRec((r) => ({ ...r, title: d.title || title })); setRenaming(false); }
     else { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not rename'); }
+  }
+
+  async function deleteVideo() {
+    if (!window.confirm('Delete this video permanently? This can’t be undone.')) return;
+    const res = await fetch(`${API}/api/recordings/${id}`, { method: 'DELETE', headers: authHeaders() });
+    if (res.ok) navigate('/'); else alert('Could not delete this video.');
+  }
+  async function duplicateVideo() {
+    setMenuOpen(false);
+    const res = await fetch(`${API}/api/recordings/${id}/duplicate`, { method: 'POST', headers: authHeaders() });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.id) navigate(`/watch/${d.id}`); else alert(d.error || 'Could not duplicate this video.');
+  }
+  function loadViewers() {
+    fetch(`${API}/api/recordings/${id}/analytics`, { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setViewers(Array.isArray(d?.viewers) ? d.viewers : []))
+      .catch(() => setViewers([]));
   }
 
   async function autoTitle() {
@@ -659,16 +682,43 @@ export default function Watch() {
                   <button className={styles.menuItem} onClick={() => { setMenuOpen(false); copy('embed', embedCode); }}>
                     <Code2 size={15} /> Copy embed code
                   </button>
+                  {isOwner && (
+                    <>
+                      <button className={styles.menuItem} onClick={duplicateVideo}>
+                        <CopyPlus size={15} /> Duplicate
+                      </button>
+                      <div className={styles.menuDivider} />
+                      <button className={`${styles.menuItem} ${styles.menuDanger}`} onClick={() => { setMenuOpen(false); deleteVideo(); }}>
+                        <Trash2 size={15} /> Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             )}
           </div>
 
-          {/* Account avatar (signed-in only) */}
+          {/* Account avatar dropdown (signed-in only) */}
           {user && (
-            <Link to="/" className={styles.avatar} title={user.name || user.email || 'Your library'}>
-              {(user.name || user.email || 'U').charAt(0).toUpperCase()}
-            </Link>
+            <div className={styles.moreWrap}>
+              <button className={styles.avatar} title={user.name || user.email || 'Account'} onClick={() => setAvatarOpen(o => !o)}>
+                {(user.name || user.email || 'U').charAt(0).toUpperCase()}
+              </button>
+              {avatarOpen && (
+                <>
+                  <div className={styles.menuBackdrop} onClick={() => setAvatarOpen(false)} />
+                  <div className={styles.menu}>
+                    <div className={styles.menuUser}><strong>{user.name}</strong><small>{user.email}</small></div>
+                    <Link className={styles.menuItem} to="/" onClick={() => setAvatarOpen(false)}><PlaySquare size={15} /> My library</Link>
+                    <Link className={styles.menuItem} to="/account" onClick={() => setAvatarOpen(false)}><UserIcon size={15} /> My account</Link>
+                    <Link className={styles.menuItem} to="/contact" onClick={() => setAvatarOpen(false)}><HelpCircle size={15} /> Help &amp; support</Link>
+                    {user.isAdmin && <Link className={styles.menuItem} to="/admin" onClick={() => setAvatarOpen(false)}><BarChart3 size={15} /> Admin panel</Link>}
+                    <div className={styles.menuDivider} />
+                    <button className={`${styles.menuItem} ${styles.menuDanger}`} onClick={() => { setAvatarOpen(false); logout(); }}><LogOut size={15} /> Log out</button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </header>
@@ -697,7 +747,39 @@ export default function Watch() {
               )}
               <p className={styles.byline}>{rec.author ? `${rec.author} · ` : ''}{timeAgo(rec.created_at)} · {fmt(rec.duration)}</p>
             </div>
-            <div className={styles.viewsPill}><Eye size={15} /> {views} view{views === 1 ? '' : 's'}</div>
+            <div className={styles.moreWrap}>
+              <button className={styles.viewsPill} onClick={() => { setViewsOpen(o => !o); if (!viewers && isOwner) loadViewers(); }}>
+                <Eye size={15} /> {views} view{views === 1 ? '' : 's'}
+              </button>
+              {viewsOpen && (
+                <>
+                  <div className={styles.menuBackdrop} onClick={() => setViewsOpen(false)} />
+                  <div className={styles.viewsPopup}>
+                    <div className={styles.viewsHead}>Views</div>
+                    <div className={styles.viewsStat}>
+                      {views} total view{views === 1 ? '' : 's'}
+                      {viewers ? `, ${new Set(viewers.map(v => v.email || v.name || Math.random())).size} signed-in viewer${new Set(viewers.map(v => v.email || v.name)).size === 1 ? '' : 's'}` : ''}
+                    </div>
+                    {isOwner ? (
+                      viewers ? (
+                        <div className={styles.viewerList}>
+                          {viewers.length === 0 && <p className={styles.blockEmpty}>No signed-in viewers yet — anonymous views still count above.</p>}
+                          {viewers.map((v, i) => (
+                            <div key={i} className={styles.viewerRow}>
+                              <span className={styles.viewerAvatar}>{(v.name || 'A').charAt(0).toUpperCase()}</span>
+                              <span className={styles.viewerName}>{v.name || 'Anonymous'}</span>
+                              <span className={styles.viewerTime}>{timeAgo(v.at)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p className={styles.blockEmpty}>Loading…</p>
+                    ) : (
+                      <p className={styles.blockEmpty}>Detailed viewer insights are visible to the owner.</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Custom player — reaction/comment markers sit ON the progress bar */}

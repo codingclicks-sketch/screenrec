@@ -987,6 +987,31 @@ app.post('/api/recordings/:id/title/auto', requireAuth, async (req, res) => {
   }
 });
 
+// Duplicate a recording into a brand-new library entry (owner).
+app.post('/api/recordings/:id/duplicate', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  if (!USE_CLOUDINARY) return res.status(501).json({ error: 'Duplicate is unavailable here.' });
+  try {
+    const srcPublic = `screenrec/${req.userId}/${req.params.id}`;
+    const s = await cloudinary.search.expression(`public_id=${srcPublic}`).with_field('context').max_results(1).execute();
+    if (!s.resources.length) return res.status(404).json({ error: 'Not found' });
+    const r = s.resources[0]; const ctx = r.context?.custom || {};
+    const m = meta.get(req.params.id);
+    const newId = uuidv4();
+    const title = `${(m.title || ctx.title || 'Untitled Recording')} (copy)`.slice(0, 120);
+    const up = await cloudinary.uploader.upload(r.secure_url, {
+      resource_type: 'video', public_id: `screenrec/${req.userId}/${newId}`,
+      context: buildContext({ title, duration: ctx.duration || Math.round(r.duration || 0), created_at: Date.now(), rec_id: newId, user_id: req.userId }),
+    });
+    usageService.updateUsage(req.userId, { bytes: up.bytes || 0, videos: 1, seconds: Math.round(r.duration || 0) });
+    meta.set(newId, { title, description: m.description, cta: m.cta, folder: m.folder, audience: m.audience });
+    res.json({ id: newId, title });
+  } catch (e) {
+    console.error('[duplicate] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Could not duplicate this video' });
+  }
+});
+
 // ── Folders (owner) ───────────────────────────────────────────────────────────
 app.get('/api/folders', requireAuth, (req, res) => res.json(folders.listByUser(req.userId)));
 app.post('/api/folders', requireAuth, (req, res) => {
