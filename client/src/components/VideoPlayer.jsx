@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Captions, RotateCcw, RotateCw } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Captions, RotateCcw, RotateCw, MessageSquare } from 'lucide-react';
 import s from './VideoPlayer.module.css';
 
 function clk(t) { if (!isFinite(t)) t = 0; const m = Math.floor(t / 60), x = Math.floor(t % 60); return `${m}:${String(x).padStart(2, '0')}`; }
@@ -90,7 +90,7 @@ export default function VideoPlayer({
           {markers.map((m, i) => (
             <button key={i} className={`${s.marker} ${m.kind === 'comment' ? s.mComment : ''}`} style={{ left: `${pct(m.t)}%` }}
               title={m.label} onClick={e => { e.stopPropagation(); onMarkerClick && onMarkerClick(m.t); }}>
-              {m.kind === 'comment' ? '💬' : m.emoji}
+              {m.kind === 'comment' ? <MessageSquare size={13} fill="currentColor" /> : m.emoji}
             </button>
           ))}
         </div>
