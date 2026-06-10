@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../AuthContext';
 import { useBilling } from '../hooks/useBilling';
 import StorageMeter from './StorageMeter';
+import NotificationsBell from './NotificationsBell';
 import API from '../api';
 import s from './AppShell.module.css';
 
@@ -143,6 +144,7 @@ export default function AppShell({ active = 'library', search, onSearch, headerR
 
           <div className={s.headerRight}>
             {headerRight}
+            <NotificationsBell />
             <div className={s.recordWrap} ref={recordRef}>
               <button className={s.recordBtn} onClick={() => setHint(true)}>
                 <Plus size={17} /> Record Video

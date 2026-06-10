@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const users = require('./users');
-const { meta, folders } = require('./meta');
+const { meta, folders, notifReads } = require('./meta');
 const transcription = require('./transcription');
 const { signToken, requireAuth, verifyToken } = require('./auth');
 
@@ -666,6 +666,92 @@ app.get('/api/recordings/:id/analytics', requireAuth, async (req, res) => {
   }
   const m = meta.get(req.params.id);
   res.json({ views: m.views, viewers: m.viewers, reactions: m.reactions, comments: m.comments });
+});
+
+// ── Notifications: per-user activity feed ─────────────────────────────────────
+// Aggregates engagement (views, comments, reactions) across ALL of the owner's
+// videos into one reverse-chronological feed. Self-activity (the owner viewing
+// or reacting to their own video) is filtered out so the feed is about *others*.
+async function listOwnerVideos(userId) {
+  if (!USE_CLOUDINARY) {
+    return db.all().filter(r => r.userId === userId)
+      .map(r => ({ id: r.id, title: r.title || 'Untitled Recording', thumbnail: null }));
+  }
+  const prefix = `screenrec/${userId}/`;
+  const [searchRes, adminRes] = await Promise.all([
+    cloudinary.search
+      .expression(`folder:screenrec/${userId} AND resource_type:video`)
+      .with_field('context').sort_by('created_at', 'desc').max_results(200).execute()
+      .catch(() => ({ resources: [] })),
+    cloudinary.api
+      .resources({ resource_type: 'video', type: 'upload', prefix, max_results: 200, context: true })
+      .catch(() => ({ resources: [] })),
+  ]);
+  const byId = new Map();
+  for (const r of searchRes.resources) byId.set(r.public_id, r);
+  for (const r of adminRes.resources) if (!byId.has(r.public_id)) byId.set(r.public_id, r);
+  return [...byId.values()]
+    .filter(r => !/__trim_\d+$/.test(r.public_id))
+    .map(r => {
+      const ctx = r.context?.custom || {};
+      const id = ctx.rec_id || r.public_id.split('/').pop();
+      return {
+        id,
+        ctxTitle: ctx.title || 'Untitled Recording',
+        thumbnail: r.secure_url.replace(/\.(webm|mp4|mov|mkv)$/, '.jpg').replace('/upload/', '/upload/so_0/'),
+      };
+    });
+}
+
+async function buildNotificationFeed(userId) {
+  const owner = users.findById(userId) || {};
+  const ownerName = (owner.name || '').toLowerCase();
+  const ownerEmail = (owner.email || '').toLowerCase();
+  const vids = await listOwnerVideos(userId);
+  const allMeta = meta.all();
+  const events = [];
+  for (const v of vids) {
+    const m = allMeta[v.id];
+    if (!m) continue;
+    const title = m.title || v.ctxTitle || v.title || 'Untitled Recording';
+    const base = { videoId: v.id, videoTitle: title, thumbnail: v.thumbnail };
+    for (const c of (Array.isArray(m.comments) ? m.comments : [])) {
+      const name = c.name || 'Someone';
+      if (name.toLowerCase() === ownerName) continue; // skip the owner's own comments
+      events.push({ ...base, type: 'comment', name, text: c.text || '', at: c.at || 0 });
+    }
+    for (const r of (Array.isArray(m.reactions) ? m.reactions : [])) {
+      if (!r.at) continue; // legacy reactions stored at:0 — not real timeline events
+      const name = r.name || 'Someone';
+      if (name.toLowerCase() === ownerName) continue;
+      events.push({ ...base, type: 'reaction', name, emoji: r.emoji || '👍', at: r.at });
+    }
+    for (const vw of (Array.isArray(m.viewers) ? m.viewers : [])) {
+      if (!vw.at) continue;
+      if ((vw.email || '').toLowerCase() === ownerEmail && ownerEmail) continue; // skip self-views
+      events.push({ ...base, type: 'view', name: vw.name || 'Someone', at: vw.at });
+    }
+  }
+  events.sort((a, b) => b.at - a.at);
+  return events;
+}
+
+// GET /api/notifications — recent activity + unread count for the bell.
+app.get('/api/notifications', requireAuth, async (req, res) => {
+  try {
+    const events = await buildNotificationFeed(req.userId);
+    const lastReadAt = notifReads.get(req.userId);
+    const unread = events.filter(e => e.at > lastReadAt).length;
+    res.json({ items: events.slice(0, 50), unread, lastReadAt });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/notifications/read — mark the feed as seen up to now.
+app.post('/api/notifications/read', requireAuth, (req, res) => {
+  const at = notifReads.set(req.userId, Date.now());
+  res.json({ lastReadAt: at });
 });
 
 app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {

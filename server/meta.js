@@ -6,6 +6,7 @@ const DATA_DIR = process.env.DATA_DIR || __dirname;
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const META_FILE = path.join(DATA_DIR, 'meta.json');
 const FOLDER_FILE = path.join(DATA_DIR, 'folders.json');
+const NOTIF_READ_FILE = path.join(DATA_DIR, 'notif-reads.json');
 
 function loadJSON(file, fallback) {
   if (!fs.existsSync(file)) return fallback;
@@ -67,6 +68,27 @@ const meta = {
     delete all[id];
     saveJSON(META_FILE, all);
   },
+  // Raw map of every recording's stored fields (no defaults merge). Used to
+  // build the per-user notifications feed without N file reads.
+  all() {
+    return loadJSON(META_FILE, {});
+  },
+};
+
+// ── Notification read-state (per user) ────────────────────────────────────────
+// Tracks the timestamp at which each user last opened their activity feed, so
+// the bell can show an unread count. One tiny JSON file keyed by userId.
+const notifReads = {
+  get(userId) {
+    const all = loadJSON(NOTIF_READ_FILE, {});
+    return all[userId] || 0;
+  },
+  set(userId, at) {
+    const all = loadJSON(NOTIF_READ_FILE, {});
+    all[userId] = at;
+    saveJSON(NOTIF_READ_FILE, all);
+    return at;
+  },
 };
 
 // ── Folders (per user) ────────────────────────────────────────────────────────
@@ -98,4 +120,4 @@ const folders = {
   },
 };
 
-module.exports = { meta, folders };
+module.exports = { meta, folders, notifReads };
