@@ -41,6 +41,7 @@ function defaults() {
     },
     recommendedSpeed: null, // suggested playback speed (e.g. 1.5); null = normal
     animatedThumbnail: true, // show the animated preview thumbnail when shared
+    archived: false,         // hidden from the main library (kept, not deleted)
   };
 }
 

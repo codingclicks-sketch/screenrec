@@ -4,7 +4,7 @@ import { Scissors, Sparkles, Link2, Download, Settings as SettingsIcon,
   Activity as ActivityIcon, Pencil, Code2, Crown, Share2, Check,
   FileText, Search, Loader2, RefreshCw, MoreHorizontal, Eye, X, MessageSquare,
   User as UserIcon, HelpCircle, BarChart3, LogOut, PlaySquare,
-  FolderInput, CopyPlus, Archive, Trash2 } from 'lucide-react';
+  FolderInput, CopyPlus, Archive, ArchiveRestore, Film, Trash2 } from 'lucide-react';
 import styles from './Watch.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
@@ -70,6 +70,8 @@ export default function Watch() {
   const [renameVal, setRenameVal] = useState('');
   const [autoTitling, setAutoTitling] = useState(false);
   const [commentDockOpen, setCommentDockOpen] = useState(false);
+  const [folders, setFolders] = useState([]);          // owner's folders (⋯ → Move)
+  const [moveOpen, setMoveOpen] = useState(false);     // ⋯ → Move submenu
 
   // Sidebar tabs (Loom-style). Owners default to "Make edits"; viewers see Activity.
   const [tab, setTab] = useState('activity');
@@ -98,6 +100,13 @@ export default function Watch() {
   }, [user, id]);
 
   useEffect(() => { if (isOwner && !tabTouched) setTab('edit'); }, [isOwner, tabTouched]);
+
+  // Owner's folders for the ⋯ → "Move to folder" submenu.
+  useEffect(() => {
+    if (!isOwner) return;
+    fetch(`${API}/api/folders`, { headers: authHeaders() })
+      .then(r => (r.ok ? r.json() : [])).then(d => setFolders(Array.isArray(d) ? d : [])).catch(() => {});
+  }, [isOwner]);
 
   function selectTab(t) { setTabTouched(true); setTab(t); }
 
@@ -189,6 +198,15 @@ export default function Watch() {
   function saveThumb(on) {
     setRec(r => ({ ...r, animatedThumbnail: on }));
     patchMeta({ animatedThumbnail: on }).catch(() => {});
+  }
+  function saveArchived(on) {
+    setRec(r => ({ ...r, archived: on }));
+    patchMeta({ archived: on }).catch(() => {});
+  }
+  function moveToFolder(folderId) {
+    setMoveOpen(false); setMenuOpen(false);
+    setRec(r => ({ ...r, folder: folderId }));
+    patchMeta({ folder: folderId }).catch(() => {});
   }
   function saveSummary(text) {
     const t = (text || '').trim();
@@ -692,7 +710,7 @@ export default function Watch() {
             </button>
             {menuOpen && (
               <>
-                <div className={styles.menuBackdrop} onClick={() => setMenuOpen(false)} />
+                <div className={styles.menuBackdrop} onClick={() => { setMenuOpen(false); setMoveOpen(false); }} />
                 <div className={styles.menu}>
                   {isOwner && (
                     <button className={styles.menuItem} onClick={() => { setMenuOpen(false); navigate(`/edit/${id}`); }}>
@@ -709,8 +727,29 @@ export default function Watch() {
                   </button>
                   {isOwner && (
                     <>
+                      <div className={styles.menuSub}>
+                        <button className={styles.menuItem} onClick={() => setMoveOpen(o => !o)}>
+                          <FolderInput size={15} /> Move to folder
+                        </button>
+                        {moveOpen && (
+                          <div className={styles.subMenu}>
+                            <button className={styles.menuItem} onClick={() => moveToFolder(null)}>No folder</button>
+                            {folders.map((f) => (
+                              <button key={f.id} className={styles.menuItem} onClick={() => moveToFolder(f.id)}>{f.name}</button>
+                            ))}
+                            {!folders.length && <span className={styles.menuEmpty}>No folders yet</span>}
+                          </div>
+                        )}
+                      </div>
                       <button className={styles.menuItem} onClick={duplicateVideo}>
                         <CopyPlus size={15} /> Duplicate
+                      </button>
+                      <button className={styles.menuItem} onClick={() => saveThumb(rec.animatedThumbnail === false)}>
+                        <Film size={15} /> Animated thumbnail
+                        <span className={styles.menuState}>{rec.animatedThumbnail !== false ? 'On' : 'Off'}</span>
+                      </button>
+                      <button className={styles.menuItem} onClick={() => { setMenuOpen(false); saveArchived(!rec.archived); }}>
+                        {rec.archived ? <><ArchiveRestore size={15} /> Unarchive</> : <><Archive size={15} /> Archive</>}
                       </button>
                       <div className={styles.menuDivider} />
                       <button className={`${styles.menuItem} ${styles.menuDanger}`} onClick={() => { setMenuOpen(false); deleteVideo(); }}>

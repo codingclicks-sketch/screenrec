@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   MoreHorizontal, Copy, Share2, BarChart2, Pencil, Trash2, Check,
   LayoutGrid, List, Lock, Users as UsersIcon, Play, Film, FolderInput, Scissors, CopyPlus,
+  Archive, ArchiveRestore,
 } from 'lucide-react';
 import styles from './Dashboard.module.css';
 import API from '../api';
@@ -34,6 +35,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('newest');
   const [view, setView] = useState('grid');
+  const [showArchived, setShowArchived] = useState(false);
   const [settingsRec, setSettingsRec] = useState(null);
   const [analyticsRec, setAnalyticsRec] = useState(null);
   const [upgrade, setUpgrade] = useState(null);
@@ -78,8 +80,18 @@ export default function Dashboard() {
     await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: folderId }) });
     setRecordings((r) => r.map((x) => (x.id === id ? { ...x, folder: folderId } : x)));
   }
+  async function setArchived(id, archived) {
+    await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived }) });
+    setRecordings((r) => r.map((x) => (x.id === id ? { ...x, archived } : x)));
+  }
+  async function setAnimated(id, animatedThumbnail) {
+    await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ animatedThumbnail }) });
+    setRecordings((r) => r.map((x) => (x.id === id ? { ...x, animatedThumbnail } : x)));
+  }
 
+  const archivedCount = recordings.filter((r) => r.archived).length;
   const filtered = recordings
+    .filter((r) => (showArchived ? r.archived : !r.archived))
     .filter((r) => !search || (r.title || '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (sort === 'oldest' ? a.created_at - b.created_at : sort === 'views' ? (b.views || 0) - (a.views || 0) : b.created_at - a.created_at));
 
@@ -87,10 +99,19 @@ export default function Dashboard() {
     <AppShell active="library" search={search} onSearch={setSearch}>
       <div className={styles.pageHead}>
         <div className={styles.titleRow}>
-          <h1 className={styles.pageTitle}>Library</h1>
-          <span className={styles.count}>{recordings.length} videos</span>
+          <h1 className={styles.pageTitle}>{showArchived ? 'Archived' : 'Library'}</h1>
+          <span className={styles.count}>{filtered.length} video{filtered.length === 1 ? '' : 's'}</span>
         </div>
         <div className={styles.toolbar}>
+          {(archivedCount > 0 || showArchived) && (
+            <button
+              className={showArchived ? styles.archiveToggleActive : styles.archiveToggle}
+              onClick={() => setShowArchived((v) => !v)}
+              title={showArchived ? 'Back to your library' : 'View archived videos'}
+            >
+              {showArchived ? <><ArchiveRestore size={15} /> Library</> : <><Archive size={15} /> Archived{archivedCount ? ` (${archivedCount})` : ''}</>}
+            </button>
+          )}
           <select className={styles.sort} value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
@@ -118,7 +139,11 @@ export default function Dashboard() {
           <p>Click <strong>Record Video</strong> and the VeoRec extension captures your screen. Your videos show up here.</p>
         </div>
       )}
-      {!loading && recordings.length > 0 && filtered.length === 0 && <p className={styles.noMatch}>No recordings match “{search}”.</p>}
+      {!loading && recordings.length > 0 && filtered.length === 0 && (
+        <p className={styles.noMatch}>
+          {search ? `No recordings match “${search}”.` : showArchived ? 'No archived videos.' : 'No videos here yet.'}
+        </p>
+      )}
 
       <div className={view === 'grid' ? styles.grid : styles.list}>
         {filtered.map((r) => (
@@ -135,6 +160,8 @@ export default function Dashboard() {
             onMove={(fid) => moveToFolder(r.id, fid)}
             onDelete={() => deleteRec(r.id)}
             onDuplicate={() => duplicateRec(r.id)}
+            onArchive={() => setArchived(r.id, !r.archived)}
+            onToggleAnimated={() => setAnimated(r.id, !(r.animatedThumbnail !== false))}
           />
         ))}
       </div>
@@ -157,7 +184,7 @@ export default function Dashboard() {
 }
 
 /* ── Video card (grid + list) ─────────────────────────────────────────────── */
-function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, onStats, onRename, onRenameChange, onRenameSave, onRenameCancel, onMove, onDelete, onDuplicate }) {
+function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, onStats, onRename, onRenameChange, onRenameSave, onRenameCancel, onMove, onDelete, onDuplicate, onArchive, onToggleAnimated }) {
   const [menu, setMenu] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const ref = useRef(null);
@@ -187,8 +214,15 @@ function Card({ r, view, folders, copied, editing, editTitle, onCopy, onShare, o
               </div>
             )}
           </div>
+          <button className={styles.menuItem} onClick={() => { setMenu(false); onToggleAnimated(); }}>
+            <Film size={15} /> Animated thumbnail
+            <span className={styles.menuState}>{r.animatedThumbnail !== false ? 'On' : 'Off'}</span>
+          </button>
           <div className={styles.menuDivider} />
           <button className={styles.menuItem} onClick={() => { setMenu(false); onDuplicate(); }}><CopyPlus size={15} /> Duplicate</button>
+          <button className={styles.menuItem} onClick={() => { setMenu(false); onArchive(); }}>
+            {r.archived ? <><ArchiveRestore size={15} /> Unarchive</> : <><Archive size={15} /> Archive</>}
+          </button>
           <button className={`${styles.menuItem} ${styles.menuDanger}`} onClick={() => { setMenu(false); onDelete(); }}><Trash2 size={15} /> Delete</button>
         </div>
       )}
