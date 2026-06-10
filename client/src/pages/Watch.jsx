@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Scissors, Sparkles, Link2, Download, Settings as SettingsIcon,
   Activity as ActivityIcon, Pencil, Code2, Crown, Share2, Check,
-  FileText, Search, Loader2, RefreshCw, MoreHorizontal } from 'lucide-react';
+  FileText, Search, Loader2, RefreshCw, MoreHorizontal, Eye, X } from 'lucide-react';
 import styles from './Watch.module.css';
 import API from '../api';
 import { useAuth } from '../AuthContext';
@@ -17,6 +17,16 @@ function fmt(s) {
 function clock(t) {
   const m = Math.floor(t / 60), s = Math.floor(t % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+function timeAgo(ts) {
+  if (!ts) return '';
+  const sec = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+  const units = [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]];
+  for (const [name, s] of units) {
+    const n = Math.floor(sec / s);
+    if (n >= 1) return `${n} ${name}${n > 1 ? 's' : ''} ago`;
+  }
+  return 'just now';
 }
 function authHeaders() {
   const t = localStorage.getItem('sr_token');
@@ -36,6 +46,8 @@ export default function Watch() {
   const [copied, setCopied] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);   // header "more" (⋯) menu
   const [settingsSub, setSettingsSub] = useState('audience'); // Settings: 'audience' | 'enhancements'
+  const [summaryDraft, setSummaryDraft] = useState(null);     // editable Summary (owner)
+  const [tagInput, setTagInput] = useState('');
 
   const [views, setViews] = useState(0);
   const [reactions, setReactions] = useState([]);   // [{emoji, t, at}]
@@ -118,6 +130,24 @@ export default function Watch() {
     setRec(r => ({ ...r, recommendedSpeed: v }));
     if (videoRef.current) try { videoRef.current.playbackRate = v || 1; } catch {}
     patchMeta({ recommendedSpeed: v }).catch(() => {});
+  }
+  function saveSummary(text) {
+    const t = (text || '').trim();
+    if (t === (rec.description || '')) return;
+    setRec(r => ({ ...r, description: t }));
+    patchMeta({ description: t }).catch(() => {});
+  }
+  function addTag(raw) {
+    const t = String(raw || '').trim().replace(/^#/, '').slice(0, 40);
+    if (!t) return;
+    const next = [...new Set([...(rec.tags || []), t])].slice(0, 20);
+    setRec(r => ({ ...r, tags: next })); setTagInput('');
+    patchMeta({ tags: next }).catch(() => {});
+  }
+  function removeTag(t) {
+    const next = (rec.tags || []).filter(x => x !== t);
+    setRec(r => ({ ...r, tags: next }));
+    patchMeta({ tags: next }).catch(() => {});
   }
 
   async function removeCta() {
@@ -616,8 +646,32 @@ export default function Watch() {
       </header>
 
       <main className={styles.layout}>
-        {/* ── Left: player + info ─────────────────────────────────────────── */}
+        {/* ── Left: title + player + summary ──────────────────────────────── */}
         <div className={styles.left}>
+          {/* Title block (Loom-style, above the video) */}
+          <div className={styles.titleTop}>
+            <div className={styles.titleMain}>
+              {isOwner && renaming ? (
+                <div className={styles.renameRow}>
+                  <input className={styles.renameInput} value={renameVal} autoFocus
+                    onChange={(e) => setRenameVal(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(false); }} />
+                  <button className="btn-primary" onClick={saveRename}>Save</button>
+                  <button className="btn-ghost" onClick={() => setRenaming(false)}>Cancel</button>
+                </div>
+              ) : (
+                <h1 className={styles.title}>
+                  {rec.title}
+                  {isOwner && (
+                    <button className={styles.titleEdit} title="Rename" onClick={() => { setRenameVal(rec.title); setRenaming(true); }}><Pencil size={15} /></button>
+                  )}
+                </h1>
+              )}
+              <p className={styles.byline}>{rec.author ? `${rec.author} · ` : ''}{timeAgo(rec.created_at)} · {fmt(rec.duration)}</p>
+            </div>
+            <div className={styles.viewsPill}><Eye size={15} /> {views} view{views === 1 ? '' : 's'}</div>
+          </div>
+
           <div className={styles.player}>
             <video
               ref={videoRef}
@@ -682,31 +736,47 @@ export default function Watch() {
           )}
 
           <div className={styles.info}>
-            {isOwner && renaming ? (
-              <div className={styles.renameRow}>
-                <input className={styles.renameInput} value={renameVal} autoFocus
-                  onChange={(e) => setRenameVal(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') setRenaming(false); }} />
-                <button className="btn-primary" onClick={saveRename}>Save</button>
-                <button className="btn-ghost" onClick={() => setRenaming(false)}>Cancel</button>
-              </div>
-            ) : (
-              <h1 className={styles.title}>
-                {rec.title}
-                {isOwner && (
-                  <button className={styles.titleEdit} title="Rename" onClick={() => { setRenameVal(rec.title); setRenaming(true); }}><Pencil size={15} /></button>
-                )}
-              </h1>
-            )}
-            <p className={styles.meta}>
-              👁 {views} view{views === 1 ? '' : 's'} · {new Date(rec.created_at).toLocaleDateString()} · {fmt(rec.duration)}
-            </p>
-            {rec.description && <p className={styles.desc}>{rec.description}</p>}
             {rec.cta && rec.cta.url && (
               <a className={styles.cta} href={rec.cta.url} target="_blank" rel="noopener noreferrer">
                 {rec.cta.label || 'Learn more'} →
               </a>
             )}
+
+            {/* Summary */}
+            <section className={styles.belowBlock}>
+              <h3 className={styles.blockTitle}>Summary</h3>
+              {isOwner ? (
+                <textarea className={styles.summaryInput} placeholder="Add a summary…" rows={2}
+                  value={summaryDraft ?? rec.description ?? ''}
+                  onChange={(e) => setSummaryDraft(e.target.value)}
+                  onBlur={() => saveSummary(summaryDraft ?? '')} />
+              ) : rec.description ? (
+                <p className={styles.desc}>{rec.description}</p>
+              ) : (
+                <p className={styles.blockEmpty}>No summary added.</p>
+              )}
+            </section>
+
+            {/* Tags */}
+            <section className={styles.belowBlock}>
+              <h3 className={styles.blockTitle}>Tags</h3>
+              <div className={styles.tagRow}>
+                {(rec.tags || []).map(t => (
+                  <span key={t} className={styles.tagChip}>
+                    #{t}
+                    {isOwner && <button className={styles.tagX} title="Remove" onClick={() => removeTag(t)}><X size={11} /></button>}
+                  </span>
+                ))}
+                {isOwner ? (
+                  <input className={styles.tagInput} placeholder="# add tag" value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput); } }}
+                    onBlur={() => addTag(tagInput)} />
+                ) : (!rec.tags || !rec.tags.length) ? (
+                  <span className={styles.blockEmpty}>No tags.</span>
+                ) : null}
+              </div>
+            </section>
           </div>
         </div>
 
