@@ -63,6 +63,7 @@ export default function Watch() {
   const [canTranscribe, setCanTranscribe] = useState(true); // plan allows transcription
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState('');
+  const [autoTitling, setAutoTitling] = useState(false);
 
   // Sidebar tabs (Loom-style). Owners default to "Make edits"; viewers see Activity.
   const [tab, setTab] = useState('activity');
@@ -102,6 +103,18 @@ export default function Watch() {
     });
     if (res.ok) { const d = await res.json().catch(() => ({})); setRec((r) => ({ ...r, title: d.title || title })); setRenaming(false); }
     else { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not rename'); }
+  }
+
+  async function autoTitle() {
+    setAutoTitling(true);
+    try {
+      const res = await fetch(`${API}/api/recordings/${id}/title/auto`, { method: 'POST', headers: authHeaders() });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.title) { setRec(r => ({ ...r, title: d.title })); if (d.transcriptGenerated) setTranscript(null); }
+      else if (d.code === 'feature_locked') { setCanTranscribe(false); selectTab('transcript'); }
+      else alert(d.error || 'Could not generate a title.');
+    } catch { alert('Network error — please try again.'); }
+    finally { setAutoTitling(false); }
   }
 
   async function saveCta() {
@@ -426,6 +439,13 @@ export default function Watch() {
       </button>
 
       <div className={styles.panelLabel} style={{ marginTop: 20 }}>Take action</div>
+      <button className={styles.action} onClick={autoTitle} disabled={autoTitling}>
+        <span className={styles.actionIcon}>{autoTitling ? <Loader2 size={18} className={styles.spin} /> : <Sparkles size={18} />}</span>
+        <span className={styles.actionText}>
+          <strong>{autoTitling ? 'Generating title…' : 'Auto-generate title'}</strong>
+          <span>Name this video from its content — free &amp; unlimited.</span>
+        </span>
+      </button>
       <button className={styles.action} onClick={() => selectTab('transcript')}>
         <span className={styles.actionIcon}><FileText size={18} /></span>
         <span className={styles.actionText}>

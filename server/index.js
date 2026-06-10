@@ -940,6 +940,53 @@ app.delete('/api/recordings/:id/transcribe', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Auto-generate a title from the video's content (its transcript). Free &
+// unlimited — transcribes locally if needed, then derives a title heuristically.
+app.post('/api/recordings/:id/title/auto', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const tCheck = permissions.canUseTranscription(users.findById(req.userId));
+  if (!tCheck.allowed) {
+    conversion.track({ userId: req.userId, userPlan: tCheck.meta?.plan, featureRequested: 'auto_title', meta: tCheck.meta });
+    return res.status(403).json({ error: tCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'transcription' });
+  }
+  try {
+    let m = meta.get(req.params.id);
+    let text = m.transcript?.text;
+    let transcriptGenerated = false;
+
+    if (!text) {
+      if (!transcription.isConfigured()) {
+        return res.status(501).json({ error: 'Transcription is not available on this server yet, so a title can’t be generated.' });
+      }
+      let audioUrl;
+      if (USE_CLOUDINARY) {
+        audioUrl = cloudinary.url(`screenrec/${req.userId}/${req.params.id}`, { resource_type: 'video', format: 'mp3', secure: true });
+      } else {
+        const row = db.get(req.params.id);
+        if (!row) return res.status(404).json({ error: 'Not found' });
+        audioUrl = `${req.protocol}://${req.get('host')}/uploads/${row.filename}`;
+      }
+      const result = await transcription.transcribeUrl(audioUrl);
+      if (result.segments.length) {
+        meta.set(req.params.id, { transcript: { ...result, status: 'done', created_at: Date.now() } });
+        text = result.text; transcriptGenerated = true;
+      }
+    }
+
+    const title = transcription.generateTitle(text);
+    if (!title) return res.status(422).json({ error: 'Not enough speech in this video to generate a title — try renaming it manually.' });
+
+    meta.set(req.params.id, { title });
+    if (USE_CLOUDINARY) {
+      try { await cloudinary.uploader.add_context(buildContext({ title }), [`screenrec/${req.userId}/${req.params.id}`], { resource_type: 'video' }); } catch {}
+    }
+    res.json({ title, transcriptGenerated });
+  } catch (e) {
+    console.error('[auto-title] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Could not generate a title' });
+  }
+});
+
 // ── Folders (owner) ───────────────────────────────────────────────────────────
 app.get('/api/folders', requireAuth, (req, res) => res.json(folders.listByUser(req.userId)));
 app.post('/api/folders', requireAuth, (req, res) => {
