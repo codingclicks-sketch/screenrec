@@ -21,6 +21,10 @@ const GB = 1024 * 1024 * 1024;
 // Paddle price IDs are resolved from env so we never hardcode them in source.
 // (See billing.config.js for the structured Paddle product map.)
 const env = (k) => process.env[k] || null;
+// Environment-aware Paddle price lookup — mirrors billing.config so the reverse
+// price-id → plan mapping (resolvePlanByPriceId) works in sandbox AND production.
+const IS_SANDBOX = !(process.env.PADDLE_ENVIRONMENT === 'production' || process.env.PADDLE_ENV === 'production');
+const priceEnv = (base, alias) => IS_SANDBOX ? env(`${base}_SANDBOX`) : (env(base) || (alias ? env(alias) : null));
 
 /**
  * @typedef {Object} PlanFeatures
@@ -95,8 +99,8 @@ const PLANS = {
       transcriptionEnabled: true,
     },
     paddle: {
-      monthlyPriceId: env('PADDLE_PRICE_PRO_MONTHLY') || env('PADDLE_PRICE_ID'), // back-compat
-      yearlyPriceId: env('PADDLE_PRICE_PRO_YEARLY'),
+      monthlyPriceId: priceEnv('PADDLE_PRICE_PRO_MONTHLY', 'PADDLE_PRICE_ID'),
+      yearlyPriceId: priceEnv('PADDLE_PRICE_PRO_YEARLY'),
     },
   },
 
@@ -126,8 +130,8 @@ const PLANS = {
       // room to grow: teamsEnabled, ssoEnabled, customDomainsEnabled, …
     },
     paddle: {
-      monthlyPriceId: env('PADDLE_PRICE_BUSINESS_MONTHLY'),
-      yearlyPriceId: env('PADDLE_PRICE_BUSINESS_YEARLY'),
+      monthlyPriceId: priceEnv('PADDLE_PRICE_BUSINESS_MONTHLY'),
+      yearlyPriceId: priceEnv('PADDLE_PRICE_BUSINESS_YEARLY'),
     },
   },
 
