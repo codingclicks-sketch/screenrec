@@ -164,3 +164,5 @@
 .recBadge { font-size: 10.5px; font-weight: 700; color: #5b5bf6; background: #efeffe; padding: 2px 8px; border-radius: 999px; }
 .upMove { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #9a9aab; }
 .upRows { display: flex; flex-direction: column; gap: 1px; }
+
+.subInfo { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
