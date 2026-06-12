@@ -4,10 +4,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const env = (k) => process.env[k] || null;
 
-const PADDLE_ENVIRONMENT =
-  process.env.PADDLE_ENVIRONMENT === 'production' || process.env.PADDLE_ENV === 'production'
-    ? 'production'
-    : 'sandbox';
+// PADDLE_ENVIRONMENT (preferred) wins if set; PADDLE_ENV is a legacy fallback.
+// This way an explicit PADDLE_ENVIRONMENT=sandbox can't be overridden by a stale
+// PADDLE_ENV=production. Default is sandbox (never accidentally go live).
+const _envRaw = (process.env.PADDLE_ENVIRONMENT || process.env.PADDLE_ENV || 'sandbox').trim().toLowerCase();
+const PADDLE_ENVIRONMENT = _envRaw === 'production' || _envRaw === 'live' ? 'production' : 'sandbox';
 const IS_SANDBOX = PADDLE_ENVIRONMENT !== 'production';
 
 // Per-environment credentials. In SANDBOX we read the `*_SANDBOX` vars only, so
