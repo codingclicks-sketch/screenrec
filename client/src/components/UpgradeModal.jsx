@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useBillingConfig } from '../hooks/useBillingConfig';
 import s from './Paywall.module.css';
 
 // Per-feature paywall copy. Keyed by the same feature strings the server returns
@@ -31,24 +32,25 @@ const FEATURE_COPY = {
     bullets: ['Front-of-line processing', 'Faster share links', 'Less waiting'],
   },
   recordingLength: {
-    icon: '⏱️', title: 'Record up to 2 hours',
-    text: 'Free recordings stop at 5 minutes. Pro lets you record full meetings and walkthroughs.',
-    bullets: ['Up to 120-minute recordings', 'Full meetings & demos', 'No mid-record cutoff'],
+    icon: '⏱️', title: 'Record without limits',
+    text: 'Free recordings stop at 10 minutes. Pro removes the cap so you can record full meetings and walkthroughs.',
+    bullets: ['Unlimited recording length', 'Full meetings & demos', 'No mid-record cutoff'],
   },
   storage: {
-    icon: '💾', title: 'Need more storage',
-    text: 'You’ve hit your 2 GB free limit. Pro gives you 100 GB — room for hundreds of videos.',
-    bullets: ['100 GB storage', '1080p HD exports', 'Unlimited videos'],
+    icon: '💾', title: 'Need more videos',
+    text: 'The free plan keeps up to 30 videos. Pro is unlimited — room for your whole library.',
+    bullets: ['Unlimited videos', '1080p HD exports', 'Viewer analytics'],
   },
   default: {
     icon: '🚀', title: 'Unlock VeoRec Pro',
     text: 'This is a Pro feature. Upgrade to unlock everything VeoRec has to offer.',
-    bullets: ['100 GB storage', '2-hour recordings', '1080p, analytics & more'],
+    bullets: ['Unlimited videos & length', '1080p exports & analytics', 'No VeoRec branding'],
   },
 };
 
 export default function UpgradeModal({ open, feature = 'default', reason, onClose }) {
   const navigate = useNavigate();
+  const { comingSoon } = useBillingConfig();
   const copy = FEATURE_COPY[feature] || FEATURE_COPY.default;
 
   useEffect(() => {
@@ -71,9 +73,14 @@ export default function UpgradeModal({ open, feature = 'default', reason, onClos
             <li key={i}><span className={s.modalCheck}>✓</span> {b}</li>
           ))}
         </ul>
+        {comingSoon && (
+          <p className={s.modalSoon} style={{ fontSize: 13, color: '#8a5a00', background: '#fff6e6', border: '1px solid #f3d99b', borderRadius: 8, padding: '8px 11px', margin: '0 0 12px' }}>
+            🚀 Pro is launching soon — we’ll let you know the moment it’s live.
+          </p>
+        )}
         <div className={s.modalActions}>
           <button className={s.primaryBtn} onClick={() => { onClose?.(); navigate('/pricing'); }}>
-            Upgrade to Pro — $7.99/mo
+            {comingSoon ? 'See what’s coming in Pro' : 'Upgrade to Pro — $7.99/mo'}
           </button>
           <button className={s.ghostBtn} onClick={onClose}>Maybe later</button>
         </div>

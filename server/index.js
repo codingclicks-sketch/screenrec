@@ -1161,6 +1161,7 @@ app.get('/api/billing/config', (req, res) => {
   res.json({
     provider: 'paddle',
     enabled: billingConfig.isBillingEnabled(),
+    comingSoon: billingConfig.isComingSoon(),
     clientToken: billingConfig.PADDLE.clientToken || null,
     env: billingConfig.PADDLE.environment,
     prices: {

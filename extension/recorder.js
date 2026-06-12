@@ -31,8 +31,8 @@ let activeStreams = [];    // all source streams to stop at the end
 let opts = { quality: 'medium', audio: true, camera: 'off', countdown: true };
 
 // Recording-length limit (seconds). Driven by the user's plan — fetched on load.
-// Defaults to the Free limit (5 min) as a safe fallback until entitlements load.
-let recordingLimitSec = 5 * 60;
+// Defaults to the Free limit (10 min) as a safe fallback until entitlements load.
+let recordingLimitSec = 10 * 60;
 let limitWarned = false;          // 30s-remaining warning shown once
 let limitReached = false;         // auto-stopped at the cap
 

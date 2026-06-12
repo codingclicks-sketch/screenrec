@@ -59,7 +59,9 @@ const PLANS = {
       removeBrandingEnabled: false,
       priorityProcessingEnabled: false,
       passwordProtectedVideosEnabled: false,
-      transcriptionEnabled: false,
+      // AI transcription + auto-title run on our self-hosted Whisper, so they're
+      // free & unlimited for everyone (matches the in-app "free & unlimited" copy).
+      transcriptionEnabled: true,
     },
     paddle: { monthlyPriceId: null, yearlyPriceId: null },
   },

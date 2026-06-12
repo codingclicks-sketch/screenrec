@@ -1,19 +1,20 @@
 # VeoRec — Chrome Web Store Submission Guide
 
-Upload file (project root): **`veorec-extension-v1.7.0-final.zip`**  ← the clean, ready-to-submit package (10 runtime files, manifest at root, dev scripts excluded)
+Current package (project root): **`veorec-extension-v1.7.1.zip`** — clean build, 10 runtime files, manifest at root.
 
----
+> ⚠️ **v1.7.1 is a bug-fix update.** The published v1.7.0 shipped with a CSP-blocked
+> inline-handler bug that broke the **Sign up / Sign in toggle and Sign out** in the popup.
+> v1.7.1 fixes it (clicks wired via `addEventListener`). **Upload v1.7.1 as a new version
+> to replace the broken one** — do NOT keep v1.7.0 live.
 
-## ⚠️ What only YOU can do
-The store requires a **one-time $5 developer registration fee** and a Google account.
-I can't create accounts or enter payment on your behalf — you do these steps:
+## 🔄 Publishing the update (the item already exists)
+1. Go to the **Developer Dashboard**: https://chrome.google.com/webstore/devconsole
+2. Open your **VeoRec** item → **Package** → **Upload new package**.
+3. Upload **`veorec-extension-v1.7.1.zip`** (Chrome requires the higher version number — 1.7.1 ✓).
+4. Listing copy/graphics below are unchanged; only re-touch if you want.
+5. **Save draft → Submit for review.**
 
-1. Go to the **Chrome Web Store Developer Dashboard**: https://chrome.google.com/webstore/devconsole
-2. Sign in with your Google account (`codingclicks@gmail.com` for consistency).
-3. Pay the **$5 one-time** registration fee (covers up to 20 extensions, forever).
-4. Click **"Add new item"** and upload `veorec-extension-v1.7.0-final.zip`.
-5. Fill in the listing using the copy below.
-6. Click **Submit for review** (typically a few hours to a few days).
+*(First-time submission steps — $5 registration, Add new item — are only needed once and are already done.)*
 
 ---
 
@@ -139,7 +140,7 @@ host_permissions (http/https) — the camera-bubble overlay can be injected on
 ---
 
 ## ✅ Pre-submission checklist
-- [x] Manifest V3, **version 1.7.0**
+- [x] Manifest V3, **version 1.7.1** (popup inline-handler bug fixed)
 - [x] 16 / 48 / 128 px icons included
 - [x] No remote code, no dead files (dev scripts excluded from zip)
 - [x] Privacy policy live at https://veorec.com/privacy
@@ -156,5 +157,5 @@ host_permissions (http/https) — the camera-bubble overlay can be injected on
    Exclude dev/listing files: `make-icons.cjs`, `bubble.js` (orphan), `store-icon-512.png`, `*.zip`.
 3. Dashboard → your item → **Package** → **Upload new package** → Submit.
 
-> The current `veorec-extension-v1.7.0-final.zip` was already built this way, so for
-> the first submission you can upload it as-is — no re-zipping needed.
+> The current `veorec-extension-v1.7.1.zip` was already built this way and verified
+> to contain no inline handlers — upload it directly as the new version.

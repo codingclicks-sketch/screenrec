@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Video, Link2, LineChart, FolderOpen, Clapperboard, MessageSquare,
-  CheckCircle2, Mic, Gauge, Timer, Sparkles, Play, Check, Quote,
+  CheckCircle2, Mic, Gauge, Timer, Sparkles, Play, Check,
   Plus, PlaySquare, BarChart3, Monitor, AppWindow,
 } from 'lucide-react';
 import API from '../api';
@@ -32,9 +32,10 @@ const STEPS = [
 ];
 
 function planRows(plan) {
-  if (plan.slug === 'free') return ['Unlimited recordings', 'Up to 5 minutes per video', '720p quality', 'Shareable links', 'Screen + mic recording'];
-  return ['Everything in Free', `Up to ${Math.round((plan.recordingLimitMinutes || 120) / 60)}-hour recordings`,
-    `${plan.exportQuality || '1080p'} HD quality`, 'Remove VeoRec branding', 'Password-protected videos', 'Viewer analytics', 'Priority processing'];
+  if (plan.slug === 'free') return [`Up to ${plan.maxVideos || 30} videos`, `Up to ${plan.recordingLimitMinutes || 10} minutes each`,
+    '720p quality', 'AI transcription & subtitles', 'Shareable links & comments'];
+  return ['Everything in Free', 'Unlimited videos', 'Unlimited recording length',
+    `${plan.exportQuality || '1080p'} HD quality`, 'Remove VeoRec branding', 'Viewer analytics', 'Password-protected videos'];
 }
 
 export default function Landing() {
@@ -73,7 +74,7 @@ export default function Landing() {
           <p className={s.heroSub}>Record your screen, share instantly, and communicate with clarity. No meetings. No back and forth.</p>
           <div className={s.heroBtns}>
             <Link to="/signup" className={s.primaryBtn}><span className={s.recDot} /> Start Recording Free</Link>
-            <a href="#how" className={s.secondaryBtn}><Play size={16} fill="currentColor" /> Watch Demo</a>
+            <a href="#how" className={s.secondaryBtn}><Play size={16} fill="currentColor" /> See how it works</a>
           </div>
           <div className={s.trustBadges}>
             <span><Check size={15} color="#16a34a" /> No credit card</span>
@@ -190,18 +191,6 @@ export default function Landing() {
               {i < STEPS.length - 1 && <div className={s.stepLine} />}
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* ── Testimonial (placeholder) ───────────────────────────────────────── */}
-      <section className={s.section}>
-        <div className={s.testimonial}>
-          <div className={s.quoteMark}><Quote size={40} color="#6366f1" fill="#6366f1" /></div>
-          <blockquote>VeoRec replaced a dozen status meetings a week. I record a two-minute walkthrough, drop the link, and everyone’s unblocked — on their own time.</blockquote>
-          <div className={s.author}>
-            <div className={s.authorAvatar} />
-            <div><strong>Your customer here</strong><small>Add a real testimonial once you have one</small></div>
-          </div>
         </div>
       </section>
 

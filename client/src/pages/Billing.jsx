@@ -102,13 +102,14 @@ export default function Billing() {
 
         {msg && <div className={s.banner}>{msg}</div>}
         {cfg && !cfg.enabled && (
-          <div className={s.bannerWarn}>Billing isn’t fully configured yet. Checkout will activate once Paddle is connected.</div>
+          <div className={s.bannerWarn}>🚀 VeoRec Pro is coming soon — we’ll let you know the moment upgrades open. Your free plan is fully active.</div>
         )}
 
         <div className={s.cards}>
           <SubscriptionCard
             entitlements={entitlements}
             busy={busy}
+            comingSoon={!cfg?.enabled}
             onUpgrade={() => openCheckout('monthly')}
             onCancel={() => act('/api/billing/cancel', 'Your subscription will cancel at the end of the period.')}
             onResume={() => act('/api/billing/resume', 'Welcome back — your subscription is active again.')}
@@ -120,7 +121,7 @@ export default function Billing() {
         {!isPaid && cfg?.enabled && (
           <div className={s.upgradeStrip}>
             <div>
-              <strong>Go Pro</strong> — 100 GB storage, 2-hour recordings, 1080p, analytics & more.
+              <strong>Go Pro</strong> — unlimited videos, unlimited recording length, 1080p, analytics & more.
             </div>
             <div className={s.upgradeBtns}>
               <button className={s.btnGhost} onClick={() => openCheckout('monthly')} disabled={busy}>$7.99/mo</button>

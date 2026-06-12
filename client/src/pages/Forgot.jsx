@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../api';
 import styles from './Auth.module.css';
@@ -7,17 +7,44 @@ export default function Forgot() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(null); // null = unknown until /config loads
+
+  useEffect(() => {
+    fetch(`${API}/api/auth/config`)
+      .then((r) => r.json())
+      .then((d) => setEmailEnabled(!!d.emailEnabled))
+      .catch(() => setEmailEnabled(false));
+  }, []);
 
   async function submit(e) {
     e.preventDefault();
     setLoading(true);
     try {
-      await fetch(`${API}/api/auth/forgot`, {
+      const r = await fetch(`${API}/api/auth/forgot`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      setSent(true);
-    } catch { setSent(true); } finally { setLoading(false); }
+      if (r.ok) setSent(true);
+    } catch { /* keep the form so the user can retry */ } finally { setLoading(false); }
+  }
+
+  // Reset-by-email isn't wired up yet (no mail provider). Be honest instead of
+  // showing a "link is on its way" message for an email that will never arrive.
+  if (emailEnabled === false) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <div className={styles.logo}><span className={styles.dot} />VeoRec</div>
+          <h1 className={styles.title}>Reset password</h1>
+          <div style={{ background: '#fff6e6', border: '1px solid #f3d99b', color: '#8a5a00', borderRadius: 8, padding: '12px 14px', fontSize: 14, lineHeight: 1.5 }}>
+            Password reset by email isn’t available just yet. If you signed up with{' '}
+            <strong>Google</strong>, head back and use <strong>Continue with Google</strong>.
+            Otherwise, <Link to="/contact">contact support</Link> and we’ll help you back in.
+          </div>
+          <p className={styles.footer}><Link to="/login">← Back to sign in</Link></p>
+        </div>
+      </div>
+    );
   }
 
   return (
