@@ -285,7 +285,7 @@ function UsersTab({ token, authGet }) {
       {!rows ? <p className={s.muted}>Loading…</p> : (
         <div className={s.tableWrap}>
           <table className={s.table}>
-            <thead><tr><th>User</th><th>Plan</th><th>Storage</th><th>Videos</th><th>Joined</th><th>Grant premium</th><th></th></tr></thead>
+            <thead><tr><th>User</th><th>Plan</th><th>Storage</th><th>Videos</th><th>Joined</th><th>Billing / grant</th><th></th></tr></thead>
             <tbody>
               {rows.map((u) => <UserRow key={u.id} u={u} busy={busy === u.id} onSet={setPlan} onDelete={remove} />)}
               {!rows.length && <tr><td colSpan={7} className={s.muted}>No users found</td></tr>}
@@ -311,21 +311,37 @@ function UserRow({ u, busy, onSet, onDelete }) {
           <div><strong>{u.name || '—'}</strong><small>{u.email}{u.isAdmin ? ' · admin' : ''}</small></div>
         </div>
       </td>
-      <td>{planBadge}<div className={s.subMeta}>{u.subscriptionStatus ? `sub: ${u.subscriptionStatus}` : u.source}</div></td>
+      <td>{planBadge}<div className={s.subMeta}>{
+        u.source === 'subscription' ? `${u.subscriptionStatus}${u.billingCycle ? ' · ' + u.billingCycle : ''}`
+          : u.comped ? 'comped' : 'free'
+      }</div></td>
       <td>{gb(u.storageUsedBytes)}</td>
       <td>{u.videoCount}</td>
       <td className={s.nowrap}>{fmtDate(u.createdAt)}</td>
       <td>
-        <div className={s.grantRow}>
-          {u.comped ? (
-            <button className={`${s.smBtn} ${s.smDanger}`} disabled={busy} onClick={() => onSet(u.id, 'free')}><Ban size={13} /> Revoke</button>
-          ) : (
-            <>
-              <input className={s.daysInput} placeholder="∞ days" value={days} onChange={(e) => setDays(e.target.value)} title="Optional: days until it expires (blank = forever)" />
-              <button className={`${s.smBtn} ${s.smPrimary}`} disabled={busy} onClick={() => onSet(u.id, 'pro', days)}><Crown size={13} /> Grant Pro</button>
-            </>
-          )}
-        </div>
+        {u.source === 'subscription' ? (
+          // Real Paddle subscriber — show the billing period (managed by Paddle, not granted here).
+          <div className={s.subInfo}>
+            <span className={`${s.badge} ${s.badgePro}`} style={{ gap: 4 }}>Paddle</span>
+            <span className={s.subMeta} style={{ margin: 0 }}>
+              {u.cancelAtPeriodEnd ? 'Ends ' : 'Renews '}{fmtDate(u.currentPeriodEnd)}
+            </span>
+          </div>
+        ) : (
+          <div className={s.grantRow}>
+            {u.comped ? (
+              <>
+                <span className={s.subMeta} style={{ margin: 0 }}>{u.manualPlanExpires ? `until ${fmtDate(u.manualPlanExpires)}` : 'forever'}</span>
+                <button className={`${s.smBtn} ${s.smDanger}`} disabled={busy} onClick={() => onSet(u.id, 'free')}><Ban size={13} /> Revoke</button>
+              </>
+            ) : (
+              <>
+                <input className={s.daysInput} placeholder="∞ days" value={days} onChange={(e) => setDays(e.target.value)} title="Optional: days until it expires (blank = forever)" />
+                <button className={`${s.smBtn} ${s.smPrimary}`} disabled={busy} onClick={() => onSet(u.id, 'pro', days)}><Crown size={13} /> Grant Pro</button>
+              </>
+            )}
+          </div>
+        )}
       </td>
       <td>
         {!u.isAdmin && (

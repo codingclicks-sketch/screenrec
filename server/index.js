@@ -1337,6 +1337,8 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
         manualPlan: u.manualPlan || null, manualPlanExpires: u.manualPlanExpires || null,
         subscriptionStatus: sub?.status || null,
         billingCycle: sub?.billingCycle || null,
+        currentPeriodEnd: sub?.currentPeriodEnd || null,
+        cancelAtPeriodEnd: !!sub?.cancelAtPeriodEnd,
         storageUsedBytes: usg.storageUsedBytes || 0,
         videoCount: usg.videoCount || 0,
         isAdmin: isAdmin(u),
