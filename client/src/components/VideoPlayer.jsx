@@ -12,7 +12,7 @@ const SPEEDS = [0.5, 1, 1.25, 1.5, 1.75, 2];
 // (react-at-moment, transcript highlight).
 export default function VideoPlayer({
   videoRef, src, poster, segments, trimStart, trimEnd, recommendedSpeed,
-  markers = [], captions = [], onMarkerClick, onTime,
+  markers = [], captions = [], onMarkerClick, onTime, branding = false,
 }) {
   const wrapRef = useRef(null), barRef = useRef(null);
   const [playing, setPlaying] = useState(false);
@@ -79,6 +79,11 @@ export default function VideoPlayer({
 
       {curCap && <div className={s.caption}>{curCap}</div>}
       {!playing && <button className={s.bigPlay} onClick={togglePlay} aria-label="Play"><Play size={28} fill="currentColor" /></button>}
+      {branding && (
+        <a className={s.watermark} href="https://veorec.com" target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Made with VeoRec">
+          <span className={s.watermarkDot} /> VeoRec
+        </a>
+      )}
 
       <div className={s.controls}>
         <div className={s.bar} ref={barRef} onClick={seekEv}

@@ -856,6 +856,7 @@ export default function Watch() {
             captions={(isOwner || rec.audience?.transcript !== false) ? (transcript?.segments || []) : []}
             onMarkerClick={seekTo}
             onTime={setVideoTime}
+            branding={rec.branding}
           />
 
           {/* Loom-style floating reaction dock */}

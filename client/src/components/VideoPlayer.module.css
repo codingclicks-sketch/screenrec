@@ -90,3 +90,15 @@
 .spdItem { background: none; border: none; color: #fff; font-size: 13px; padding: 7px 12px; border-radius: 7px; cursor: pointer; text-align: left; }
 .spdItem:hover { background: rgba(255,255,255,.12); }
 .spdItem.on { color: var(--accent, #8b8bff); font-weight: 700; }
+
+/* Free-plan "Made with VeoRec" watermark (removed on Pro via branding flag) */
+.watermark {
+  position: absolute; top: 12px; right: 12px; z-index: 6;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px 5px 8px; border-radius: 8px;
+  background: rgba(11, 11, 20, .55); backdrop-filter: blur(6px);
+  color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .2px;
+  text-decoration: none; opacity: .82; transition: opacity .15s;
+}
+.watermark:hover { opacity: 1; }
+.watermarkDot { width: 13px; height: 13px; border-radius: 4px; background: linear-gradient(135deg, #6366f1, #a855f7); flex: 0 0 auto; }
