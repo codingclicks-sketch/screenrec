@@ -1,16 +1,17 @@
 # VeoRec — Chrome Web Store Submission Guide
 
-Current package (project root): **`veorec-extension-v1.7.1.zip`** — clean build, 10 runtime files, manifest at root.
+Current package (project root): **`veorec-extension-v1.7.2.zip`** — clean build, 11 runtime files, manifest at root.
 
-> ⚠️ **v1.7.1 is a bug-fix update.** The published v1.7.0 shipped with a CSP-blocked
-> inline-handler bug that broke the **Sign up / Sign in toggle and Sign out** in the popup.
-> v1.7.1 fixes it (clicks wired via `addEventListener`). **Upload v1.7.1 as a new version
-> to replace the broken one** — do NOT keep v1.7.0 live.
+> ⚠️ **v1.7.2 — auth moved to the website.** The popup no longer has its own sign-in
+> form (the in-popup form hit MV3 CSP limits). Instead the popup links to
+> **veorec.com/login** + **/signup**, and a content script (`bridge.js`) on
+> veorec.com syncs the signed-in session back into the extension. Sign-out is fixed.
+> Upload v1.7.2 as the new version.
 
 ## 🔄 Publishing the update (the item already exists)
 1. Go to the **Developer Dashboard**: https://chrome.google.com/webstore/devconsole
 2. Open your **VeoRec** item → **Package** → **Upload new package**.
-3. Upload **`veorec-extension-v1.7.1.zip`** (Chrome requires the higher version number — 1.7.1 ✓).
+3. Upload **`veorec-extension-v1.7.2.zip`** (Chrome requires the higher version number — 1.7.2 ✓).
 4. Listing copy/graphics below are unchanged; only re-touch if you want.
 5. **Save draft → Submit for review.**
 
@@ -82,7 +83,7 @@ VeoRec lets users record their screen, camera and microphone and share the
 recording via a link. The extension's single purpose is screen recording and sharing.
 ```
 
-### Permission justifications  (⚠️ must match the manifest — all five)
+### Permission justifications  (⚠️ must match the manifest)
 ```
 storage    — stores the user's login token and in-progress recording state on
              their own device so they stay signed in and a recording can be
@@ -95,8 +96,14 @@ scripting  — injects that webcam-bubble + toolbar overlay into the page when t
              user starts a "screen + camera" recording.
 
 tabs       — lets the on-screen recording toolbar keep working when the user
-             switches between tabs during a recording, and opens the saved
-             video's link in a new tab when the recording finishes.
+             switches between tabs during a recording, opens the saved video's
+             link in a new tab, and opens veorec.com for sign-in.
+
+content script on veorec.com (bridge.js) — runs ONLY on the developer's own site
+             (veorec.com). Sign-in happens on the website; this script copies the
+             user's own session token from veorec.com into the extension so the
+             popup is signed in too. It reads only the app's own auth token on
+             its own domain — no third-party sites, no browsing data.
 
 host_permissions (http/https) — the camera-bubble overlay can be injected on
              whatever page the user chooses to record, so the extension needs to
@@ -140,7 +147,7 @@ host_permissions (http/https) — the camera-bubble overlay can be injected on
 ---
 
 ## ✅ Pre-submission checklist
-- [x] Manifest V3, **version 1.7.1** (popup inline-handler bug fixed)
+- [x] Manifest V3, **version 1.7.2** (auth moved to website; sign-out fixed)
 - [x] 16 / 48 / 128 px icons included
 - [x] No remote code, no dead files (dev scripts excluded from zip)
 - [x] Privacy policy live at https://veorec.com/privacy
@@ -151,11 +158,16 @@ host_permissions (http/https) — the camera-bubble overlay can be injected on
 
 ## 🔁 Updating later
 1. Bump `"version"` in `extension/manifest.json` (Chrome requires a higher number each upload).
-2. Re-zip **only these 10 runtime files**, with `manifest.json` at the zip root:
+2. Re-zip **only these 11 runtime files**, with `manifest.json` at the zip root:
    `manifest.json`, `background.js`, `popup.html`, `popup.js`, `recorder.html`,
-   `recorder.js`, `overlay.js`, `icon16.png`, `icon48.png`, `icon128.png`.
-   Exclude dev/listing files: `make-icons.cjs`, `bubble.js` (orphan), `store-icon-512.png`, `*.zip`.
+   `recorder.js`, `overlay.js`, `bridge.js`, `icon16.png`, `icon48.png`, `icon128.png`.
+   Exclude dev/listing files: `make-icons.cjs`, `store-icon-512.png`, `*.zip`.
 3. Dashboard → your item → **Package** → **Upload new package** → Submit.
 
-> The current `veorec-extension-v1.7.1.zip` was already built this way and verified
+> The current `veorec-extension-v1.7.2.zip` was already built this way and verified
 > to contain no inline handlers — upload it directly as the new version.
+
+## 🧪 Loading it unpacked (before it's on the store)
+`chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the
+`extension/` folder. After editing, click the **↻ reload** icon on the card so the
+new code takes effect (this is why earlier fixes "didn't update").

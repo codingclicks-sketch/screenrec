@@ -140,6 +140,9 @@
       cursor:pointer; border:none; background:var(--accent); color:#fff; margin-top:6px; }
     .btn-auth:hover { background:var(--accent-h); }
     .btn-auth:disabled { opacity:.55; cursor:not-allowed; }
+    .btn-auth-ghost { width:100%; padding:12px; border-radius:12px; font-size:14px; font-weight:600;
+      cursor:pointer; border:1px solid #e2e2ee; background:#fff; color:var(--accent); margin-top:9px; }
+    .btn-auth-ghost:hover { background:#f6f6fe; border-color:#d7d7fb; }
     .toggle { font-size:13px; color:var(--text2); text-align:center; margin-top:14px; }
     .toggle span { color:var(--accent); font-weight:700; cursor:pointer; }
     .auth-error { font-size:13px; color:var(--record); margin-bottom:8px; min-height:16px; }
@@ -161,25 +164,21 @@
       </div>
     </div>
 
-    <!-- Auth panel -->
+    <!-- Auth panel — sign in happens on the website; the session syncs back here -->
     <div id="authPanel">
-      <div class="auth-title" id="authTitle">Sign in</div>
-      <div class="auth-sub" id="authSub">to start recording</div>
+      <div class="hero" style="margin-bottom: 16px;">
+        <div class="hero-icon"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13l1-8z"/></svg></div>
+        <div>
+          <div class="hero-title">Sign in to VeoRec</div>
+          <div class="hero-sub">Record &amp; share your screen in seconds.</div>
+        </div>
+      </div>
       <div class="auth-error" id="authError"></div>
-      <div class="field" id="nameField" style="display:none">
-        <label>Name</label>
-        <input type="text" id="nameInput" placeholder="Your name" />
+      <button class="btn-auth" id="webSigninBtn">Sign in</button>
+      <button class="btn-auth-ghost" id="webSignupBtn">Create a free account</button>
+      <div class="auth-sub" id="authHint" style="margin-top: 14px; font-size: 12px; line-height: 1.5;">
+        Opens veorec.com in a new tab. Once you’re signed in there, this extension picks it up automatically.
       </div>
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="emailInput" placeholder="you@example.com" />
-      </div>
-      <div class="field">
-        <label>Password</label>
-        <input type="password" id="passwordInput" placeholder="••••••••" />
-      </div>
-      <button class="btn-auth" id="authBtn">Sign In</button>
-      <div class="toggle" id="toggleAuth">No account? <span class="toggleLink">Sign up</span></div>
     </div>
 
     <!-- Recorder panel -->

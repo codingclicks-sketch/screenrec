@@ -1,18 +1,13 @@
 const SERVER = 'https://screenrec-api-production.up.railway.app';
+const WEB = 'https://veorec.com';
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 const topActions   = document.getElementById('topActions');
 const userChip     = document.getElementById('userChip');
 const authPanel    = document.getElementById('authPanel');
-const authTitle    = document.getElementById('authTitle');
-const authSub      = document.getElementById('authSub');
 const authError    = document.getElementById('authError');
-const authBtn      = document.getElementById('authBtn');
-const nameField    = document.getElementById('nameField');
-const nameInput    = document.getElementById('nameInput');
-const emailInput   = document.getElementById('emailInput');
-const passwordInput= document.getElementById('passwordInput');
-const toggleAuth   = document.getElementById('toggleAuth');
+const webSigninBtn = document.getElementById('webSigninBtn');
+const webSignupBtn = document.getElementById('webSignupBtn');
 const recorderPanel= document.getElementById('recorderPanel');
 
 const surfaceWrap  = document.getElementById('surface');
@@ -36,7 +31,6 @@ const copyBtn      = document.getElementById('copyBtn');
 const copyBtnDefault = copyBtn.innerHTML;
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let isSignup = false;
 let isRecording = false;
 let timerInterval = null;
 let elapsed = 0;
@@ -125,56 +119,50 @@ surfaceWrap.querySelectorAll('.surf').forEach(b => {
 });
 
 // ── Auth ────────────────────────────────────────────────────────────────────
-function toggleMode() {
-  isSignup = !isSignup;
-  authTitle.textContent = isSignup ? 'Create account' : 'Sign in';
-  authSub.textContent = isSignup ? 'Start recording for free' : 'to start recording';
-  authBtn.textContent = isSignup ? 'Create Account' : 'Sign In';
-  nameField.style.display = isSignup ? 'block' : 'none';
-  toggleAuth.innerHTML = isSignup
-    ? 'Have an account? <span class="toggleLink">Sign in</span>'
-    : 'No account? <span class="toggleLink">Sign up</span>';
-  authError.textContent = '';
+// Sign-in/up happens on veorec.com. The bridge.js content script on the site
+// copies the session token back into the extension, so we never run an auth form
+// in the popup (which sidesteps MV3's inline-handler limits entirely).
+function openWebAuth(path) {
+  chrome.tabs.create({ url: `${WEB}${path}` });
+  window.close();
 }
-// MV3 extension pages block inline onclick handlers, so wire clicks via JS.
-toggleAuth.addEventListener('click', (e) => {
-  if (e.target.closest('.toggleLink')) toggleMode();
-});
-document.getElementById('signOutBtn')?.addEventListener('click', signOut);
-
-authBtn.addEventListener('click', async () => {
-  const email = emailInput.value.trim();
-  const password = passwordInput.value;
-  const name = nameInput.value.trim();
-  if (!email || !password) { authError.textContent = 'Email and password required'; return; }
-  if (isSignup && !name) { authError.textContent = 'Name required'; return; }
-  authBtn.disabled = true;
-  authBtn.textContent = isSignup ? 'Creating…' : 'Signing in…';
-  authError.textContent = '';
-  try {
-    const endpoint = isSignup ? '/api/auth/signup' : '/api/auth/login';
-    const body = isSignup ? { name, email, password } : { email, password };
-    const res = await fetch(`${SERVER}${endpoint}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) { authError.textContent = data.error; return; }
-    await chrome.storage.local.set({ sr_token: data.token, sr_user: data.user });
-    showRecorder(data.user);
-  } catch { authError.textContent = 'Network error'; }
-  finally { authBtn.disabled = false; authBtn.textContent = isSignup ? 'Create Account' : 'Sign In'; }
-});
+webSigninBtn.addEventListener('click', () => openWebAuth('/login'));
+webSignupBtn.addEventListener('click', () => openWebAuth('/signup'));
+document.getElementById('signOutBtn').addEventListener('click', signOut);
 
 function signOut() {
-  chrome.storage.local.remove(['sr_token', 'sr_user', 'recording', 'startTime', 'shareLink', 'lastRecording']);
-  showAuth();
+  chrome.storage.local.remove(
+    ['sr_token', 'sr_user', 'recording', 'startTime', 'shareLink', 'lastRecording'],
+    () => showAuth()
+  );
 }
-window.signOut = signOut;
+
+async function fetchMe(token) {
+  try {
+    const r = await fetch(`${SERVER}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+
+// Show the right panel based on the stored token (validated once via /auth/me).
+async function refreshAuthUI() {
+  const { sr_token, sr_user } = await chrome.storage.local.get(['sr_token', 'sr_user']);
+  if (!sr_token) { showAuth(); return false; }
+  let user = sr_user;
+  if (!user) {
+    user = await fetchMe(sr_token);
+    if (user) chrome.storage.local.set({ sr_user: user });
+  }
+  if (!user) { chrome.storage.local.remove(['sr_token', 'sr_user']); showAuth(); return false; }
+  showRecorder(user);
+  return true;
+}
 
 function showAuth() {
   authPanel.style.display = 'block';
   recorderPanel.style.display = 'none';
   topActions.style.display = 'none';
+  if (authError) authError.textContent = '';
 }
 function showRecorder(user) {
   authPanel.style.display = 'none';
@@ -184,6 +172,12 @@ function showRecorder(user) {
   userChip.title = user?.name || '';
   render();
 }
+
+// If the user signs in (or out) on the website while the popup is open, the
+// bridge updates chrome.storage — react to it and switch panels instantly.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.sr_token) refreshAuthUI();
+});
 
 // ── Recording lifecycle ───────────────────────────────────────────────────────
 function setStatus(msg, cls = '') { statusEl.textContent = msg; statusEl.className = 'status ' + cls; }
@@ -303,12 +297,10 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-chrome.storage.local.get(['sr_token', 'sr_user', 'recording', 'startTime', 'lastRecording'], (data) => {
-  if (data.sr_token && data.sr_user) {
-    showRecorder(data.sr_user);
-    if (data.recording) { isRecording = true; elapsed = Math.floor((Date.now() - data.startTime) / 1000); showRecordingUI(); }
-    if (data.lastRecording) showLatest(data.lastRecording);
-  } else {
-    showAuth();
-  }
-});
+(async () => {
+  const loggedIn = await refreshAuthUI();
+  if (!loggedIn) return;
+  const data = await chrome.storage.local.get(['recording', 'startTime', 'lastRecording']);
+  if (data.recording) { isRecording = true; elapsed = Math.floor((Date.now() - data.startTime) / 1000); showRecordingUI(); }
+  if (data.lastRecording) showLatest(data.lastRecording);
+})();
