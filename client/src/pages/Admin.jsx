@@ -273,6 +273,15 @@ function UsersTab({ token, authGet }) {
     } finally { setBusy(''); }
   }
 
+  async function clearSub(u) {
+    if (!window.confirm(`Clear ${u.email}'s subscription record? Resets them to free on our side.\n\nThis does NOT cancel billing in Paddle — only use it for test or stale records.`)) return;
+    setBusy(u.id);
+    try {
+      await fetch(`${API}/api/admin/users/${u.id}/subscription`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      await load();
+    } finally { setBusy(''); }
+  }
+
   return (
     <>
       <div className={s.headRow}>
@@ -287,7 +296,7 @@ function UsersTab({ token, authGet }) {
           <table className={s.table}>
             <thead><tr><th>User</th><th>Plan</th><th>Storage</th><th>Videos</th><th>Joined</th><th>Billing / grant</th><th></th></tr></thead>
             <tbody>
-              {rows.map((u) => <UserRow key={u.id} u={u} busy={busy === u.id} onSet={setPlan} onDelete={remove} />)}
+              {rows.map((u) => <UserRow key={u.id} u={u} busy={busy === u.id} onSet={setPlan} onDelete={remove} onClearSub={clearSub} />)}
               {!rows.length && <tr><td colSpan={7} className={s.muted}>No users found</td></tr>}
             </tbody>
           </table>
@@ -298,7 +307,7 @@ function UsersTab({ token, authGet }) {
   );
 }
 
-function UserRow({ u, busy, onSet, onDelete }) {
+function UserRow({ u, busy, onSet, onDelete, onClearSub }) {
   const [days, setDays] = useState('');
   const planBadge = u.planSlug === 'free'
     ? <span className={`${s.badge} ${s.badgeFree}`}>Free</span>
@@ -326,6 +335,10 @@ function UserRow({ u, busy, onSet, onDelete }) {
             <span className={s.subMeta} style={{ margin: 0 }}>
               {u.cancelAtPeriodEnd ? 'Ends ' : 'Renews '}{fmtDate(u.currentPeriodEnd)}
             </span>
+            <button className={`${s.smBtn} ${s.smDanger}`} disabled={busy} onClick={() => onClearSub(u)}
+              title="Clear the local subscription record (for test/stale data — does not cancel Paddle billing)">
+              Reset
+            </button>
           </div>
         ) : (
           <div className={s.grantRow}>
