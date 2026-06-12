@@ -8,15 +8,23 @@ const PADDLE_ENVIRONMENT =
   process.env.PADDLE_ENVIRONMENT === 'production' || process.env.PADDLE_ENV === 'production'
     ? 'production'
     : 'sandbox';
+const IS_SANDBOX = PADDLE_ENVIRONMENT !== 'production';
+
+// Per-environment credentials. In SANDBOX we read the `*_SANDBOX` vars only, so
+// your live keys can never be used by accident; in PRODUCTION we read the plain
+// names (plus a couple of back-compat aliases). Set BOTH sets in Railway and you
+// switch environments just by flipping PADDLE_ENVIRONMENT — no overwriting keys.
+function cred(base, ...prodAliases) {
+  if (IS_SANDBOX) return env(`${base}_SANDBOX`);
+  return env(base) || prodAliases.map(env).find(Boolean) || null;
+}
 
 const PADDLE = {
   environment: PADDLE_ENVIRONMENT,
-  apiKey: env('PADDLE_API_KEY'),
-  clientToken: env('PADDLE_CLIENT_TOKEN'),
-  webhookSecret: env('PADDLE_WEBHOOK_SECRET') || env('PADDLE_NOTIFICATION_SECRET'),
-  apiBase: PADDLE_ENVIRONMENT === 'production'
-    ? 'https://api.paddle.com'
-    : 'https://sandbox-api.paddle.com',
+  apiKey: cred('PADDLE_API_KEY'),
+  clientToken: cred('PADDLE_CLIENT_TOKEN'),
+  webhookSecret: cred('PADDLE_WEBHOOK_SECRET', 'PADDLE_NOTIFICATION_SECRET'),
+  apiBase: IS_SANDBOX ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com',
 };
 
 // Product/price catalog. `productId` optional; `priceId` is what checkout needs.
@@ -49,16 +57,11 @@ const PRODUCTS = {
   },
 };
 
-/** Resolve a priceId for a plan slug + billing cycle. */
+/** Resolve a priceId for a plan slug + billing cycle (environment-aware). */
 function getPriceId(planSlug, billingCycle) {
-  if (billingCycle === 'monthly') {
-    return planSlug === 'pro'
-      ? (env('PADDLE_PRICE_PRO_MONTHLY') || env('PADDLE_PRICE_ID'))
-      : null;
-  }
-  if (billingCycle === 'yearly') {
-    return planSlug === 'pro' ? env('PADDLE_PRICE_PRO_YEARLY') : null;
-  }
+  if (planSlug !== 'pro') return null;
+  if (billingCycle === 'monthly') return cred('PADDLE_PRICE_PRO_MONTHLY', 'PADDLE_PRICE_ID');
+  if (billingCycle === 'yearly') return cred('PADDLE_PRICE_PRO_YEARLY');
   return null;
 }
 
@@ -68,9 +71,11 @@ function getPriceId(planSlug, billingCycle) {
 // Flip this one var (Railway) the moment Paddle approves the domain.
 const PAYMENTS_LIVE = process.env.PAYMENTS_LIVE === 'true';
 
-/** Are the Paddle credentials + a price actually present? */
+/** Are the Paddle credentials + a price + the webhook secret present? The
+ *  webhook secret is required so checkout can't go live without the loop that
+ *  actually grants Pro after payment (no "charged but not upgraded"). */
 function isPaddleConfigured() {
-  return !!(PADDLE.clientToken && getPriceId('pro', 'monthly'));
+  return !!(PADDLE.clientToken && getPriceId('pro', 'monthly') && PADDLE.webhookSecret);
 }
 
 /** Is billing actually wired up AND switched live enough to take money? */
