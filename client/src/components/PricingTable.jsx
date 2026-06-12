@@ -22,7 +22,7 @@ function featureRows(plan) {
   ];
 }
 
-export default function PricingTable({ plans = [], currentSlug = 'free', onSelect, billingDefault = 'monthly', loading }) {
+export default function PricingTable({ plans = [], currentSlug = 'free', onSelect, billingDefault = 'monthly', loading, comingSoon = false }) {
   const [cycle, setCycle] = useState(billingDefault);
 
   return (
@@ -72,6 +72,8 @@ export default function PricingTable({ plans = [], currentSlug = 'free', onSelec
                 <button className={`${s.planBtn} ${s.planBtnCurrent}`} disabled>Current plan</button>
               ) : plan.slug === 'free' ? (
                 <Link to="/signup" className={`${s.planBtn} ${s.planBtnGhost}`}>Get started</Link>
+              ) : comingSoon ? (
+                <button className={`${s.planBtn} ${s.planBtnCurrent}`} disabled>Coming soon</button>
               ) : (
                 <button
                   className={`${s.planBtn} ${s.planBtnPrimary}`}

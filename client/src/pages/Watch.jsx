@@ -401,6 +401,12 @@ export default function Watch() {
   );
 
   const src = rec.cloudinary ? rec.filename : `${API}/uploads/${rec.filename}`;
+  // The HTML `download` attribute is ignored cross-origin (Cloudinary), so it
+  // would just open the video. Cloudinary's fl_attachment forces a real download
+  // with a Content-Disposition header and the correct file extension.
+  const downloadUrl = (rec.cloudinary && src.includes('/upload/'))
+    ? src.replace('/upload/', '/upload/fl_attachment/')
+    : src;
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
   const embedCode = `<iframe src="${typeof window !== 'undefined' ? window.location.origin : ''}/embed/${id}" width="640" height="360" frameborder="0" allowfullscreen></iframe>`;
   const privacyLabel = { public: 'Anyone with the link', login: 'Signed-in users only', password: 'Password-protected' }[rec.privacy] || 'Anyone with the link';
@@ -457,20 +463,14 @@ export default function Watch() {
     </div>
   );
 
-  // Pro-gated, not-yet-built features: free users see a "Pro" upsell, paid users
-  // see "Soon" (they're entitled — it just isn't shipped yet).
-  const proBadge = isPaid ? <span className={styles.soonPill}>Soon</span> : <span className={styles.proPill}>Pro</span>;
-  const onProClick = () => { if (!isPaid) navigate('/pricing'); };
-  const ProRow = ({ title, sub }) => isPaid ? (
-    <div className={styles.audRow}>
+  // Genuinely-unbuilt features. These ship for nobody yet, so they always read
+  // "Soon" and are non-interactive — never a dead click or a misleading upsell.
+  const proBadge = <span className={styles.soonPill}>Soon</span>;
+  const ProRow = ({ title, sub }) => (
+    <div className={styles.audRow} aria-disabled="true">
       <div className={styles.audText}><strong>{title}</strong><span>{sub}</span></div>
       <span className={styles.soonPill}>Soon</span>
     </div>
-  ) : (
-    <Link to="/pricing" className={styles.audRowLink}>
-      <div className={styles.audText}><strong>{title}</strong><span>{sub}</span></div>
-      <span className={styles.proPill}>Pro</span>
-    </Link>
   );
 
   const editPanel = (
@@ -495,7 +495,7 @@ export default function Watch() {
           <span>Trim, split and cut parts of your recording.</span>
         </span>
       </button>
-      <button className={styles.action} onClick={onProClick}>
+      <button className={styles.action} disabled style={{ opacity: .55, cursor: 'default' }}>
         <span className={styles.actionIcon}><Sparkles size={18} /></span>
         <span className={styles.actionText}>
           <strong>Remove silences &amp; filler words</strong>
@@ -519,7 +519,7 @@ export default function Watch() {
           <span>AI-generated, timestamped &amp; searchable.</span>
         </span>
       </button>
-      <button className={styles.action} onClick={onProClick}>
+      <button className={styles.action} disabled style={{ opacity: .55, cursor: 'default' }}>
         <span className={styles.actionIcon}><Sparkles size={18} /></span>
         <span className={styles.actionText}>
           <strong>Generate documents with AI</strong>
@@ -545,7 +545,7 @@ export default function Watch() {
         </div>
       )}
       {rec.audience?.download !== false && (
-        <a className={styles.action} href={src} download={rec.title + '.webm'}>
+        <a className={styles.action} href={downloadUrl}>
           <span className={styles.actionIcon}><Download size={18} /></span>
           <span className={styles.actionText}>
             <strong>Download video</strong>
@@ -718,7 +718,7 @@ export default function Watch() {
                     </button>
                   )}
                   {rec.audience?.download !== false && (
-                    <a className={styles.menuItem} href={src} download={rec.title + '.webm'} onClick={() => setMenuOpen(false)}>
+                    <a className={styles.menuItem} href={downloadUrl} onClick={() => setMenuOpen(false)}>
                       <Download size={15} /> Download
                     </a>
                   )}

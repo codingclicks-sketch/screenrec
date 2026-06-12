@@ -3,7 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users as UsersIcon, CreditCard, Mail, DollarSign,
   TrendingUp, HardDrive, Video, UserCheck, RefreshCw, Crown, Ban, Save, RotateCcw,
-  UserPlus, Trash2, X, ArchiveRestore,
+  UserPlus, Trash2, X, ArchiveRestore, Wallet, AlertTriangle, ArrowUpRight, Server,
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import API from '../api';
@@ -15,6 +15,7 @@ const fmtDate = (ms) => (ms ? new Date(ms).toLocaleDateString(undefined, { month
 
 const TABS = [
   { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
+  { id: 'business', label: 'Costs & profit', Icon: Wallet },
   { id: 'users', label: 'Users', Icon: UsersIcon },
   { id: 'plans', label: 'Plans & pricing', Icon: CreditCard },
   { id: 'contacts', label: 'Messages', Icon: Mail },
@@ -52,6 +53,7 @@ export default function Admin() {
 
       <main className={s.content}>
         {tab === 'overview' && <Overview authGet={authGet} />}
+        {tab === 'business' && <Business authGet={authGet} />}
         {tab === 'users' && <UsersTab token={token} authGet={authGet} />}
         {tab === 'plans' && <PlansTab token={token} authGet={authGet} />}
         {tab === 'contacts' && <ContactsTab token={token} authGet={authGet} />}
@@ -110,6 +112,132 @@ function Overview({ authGet }) {
         ))}
         {!d.conversionEvents.total && <p className={s.muted}>No paywall events yet</p>}
       </Panel>
+    </>
+  );
+}
+
+/* ── Business: costs, profit/loss, free-tier alerts, upgrade impact ─────────── */
+const PLAT_ICON = { cloudinary: HardDrive, railway: Server, vercel: TrendingUp, brevo: Mail, domain: DollarSign };
+const fmtUsage = (v) => (v == null ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }));
+
+function Business({ authGet }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState('');
+  const load = useCallback(() => { setErr(''); authGet('/api/admin/business').then(setD).catch((e) => e.message !== 'forbidden' && setErr(e.message)); }, [authGet]);
+  useEffect(() => { load(); }, [load]);
+  if (err) return <div className={s.err}>{err}</div>;
+  if (!d) return <p className={s.muted}>Crunching the numbers…</p>;
+
+  const net = d.profit.net;
+  const profitable = net >= 0;
+
+  return (
+    <>
+      <div className={s.headRow}>
+        <h1 className={s.h1}>Costs &amp; profit</h1>
+        <button className={s.smBtn} onClick={load}><RefreshCw size={14} /> Refresh</button>
+      </div>
+
+      {/* Alerts first — what needs attention */}
+      {d.alerts.length > 0 && (
+        <div className={s.bizAlerts}>
+          {d.alerts.map((a) => (
+            <div key={a.key} className={`${s.bizAlert} ${a.status === 'critical' ? s.bizAlertCrit : s.bizAlertWarn}`}>
+              <AlertTriangle size={18} />
+              <span>{a.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* P&L summary */}
+      <div className={s.pnlGrid}>
+        <div className={s.pnlCard}>
+          <div className={s.pnlLabel}><DollarSign size={15} /> Revenue (MRR)</div>
+          <div className={s.pnlBig}>{money(d.revenue.mrr)}</div>
+          <div className={s.pnlSub}>{money(d.revenue.arr)}/yr · {d.revenue.payingSubscribers} paying</div>
+        </div>
+        <div className={s.pnlCard}>
+          <div className={s.pnlLabel}><Wallet size={15} /> Infra cost</div>
+          <div className={s.pnlBig}>{money(d.cost.monthly)}<span className={s.pnlUnit}>/mo</span></div>
+          <div className={s.pnlSub}>{money(d.cost.annual)}/yr</div>
+        </div>
+        <div className={`${s.pnlCard} ${profitable ? s.pnlCardPos : s.pnlCardNeg}`}>
+          <div className={s.pnlLabel}>{profitable ? <TrendingUp size={15} /> : <AlertTriangle size={15} />} Net {profitable ? 'profit' : 'loss'}</div>
+          <div className={`${s.pnlBig} ${profitable ? s.pnlPos : s.pnlNeg}`}>{profitable ? '' : '−'}{money(Math.abs(net))}<span className={s.pnlUnit}>/mo</span></div>
+          <div className={s.pnlSub}>{d.profit.margin != null ? `${d.profit.margin}% margin` : 'pre-revenue'}</div>
+        </div>
+        <div className={s.pnlCard}>
+          <div className={s.pnlLabel}><UserCheck size={15} /> Break-even</div>
+          <div className={s.pnlBig}>{d.profit.breakevenSubs}<span className={s.pnlUnit}> Pro subs</span></div>
+          <div className={s.pnlSub}>at {money(d.revenue.proPrice)}/mo each covers all infra</div>
+        </div>
+      </div>
+
+      {/* Per-platform usage vs free limit */}
+      <h2 className={s.bizSection}>Resource usage by platform</h2>
+      <div className={s.platGrid}>
+        {d.platforms.map((p) => {
+          const Icon = PLAT_ICON[p.key] || HardDrive;
+          const barCls = p.status === 'critical' ? s.barCrit : p.status === 'warning' ? s.barWarn : p.status === 'ok' ? s.barOk : s.barUnknown;
+          return (
+            <div key={p.key} className={s.platCard}>
+              <div className={s.platTop}>
+                <span className={s.platIcon}><Icon size={16} /></span>
+                <div className={s.platHeadText}>
+                  <strong>{p.name}</strong>
+                  <small>{p.what}</small>
+                </div>
+                <span className={`${s.badge} ${p.monthlyCost > 0 ? s.badgePro : s.badgeFree}`}>{p.currentTier}{p.monthlyCost > 0 ? ` · ${money(p.monthlyCost)}/mo` : ' · free'}</span>
+              </div>
+
+              {p.freeLimit != null ? (
+                <>
+                  <div className={s.platUsageRow}>
+                    <span className={s.mono}>{fmtUsage(p.usage)} / {fmtUsage(p.freeLimit)} {p.metricLabel}</span>
+                    <span className={`${s.platPct} ${p.status === 'critical' ? s.pnlNeg : p.status === 'warning' ? s.warnText : ''}`}>{p.usagePct != null ? `${p.usagePct}%` : '—'}</span>
+                  </div>
+                  <div className={s.bar}><div className={`${s.barFill} ${barCls}`} style={{ width: `${Math.min(100, p.usagePct || 0)}%` }} /></div>
+                </>
+              ) : (
+                <div className={s.platUsageRow}><span className={s.muted}>Fixed cost — no usage limit</span></div>
+              )}
+
+              <div className={s.srcNote}>{p.metricHint} · <em>{p.usageSource}</em></div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Pre-upgrade impact report */}
+      <h2 className={s.bizSection}>Before you upgrade — impact on profit</h2>
+      <p className={s.muted} style={{ margin: '0 0 14px' }}>What each platform upgrade costs and how many {money(d.revenue.proPrice)} Pro subscribers it takes to stay break-even.</p>
+      <div className={s.upGrid}>
+        {d.upgrades.map((u) => (
+          <div key={u.key} className={`${s.upCard} ${u.recommended ? s.upRec : ''}`}>
+            <div className={s.upHead}>
+              <strong>{u.name}</strong>
+              {u.recommended && <span className={s.recBadge}>Recommended soon</span>}
+            </div>
+            <div className={s.upMove}>
+              <span className={s.badge + ' ' + s.badgeFree}>{u.from.tier}</span>
+              <ArrowUpRight size={15} />
+              <span className={s.badge + ' ' + s.badgePro}>{u.to.tier} · {money(u.to.cost)}/mo</span>
+            </div>
+            <div className={s.upRows}>
+              <Row a="Extra cost" b={`+${money(u.extraMonthlyCost)}/mo (${money(u.extraAnnualCost)}/yr)`} />
+              <Row a="New infra total" b={`${money(u.newMonthlyCost)}/mo`} />
+              <Row a="New net profit" b={<span className={u.newNetProfit >= 0 ? s.pnlPos : s.pnlNeg}>{u.newNetProfit >= 0 ? '' : '−'}{money(Math.abs(u.newNetProfit))}/mo</span>} />
+              <Row a="Extra Pro subs to cover" b={`${u.extraSubsToCover}`} />
+              <Row a="Total subs to break even" b={`${u.breakevenSubsAfter}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className={s.muted} style={{ marginTop: 18, fontSize: 12 }}>
+        Cloudinary usage is live from its API; other figures are tunable estimates (set <code>RAILWAY_MONTHLY_COST</code>, <code>VERCEL_EST_GB</code>, etc. in the server env as real bills come in).
+      </p>
     </>
   );
 }

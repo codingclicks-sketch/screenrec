@@ -8,7 +8,7 @@ function fmtDate(ms) {
 }
 
 // Current plan + subscription status, with the management actions.
-export default function SubscriptionCard({ entitlements, onUpgrade, onCancel, onResume, onPortal, busy }) {
+export default function SubscriptionCard({ entitlements, onUpgrade, onCancel, onResume, onPortal, busy, comingSoon = false }) {
   if (!entitlements) return null;
   const { plan, planSlug, isPaid, subscription } = entitlements;
   const status = subscription?.status || (isPaid ? 'active' : null);
@@ -42,7 +42,9 @@ export default function SubscriptionCard({ entitlements, onUpgrade, onCancel, on
 
       <div className={s.actionRow}>
         {!isPaid && (
-          <button className={`${s.btn} ${s.btnPrimary}`} onClick={onUpgrade} disabled={busy}>Upgrade to Pro</button>
+          comingSoon
+            ? <button className={`${s.btn}`} disabled>Pro — coming soon</button>
+            : <button className={`${s.btn} ${s.btnPrimary}`} onClick={onUpgrade} disabled={busy}>Upgrade to Pro</button>
         )}
         {isPaid && (
           <>

@@ -62,9 +62,25 @@ function getPriceId(planSlug, billingCycle) {
   return null;
 }
 
-/** Is billing actually wired up enough to take money? */
-function isBillingEnabled() {
+// Master launch switch. Paddle keys/prices can be fully configured while the
+// Paddle account/domain is still pending approval — in that window we must NOT
+// take money. Checkout only goes live when PAYMENTS_LIVE=true is set in the env.
+// Flip this one var (Railway) the moment Paddle approves the domain.
+const PAYMENTS_LIVE = process.env.PAYMENTS_LIVE === 'true';
+
+/** Are the Paddle credentials + a price actually present? */
+function isPaddleConfigured() {
   return !!(PADDLE.clientToken && getPriceId('pro', 'monthly'));
 }
 
-module.exports = { PADDLE, PRODUCTS, getPriceId, isBillingEnabled };
+/** Is billing actually wired up AND switched live enough to take money? */
+function isBillingEnabled() {
+  return PAYMENTS_LIVE && isPaddleConfigured();
+}
+
+/** Configured but intentionally held back → show "Coming soon" in the UI. */
+function isComingSoon() {
+  return !PAYMENTS_LIVE;
+}
+
+module.exports = { PADDLE, PRODUCTS, getPriceId, isBillingEnabled, isComingSoon, isPaddleConfigured };

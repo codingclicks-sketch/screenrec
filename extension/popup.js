@@ -132,11 +132,15 @@ function toggleMode() {
   authBtn.textContent = isSignup ? 'Create Account' : 'Sign In';
   nameField.style.display = isSignup ? 'block' : 'none';
   toggleAuth.innerHTML = isSignup
-    ? 'Have an account? <span onclick="toggleMode()">Sign in</span>'
-    : 'No account? <span onclick="toggleMode()">Sign up</span>';
+    ? 'Have an account? <span class="toggleLink">Sign in</span>'
+    : 'No account? <span class="toggleLink">Sign up</span>';
   authError.textContent = '';
 }
-window.toggleMode = toggleMode;
+// MV3 extension pages block inline onclick handlers, so wire clicks via JS.
+toggleAuth.addEventListener('click', (e) => {
+  if (e.target.closest('.toggleLink')) toggleMode();
+});
+document.getElementById('signOutBtn')?.addEventListener('click', signOut);
 
 authBtn.addEventListener('click', async () => {
   const email = emailInput.value.trim();

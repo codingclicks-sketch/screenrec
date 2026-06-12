@@ -51,14 +51,17 @@ export default function Pricing() {
       .then((u) => {
         if (u.plan && u.plan !== 'free') { updateUser(u); setStatus('success'); }
         else if (tries < 8) setTimeout(() => pollForPro(tries + 1), 1500);
-        else setStatus('success');
+        else setStatus('pending'); // don't claim success until the plan actually flips
       })
       .catch(() => setStatus('error'));
   }
 
+  const comingSoon = !cfg || cfg.comingSoon || !cfg.enabled;
+
   async function handleSelect(planSlug, billingCycle) {
+    if (planSlug === 'free') { window.location.href = user ? '/' : '/signup'; return; }
     if (!user) { window.location.href = '/login'; return; }
-    if (!cfg?.enabled || !window.Paddle) { setStatus('error'); return; }
+    if (comingSoon || !window.Paddle) { setStatus('soon'); return; }
     const res = await fetch(`${API}/api/billing/checkout`, {
       method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ billingCycle }),
@@ -90,19 +93,22 @@ export default function Pricing() {
 
         {status === 'processing' && <div className={styles.banner}>⏳ Confirming your payment…</div>}
         {status === 'success' && <div className={styles.banner}>🎉 You’re on Pro now — thank you! Enjoy unlimited HD recording.</div>}
+        {status === 'pending' && <div className={styles.banner}>Payment received — your plan will update shortly. Refresh in a moment.</div>}
+        {status === 'soon' && <div className={styles.banner}>🚀 VeoRec Pro is launching soon — we’ll let you know the moment it’s live. The free plan is fully available right now.</div>}
         {status === 'error' && <div className={styles.bannerErr}>Something went wrong. If you were charged, refresh in a moment.</div>}
 
         <PricingTable
           plans={plans}
           currentSlug={currentSlug}
           onSelect={handleSelect}
+          comingSoon={comingSoon}
         />
 
         {cfg && cfg.env === 'sandbox' && cfg.enabled && (
           <p className={styles.note}>⚠️ Test mode — use Paddle’s sandbox test card to try checkout.</p>
         )}
-        {cfg && !cfg.enabled && (
-          <p className={styles.note}>Checkout activates as soon as Paddle billing is connected.</p>
+        {comingSoon && (
+          <p className={styles.note}>VeoRec Pro is coming soon. Every feature is currently free while we finish payments — no card needed.</p>
         )}
 
         <footer className={styles.legalFooter}>

@@ -117,3 +117,50 @@
 .msgBody { font-size: 14px; color: #3b3b4b; line-height: 1.55; white-space: pre-wrap; margin: 0 0 12px; }
 .msgFoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .msgActions { display: flex; gap: 7px; }
+
+/* ── Business: costs & profit ─────────────────────────────────────────────── */
+.bizAlerts { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 20px; }
+.bizAlert { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 11px; font-size: 13.5px; font-weight: 500; }
+.bizAlertWarn { background: #fff7e6; border: 1px solid #f5d28a; color: #8a5a00; }
+.bizAlertCrit { background: #fdecec; border: 1px solid #f3b4b4; color: #b42121; }
+
+.pnlGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 26px; }
+.pnlCard { background: #fff; border: 1px solid #ececf3; border-radius: 16px; padding: 16px 18px; }
+.pnlCardPos { border-color: #b6e6cf; background: linear-gradient(180deg, #f3fbf7, #fff); }
+.pnlCardNeg { border-color: #f3c9c9; background: linear-gradient(180deg, #fdf4f4, #fff); }
+.pnlLabel { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #8a8aa0; margin-bottom: 8px; }
+.pnlBig { font-size: 26px; font-weight: 800; color: #14141f; letter-spacing: -.5px; }
+.pnlUnit { font-size: 14px; font-weight: 600; color: #9a9aab; }
+.pnlSub { font-size: 12px; color: #8a8aa0; margin-top: 4px; }
+.pnlPos { color: #16a34a; }
+.pnlNeg { color: #dc2626; }
+.warnText { color: #c47d00; }
+
+.bizSection { font-size: 15px; font-weight: 700; color: #14141f; margin: 8px 0 14px; }
+
+.platGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.platCard { background: #fff; border: 1px solid #ececf3; border-radius: 14px; padding: 15px 16px; }
+.platTop { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.platIcon { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: #f1f1fb; color: #5b5bf6; flex-shrink: 0; }
+.platHeadText { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.platHeadText strong { font-size: 14.5px; color: #14141f; }
+.platHeadText small { font-size: 12px; color: #8a8aa0; }
+.platUsageRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; font-size: 13px; }
+.platPct { font-weight: 800; font-size: 13.5px; color: #14141f; }
+.bar { height: 8px; background: #eef0f5; border-radius: 999px; overflow: hidden; }
+.barFill { height: 100%; border-radius: 999px; transition: width .3s; }
+.barOk { background: #16a34a; }
+.barWarn { background: #f59e0b; }
+.barCrit { background: #dc2626; }
+.barUnknown { background: #c7c7d1; }
+.srcNote { font-size: 11px; color: #9a9aab; margin-top: 9px; line-height: 1.4; }
+.srcNote em { font-style: normal; color: #6b6b80; }
+
+.upGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.upCard { background: #fff; border: 1px solid #ececf3; border-radius: 14px; padding: 15px 16px; }
+.upRec { border-color: #d7d7fb; box-shadow: 0 0 0 1px #ebebff inset; }
+.upHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 11px; }
+.upHead strong { font-size: 14.5px; color: #14141f; }
+.recBadge { font-size: 10.5px; font-weight: 700; color: #5b5bf6; background: #efeffe; padding: 2px 8px; border-radius: 999px; }
+.upMove { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #9a9aab; }
+.upRows { display: flex; flex-direction: column; gap: 1px; }

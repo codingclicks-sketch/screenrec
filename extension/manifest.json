@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VeoRec — Screen Recorder & Share",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Record your screen, camera & mic, then get an instant shareable link with AI transcription. Free & fast — a Loom alternative.",
   "permissions": [
     "storage",
