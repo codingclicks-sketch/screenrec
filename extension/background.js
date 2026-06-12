@@ -57,4 +57,21 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'SR_AUTH_CLEAR') {
     chrome.storage.local.remove(['sr_token', 'sr_user']);
   }
+  // Website "Record" button → start a recording with sensible defaults. The
+  // recorder window auto-starts the screen picker on load (see recorder.js).
+  if (msg.type === 'SR_START_RECORDING') {
+    const o = msg.options || {};
+    const recOptions = {
+      audio: o.audio !== false,
+      quality: o.quality || 'high',
+      camera: o.camera || 'off',
+      bubbleSize: o.bubbleSize || 'md',
+      countdown: o.countdown != null ? o.countdown : 3,
+      surface: o.surface || 'monitor',
+      bubbleTabId: null,
+    };
+    chrome.storage.local.set({ recOptions }, () => {
+      chrome.windows.create({ url: chrome.runtime.getURL('recorder.html'), type: 'popup', width: 420, height: 560 });
+    });
+  }
 });
