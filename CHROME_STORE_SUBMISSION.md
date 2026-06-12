@@ -1,6 +1,6 @@
 # VeoRec — Chrome Web Store Submission Guide
 
-Current package (project root): **`veorec-extension-v1.7.2.zip`** — clean build, 11 runtime files, manifest at root.
+Current package (project root): **`veorec-extension-v1.7.3.zip`** — clean build, 11 runtime files, manifest at root.
 
 > ⚠️ **v1.7.2 — auth moved to the website.** The popup no longer has its own sign-in
 > form (the in-popup form hit MV3 CSP limits). Instead the popup links to
@@ -11,7 +11,7 @@ Current package (project root): **`veorec-extension-v1.7.2.zip`** — clean buil
 ## 🔄 Publishing the update (the item already exists)
 1. Go to the **Developer Dashboard**: https://chrome.google.com/webstore/devconsole
 2. Open your **VeoRec** item → **Package** → **Upload new package**.
-3. Upload **`veorec-extension-v1.7.2.zip`** (Chrome requires the higher version number — 1.7.2 ✓).
+3. Upload **`veorec-extension-v1.7.3.zip`** (Chrome requires the higher version number — 1.7.2 ✓).
 4. Listing copy/graphics below are unchanged; only re-touch if you want.
 5. **Save draft → Submit for review.**
 
@@ -147,7 +147,7 @@ host_permissions (http/https) — the camera-bubble overlay can be injected on
 ---
 
 ## ✅ Pre-submission checklist
-- [x] Manifest V3, **version 1.7.2** (auth moved to website; sign-out fixed)
+- [x] Manifest V3, **version 1.7.3** (auth moved to website; sign-out fixed)
 - [x] 16 / 48 / 128 px icons included
 - [x] No remote code, no dead files (dev scripts excluded from zip)
 - [x] Privacy policy live at https://veorec.com/privacy
@@ -164,7 +164,7 @@ host_permissions (http/https) — the camera-bubble overlay can be injected on
    Exclude dev/listing files: `make-icons.cjs`, `store-icon-512.png`, `*.zip`.
 3. Dashboard → your item → **Package** → **Upload new package** → Submit.
 
-> The current `veorec-extension-v1.7.2.zip` was already built this way and verified
+> The current `veorec-extension-v1.7.3.zip` was already built this way and verified
 > to contain no inline handlers — upload it directly as the new version.
 
 ## 🧪 Loading it unpacked (before it's on the store)

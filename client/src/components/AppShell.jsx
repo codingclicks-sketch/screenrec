@@ -20,13 +20,30 @@ export default function AppShell({ active = 'library', search, onSearch, headerR
   const navigate = useNavigate();
   const [recordOpen, setRecordOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [hint, setHint] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
   const [uploadErr, setUploadErr] = useState('');
   const recordRef = useRef(null);
   const menuRef = useRef(null);
   const fileRef = useRef(null);
+
+  // Chrome Web Store listing for the VeoRec recorder extension.
+  const EXT_STORE_URL = 'https://chromewebstore.google.com/detail/veorec-%E2%80%94-screen-recorder/alhloekclmpekfklpdnddbikgiddjnkh';
+  // bridge.js (the extension's content script) stamps this on <html> when installed.
+  function extInstalled() { return typeof document !== 'undefined' && !!document.documentElement.getAttribute('data-veorec-ext'); }
+
+  function onRecord() {
+    setRecordOpen(false);
+    if (extInstalled()) {
+      window.postMessage({ source: 'veorec-web', type: 'START_RECORDING' }, '*');
+      setStarting(true);
+      setTimeout(() => setStarting(false), 4000);
+    } else {
+      setInstallOpen(true);
+    }
+  }
 
   function pickUpload() { setRecordOpen(false); setUploadErr(''); fileRef.current?.click(); }
   async function onFileChosen(e) {
@@ -146,7 +163,7 @@ export default function AppShell({ active = 'library', search, onSearch, headerR
             {headerRight}
             <NotificationsBell />
             <div className={s.recordWrap} ref={recordRef}>
-              <button className={s.recordBtn} onClick={() => setHint(true)}>
+              <button className={s.recordBtn} onClick={onRecord}>
                 <Plus size={17} /> Record Video
               </button>
               <button className={s.recordChevron} onClick={() => setRecordOpen((o) => !o)}><ChevronDown size={16} /></button>
@@ -180,17 +197,38 @@ export default function AppShell({ active = 'library', search, onSearch, headerR
         <div className={s.content}>{children}</div>
       </div>
 
-      {/* Record hint modal */}
-      {hint && (
-        <div className={s.modalBg} onClick={() => setHint(false)}>
+      {/* Extension not detected → prompt to install */}
+      {installOpen && (
+        <div className={s.modalBg} onClick={() => setInstallOpen(false)}>
           <div className={s.modal} onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
             <div className={s.modalIcon}><Video size={26} color="#5b5bf6" /></div>
-            <h2 className={s.modalTitle}>Record a video</h2>
+            <h2 className={s.modalTitle}>Add the VeoRec recorder</h2>
             <p className={s.modalText}>
-              Click the <strong>VeoRec</strong> icon in your browser toolbar, choose your options, and hit record.
-              Your video appears here automatically when you finish.
+              To record your screen, add the free <strong>VeoRec</strong> extension to Chrome.
+              It takes a few seconds — then come back and hit Record.
             </p>
-            <button className={s.primaryBtn} onClick={() => setHint(false)}>Got it</button>
+            <a className={s.primaryBtn} href={EXT_STORE_URL} target="_blank" rel="noopener noreferrer"
+              onClick={() => setInstallOpen(false)} style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Add to Chrome — it’s free
+            </a>
+            <button className={s.linkBtn} style={{ marginTop: 12, background: 'none', border: 'none', color: '#6b6b80', cursor: 'pointer', fontSize: 13 }}
+              onClick={() => { if (extInstalled()) { setInstallOpen(false); onRecord(); } else { window.location.reload(); } }}>
+              Already installed it? Reload
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Recording is being launched in the extension */}
+      {starting && (
+        <div className={s.modalBg} onClick={() => setStarting(false)}>
+          <div className={s.modal} onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+            <div className={s.modalIcon}><Video size={26} color="#5b5bf6" /></div>
+            <h2 className={s.modalTitle}>Starting VeoRec…</h2>
+            <p className={s.modalText}>
+              Choose the screen, window or tab to share in the popup. Your video appears here automatically when you finish.
+            </p>
+            <button className={s.primaryBtn} onClick={() => setStarting(false)}>Got it</button>
           </div>
         </div>
       )}
