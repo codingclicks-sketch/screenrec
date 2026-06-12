@@ -21,6 +21,7 @@ const permissions = require('./permissions.service');
 const billingService = require('./billing.service');
 const billingConfig = require('./billing.config');
 const conversion = require('./conversion');
+const businessService = require('./business.service');
 const cron = require('./cron');
 const contacts = require('./contacts');
 const { makeHandler: makePaddleWebhook } = require('./webhooks.paddle');
@@ -1263,6 +1264,47 @@ app.post('/api/contact', async (req, res) => {
 // ── Admin dashboard metrics ───────────────────────────────────────────────────
 app.get('/api/admin/metrics', requireAuth, requireAdmin, (req, res) => {
   res.json({ ...buildAdminMetrics(), newContacts: contacts.countNew() });
+});
+
+// ── Admin business analytics: cost, profit/loss, free-tier alerts, upgrade impact
+app.get('/api/admin/business', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const all = loadAllUsers();
+    let storageBytes = 0, videos = 0;
+    for (const u of all) {
+      const usg = usageService.get(u.id);
+      storageBytes += usg.storageUsedBytes || 0;
+      videos += usg.videoCount || 0;
+    }
+    const totalStorageGB = +(storageBytes / 1024 ** 3).toFixed(2);
+    const totals = { users: all.length, videos, storageGB: totalStorageGB };
+
+    // Measure Cloudinary for real (the binding cost driver); estimate the rest.
+    const usageByKey = {};
+    if (USE_CLOUDINARY) {
+      try {
+        const cu = await cloudinary.api.usage();
+        const stGB = +((cu?.storage?.usage || 0) / 1e9).toFixed(2);
+        const bwGB = +((cu?.bandwidth?.usage || 0) / 1e9).toFixed(2);
+        const tr = cu?.transformations?.usage || 0;
+        let credits = cu?.credits?.usage;
+        if (credits == null) credits = +(stGB + bwGB + tr / 1000).toFixed(2);
+        usageByKey.cloudinary = {
+          usage: +Number(credits).toFixed(2),
+          source: 'Cloudinary API (live)',
+          detail: { storageGB: stGB, bandwidthGB: bwGB, transformations: tr, creditLimit: cu?.credits?.limit ?? null },
+        };
+      } catch (e) {
+        usageByKey.cloudinary = { usage: totalStorageGB, source: 'estimated from stored GB (usage API unavailable)' };
+      }
+    } else {
+      usageByKey.cloudinary = { usage: totalStorageGB, source: 'estimated from stored GB' };
+    }
+
+    res.json(businessService.computeBusiness({ usageByKey, totals }));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Admin: users (list, with plan/usage/subscription) ─────────────────────────
