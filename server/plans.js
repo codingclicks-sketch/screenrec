@@ -23,7 +23,8 @@ const GB = 1024 * 1024 * 1024;
 const env = (k) => process.env[k] || null;
 // Environment-aware Paddle price lookup — mirrors billing.config so the reverse
 // price-id → plan mapping (resolvePlanByPriceId) works in sandbox AND production.
-const IS_SANDBOX = !(process.env.PADDLE_ENVIRONMENT === 'production' || process.env.PADDLE_ENV === 'production');
+const _padEnv = (process.env.PADDLE_ENVIRONMENT || process.env.PADDLE_ENV || 'sandbox').trim().toLowerCase();
+const IS_SANDBOX = !(_padEnv === 'production' || _padEnv === 'live');
 const priceEnv = (base, alias) => IS_SANDBOX ? env(`${base}_SANDBOX`) : (env(base) || (alias ? env(alias) : null));
 
 /**
