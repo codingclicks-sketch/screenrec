@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useBillingConfig } from '../hooks/useBillingConfig';
 import s from './Paywall.module.css';
 
 // Per-feature paywall copy. Keyed by the same feature strings the server returns
@@ -50,7 +49,6 @@ const FEATURE_COPY = {
 
 export default function UpgradeModal({ open, feature = 'default', reason, onClose }) {
   const navigate = useNavigate();
-  const { comingSoon } = useBillingConfig();
   const copy = FEATURE_COPY[feature] || FEATURE_COPY.default;
 
   useEffect(() => {
@@ -73,14 +71,9 @@ export default function UpgradeModal({ open, feature = 'default', reason, onClos
             <li key={i}><span className={s.modalCheck}>✓</span> {b}</li>
           ))}
         </ul>
-        {comingSoon && (
-          <p className={s.modalSoon} style={{ fontSize: 13, color: '#8a5a00', background: '#fff6e6', border: '1px solid #f3d99b', borderRadius: 8, padding: '8px 11px', margin: '0 0 12px' }}>
-            🚀 Pro is launching soon — we’ll let you know the moment it’s live.
-          </p>
-        )}
         <div className={s.modalActions}>
           <button className={s.primaryBtn} onClick={() => { onClose?.(); navigate('/pricing'); }}>
-            {comingSoon ? 'See what’s coming in Pro' : 'Upgrade to Pro — $7.99/mo'}
+            Upgrade to Pro
           </button>
           <button className={s.ghostBtn} onClick={onClose}>Maybe later</button>
         </div>
