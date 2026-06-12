@@ -1368,6 +1368,18 @@ app.patch('/api/admin/users/:id/plan', requireAuth, requireAdmin, (req, res) => 
   res.json({ ok: true, entitlements: entitlements.summary(updated) });
 });
 
+// ── Admin: clear a user's subscription record (test/stale cleanup) ────────────
+// Removes the LOCAL subscription + resets the coarse plan flag (unless comped).
+// Does NOT cancel billing in Paddle — that's done via /api/billing/cancel or the
+// Paddle dashboard. This is for wiping test/orphaned subscription records.
+app.delete('/api/admin/users/:id/subscription', requireAuth, requireAdmin, (req, res) => {
+  const target = users.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  subscriptions.remove(req.params.id);
+  if (!target.manualPlan) users.update(req.params.id, { plan: 'free', planId: 'free' });
+  res.json({ ok: true, entitlements: entitlements.summary(users.findById(req.params.id)) });
+});
+
 // ── Admin: create / invite a user ─────────────────────────────────────────────
 app.post('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
   const name = String(req.body.name || '').trim().slice(0, 120);
