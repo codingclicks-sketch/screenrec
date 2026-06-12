@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VeoRec — Screen Recorder & Share",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "description": "Record your screen, camera & mic, then get an instant shareable link with AI transcription. Free & fast — a Loom alternative.",
   "permissions": [
     "storage",
@@ -16,6 +16,13 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://veorec.com/*", "https://www.veorec.com/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "VeoRec — Record your screen",

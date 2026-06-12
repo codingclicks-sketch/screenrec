@@ -41,7 +41,20 @@ chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (recording && info.status === 'complete') injectOverlay(tabId, tab.url);
 });
 
-// Also catch explicit start messages (covers SW cold-starts).
+// Also catch explicit start messages (covers SW cold-starts) and auth-sync
+// messages from bridge.js (the veorec.com content script).
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.type === 'RECORDER_STARTED') recording = true;
+  if (!msg) return;
+  if (msg.type === 'RECORDER_STARTED') recording = true;
+  // Website signed in → mirror the token into the extension (clear sr_user so
+  // the popup re-fetches the fresh profile).
+  if (msg.type === 'SR_AUTH_SYNC' && msg.token) {
+    chrome.storage.local.get('sr_token', ({ sr_token }) => {
+      if (sr_token !== msg.token) chrome.storage.local.set({ sr_token: msg.token, sr_user: null });
+    });
+  }
+  // Website signed out → drop the extension session too.
+  if (msg.type === 'SR_AUTH_CLEAR') {
+    chrome.storage.local.remove(['sr_token', 'sr_user']);
+  }
 });
