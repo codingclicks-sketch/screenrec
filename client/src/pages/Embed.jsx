@@ -27,7 +27,15 @@ export default function Embed() {
 
   const src = rec.cloudinary ? rec.filename : `${API}/uploads/${rec.filename}`;
   return (
-    <div style={wrap}>
+    <div style={{ ...wrap, position: 'relative' }}>
+      {rec.branding && (
+        <a href="https://veorec.com" target="_blank" rel="noopener noreferrer"
+          style={{ position: 'absolute', top: 12, right: 12, zIndex: 5, display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '5px 10px 5px 8px', borderRadius: 8, background: 'rgba(11,11,20,.55)', backdropFilter: 'blur(6px)',
+            color: '#fff', fontFamily: 'system-ui, sans-serif', fontSize: 12, fontWeight: 700, textDecoration: 'none', opacity: .85 }}>
+          <span style={{ width: 13, height: 13, borderRadius: 4, background: 'linear-gradient(135deg,#6366f1,#a855f7)' }} /> VeoRec
+        </a>
+      )}
       <video
         ref={videoRef}
         src={src}

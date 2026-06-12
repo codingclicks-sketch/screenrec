@@ -22,6 +22,7 @@ const billingService = require('./billing.service');
 const billingConfig = require('./billing.config');
 const conversion = require('./conversion');
 const businessService = require('./business.service');
+const { rateLimit } = require('./ratelimit');
 const cron = require('./cron');
 const contacts = require('./contacts');
 const { makeHandler: makePaddleWebhook } = require('./webhooks.paddle');
@@ -42,9 +43,17 @@ if (USE_CLOUDINARY) {
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+// Behind Railway's proxy — trust it so req.ip / X-Forwarded-For is the real client.
+app.set('trust proxy', 1);
 app.use(cors({ origin: '*' }));
 // Capture the raw body so we can verify Paddle webhook signatures.
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
+
+// ── Rate limiters for the public auth surface (brute-force / abuse protection) ──
+const loginLimiter  = rateLimit({ name: 'login',  windowMs: 15 * 60 * 1000, max: 10, message: 'Too many sign-in attempts. Please wait a few minutes and try again.' });
+const signupLimiter = rateLimit({ name: 'signup', windowMs: 60 * 60 * 1000, max: 15, message: 'Too many sign-ups from this network. Please try again later.' });
+const forgotLimiter = rateLimit({ name: 'forgot', windowMs: 60 * 60 * 1000, max: 5,  message: 'Too many password-reset requests. Please try again later.' });
+const resetLimiter  = rateLimit({ name: 'reset',  windowMs: 15 * 60 * 1000, max: 10, message: 'Too many attempts. Please request a fresh reset link.' });
 
 // In-memory uploader for the editor's "replace with trimmed file" flow.
 const memUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
@@ -85,7 +94,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', signupLimiter, async (req, res) => {
   const { name, email, password } = req.body;
   if (!email || !password || !name) return res.status(400).json({ error: 'Name, email and password required' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -99,7 +108,7 @@ app.post('/api/auth/signup', async (req, res) => {
   res.json({ token, user: publicUser(user) });
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
@@ -207,7 +216,7 @@ async function sendEmail(to, subject, html) {
   } catch { return false; }
 }
 
-app.post('/api/auth/forgot', async (req, res) => {
+app.post('/api/auth/forgot', forgotLimiter, async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const user = users.findByEmail(email);
   // Only password accounts can reset; always respond ok (don't reveal who exists).
@@ -222,7 +231,7 @@ app.post('/api/auth/forgot', async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/auth/reset', async (req, res) => {
+app.post('/api/auth/reset', resetLimiter, async (req, res) => {
   const { email, token, password } = req.body;
   if (!email || !token || !password) return res.status(400).json({ error: 'Missing fields' });
   if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -524,10 +533,14 @@ async function findVideo(id) {
     const r = result.resources[0];
     const ctx = r.context?.custom || {};
     const ownerId = ctx.user_id || (r.public_id || '').split('/')[1];
+    const owner = ownerId ? users.findById(ownerId) : null;
+    // Show the "Made with VeoRec" watermark unless the owner's plan removes it.
+    const branding = owner ? (entitlements.resolve(owner).branding !== false) : true;
     return {
       id,
       title: ctx.title || 'Untitled Recording',
-      author: (ownerId && users.findById(ownerId)?.name) || null,
+      author: owner?.name || null,
+      branding,
       filename: r.secure_url,
       thumbnail: r.secure_url.replace(/\.(webm|mp4|mov|mkv)$/, '.jpg').replace('/upload/', '/upload/so_0/'),
       duration: Math.round(r.duration || parseInt(ctx.duration) || 0),
