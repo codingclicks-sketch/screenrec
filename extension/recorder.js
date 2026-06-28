@@ -26,6 +26,7 @@ let timerInterval = null;
 let rafId = null;
 let audioCtx = null;
 let activeStreams = [];    // all source streams to stop at the end
+let hardStopTimer = null;  // wall-clock cap that survives background timer throttling
 
 // Options carried over from the popup
 let opts = { quality: 'medium', audio: true, camera: 'off', countdown: true };
@@ -153,7 +154,9 @@ async function beginRecording() {
     const videoConstraints = { width: { ideal: maxW }, height: { ideal: maxH }, frameRate: { ideal: 30 } };
     // Hint the picker toward the surface the user chose (monitor/browser/window)
     if (['monitor', 'browser', 'window'].includes(opts.surface)) videoConstraints.displaySurface = opts.surface;
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints, audio: true });
+    // `systemAudio: 'include'` asks Chrome to offer the "share audio" option so we
+    // can capture other meeting participants (only works for a TAB or whole SCREEN).
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints, audio: true, systemAudio: 'include' });
     activeStreams.push(screenStream);
   }
   if (cam === 'only') {
@@ -223,9 +226,36 @@ async function beginRecording() {
   const bitsPerSecond = opts.quality === 'high' ? 4_000_000 : opts.quality === 'medium' ? 2_500_000 : 1_000_000;
 
   mediaRecorder = new MediaRecorder(finalStream, { mimeType, videoBitsPerSecond: bitsPerSecond });
-  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  mediaRecorder.ondataavailable = e => {
+    if (e.data.size > 0) chunks.push(e.data);
+    // PRIMARY limit enforcement — driven by the ENCODER clock (fires ~1/s via the
+    // timeslice), so the cap trips even when the window's timers are throttled
+    // because the recorder window sits behind a focused meeting.
+    if (!limitReached && recordingLimitSec > 0 && elapsedSeconds() >= recordingLimitSec) {
+      limitReached = true;
+      setStatus(`⏱ Recording limit reached (${Math.round(recordingLimitSec / 60)} min) — saving…`, 'uploading');
+      stopRecording();
+    }
+  };
   mediaRecorder.onstop = handleStop;
   mediaRecorder.start(1000);
+
+  // Wall-clock backstop. A single setTimeout still fires when an occluded window
+  // freezes setInterval; it re-arms if the recording was paused so it never stops
+  // a take early.
+  clearTimeout(hardStopTimer);
+  if (recordingLimitSec > 0) {
+    hardStopTimer = setTimeout(function hardStop() {
+      if (!mediaRecorder || mediaRecorder.state === 'inactive' || limitReached) return;
+      if (elapsedSeconds() >= recordingLimitSec) {
+        limitReached = true;
+        setStatus(`⏱ Recording limit reached (${Math.round(recordingLimitSec / 60)} min) — saving…`, 'uploading');
+        stopRecording();
+      } else {
+        hardStopTimer = setTimeout(hardStop, (recordingLimitSec - elapsedSeconds()) * 1000 + 500);
+      }
+    }, recordingLimitSec * 1000 + 500);
+  }
 
   // UI: recording
   controls.style.display = 'flex';
@@ -233,7 +263,17 @@ async function beginRecording() {
   timerEl.classList.add('show');
   updateTimer();
   timerInterval = setInterval(updateTimer, 500);
-  setStatus(cam === 'bubble' ? '● Recording… (camera bubble is on your tab)' : '● Recording…', 'recording');
+  // Warn when only the mic is captured — no system/tab audio track came back, so
+  // other meeting participants won't be in the recording.
+  const noSystemAudio = cam !== 'only' && screenStream && screenStream.getAudioTracks().length === 0;
+  const recMsg = cam === 'bubble' ? '● Recording… (camera bubble is on your tab)' : '● Recording…';
+  setStatus(
+    noSystemAudio && wantMic
+      ? '● Recording… ⚠ Only YOUR mic is captured — other people’s audio isn’t. To record them: Stop, then re-share a browser TAB with “Share tab audio” on, or your whole SCREEN with system audio.'
+      : recMsg,
+    'recording'
+  );
+  if (noSystemAudio && wantMic) overlayMsg({ type: 'SR_OVERLAY_WARN', text: 'Only your mic is being recorded — re-share with audio to capture others.' });
 
   chrome.storage.local.set({ recording: true, startTime });
   // Shared state the on-screen overlay (on any tab) reads to render the timer.
@@ -294,6 +334,7 @@ function onStartError(e) {
 
 function cleanupStreams() {
   if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  clearTimeout(hardStopTimer); hardStopTimer = null;
   activeStreams.forEach(s => s.getTracks().forEach(t => t.stop()));
   activeStreams = [];
   if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; }
@@ -382,9 +423,16 @@ async function handleStop() {
   // limit so a sub-second timing overrun can't get the upload rejected (which
   // used to lose the whole recording on free accounts at the 5-min mark).
   if (limitReached && recordingLimitSec > 0) duration = Math.min(duration, recordingLimitSec);
-  const blob = new Blob(chunks, { type: 'video/webm' });
-  lastBlob = blob;          // preserve so the user can always recover it
+  const rawBlob = new Blob(chunks, { type: 'video/webm' });
   chunks = [];
+  // MediaRecorder omits the Duration header (live stream), so the file shows no
+  // length and can't be scrubbed. Inject the real duration before BOTH the upload
+  // and the local-save fallback. Fail-safe: returns the original blob on any error.
+  let blob = rawBlob;
+  if (typeof fixWebmDuration === 'function' && duration > 0) {
+    try { blob = await fixWebmDuration(rawBlob, duration * 1000); } catch (e) { blob = rawBlob; }
+  }
+  lastBlob = blob;          // preserve so the user can always recover it
 
   // Make sure this window is visible+focused (never frozen) during the upload.
   try { chrome.windows.getCurrent((w) => { if (w && w.id != null) chrome.windows.update(w.id, { state: 'normal', focused: true }); }); } catch (e) {}
