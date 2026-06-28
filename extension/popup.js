@@ -11,6 +11,7 @@ const webSignupBtn = document.getElementById('webSignupBtn');
 const recorderPanel= document.getElementById('recorderPanel');
 
 const surfaceWrap  = document.getElementById('surface');
+const surfHint     = document.getElementById('surfHint');
 const cameraRow    = document.getElementById('cameraRow');
 const cameraVal    = document.getElementById('cameraVal');
 const micRow       = document.getElementById('micRow');
@@ -64,6 +65,11 @@ function cameraLabel() {
   return 'Bubble';
 }
 const QUALITY_LABELS = { high: '1080p', medium: '720p', low: '480p' };
+const SURF_HINTS = {
+  tab: '<b>No pop-up.</b> Records this tab + everyone’s audio in it + your mic. Best for meetings.',
+  monitor: 'Picks your whole screen in the share dialog — tick <b>“Share system audio”</b> to capture others.',
+  window: 'Picks one app window in the share dialog. <b>Window mode can’t capture audio.</b>',
+};
 
 function render() {
   cameraVal.textContent = cameraLabel();
@@ -75,6 +81,7 @@ function render() {
   surfaceWrap.querySelectorAll('.surf').forEach(b => {
     b.classList.toggle('active', b.dataset.surface === opts.surface);
   });
+  if (surfHint) surfHint.innerHTML = SURF_HINTS[opts.surface] || '';
 }
 
 // A choice is active if every key in its `set` matches current opts.
@@ -208,24 +215,42 @@ mainBtn.addEventListener('click', async () => {
     setStatus('Processing…', 'uploading');
     return;
   }
-  // Inject the on-screen overlay (draggable control toolbar + camera bubble)
-  // onto the active tab so controls/camera are visible IN the recording. The
-  // recorder window drives MediaRecorder and talks to this overlay by tab id.
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const onWebTab = !!(tab && tab.id && /^https?:/.test(tab.url || ''));
+
+  // "This Tab" mode → grab a no-picker tabCapture stream id IN this click gesture
+  // (required: tabCapture only works on the active tab, from a user gesture).
+  let mode = 'screen', tabStreamId = null;
+  if (opts.surface === 'tab') {
+    if (!onWebTab) { setStatus('Open the page you want to record (a normal web tab), then try again.', 'uploading'); return; }
+    try {
+      tabStreamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      mode = 'tab';
+    } catch (e) {
+      setStatus('Could not capture this tab — try “Entire Screen” instead. (' + (e?.message || 'tabCapture failed') + ')', 'uploading');
+      return;
+    }
+  }
+
+  const recOptions = {
+    audio: opts.audio, quality: opts.quality, camera: opts.camera, bubbleSize: opts.bubbleSize,
+    countdown: opts.countdown, surface: opts.surface, mode, tabStreamId, bubbleTabId: null,
+  };
+
+  // Inject the on-screen overlay (draggable control toolbar + camera bubble) onto
+  // the active tab so controls/camera are visible IN the recording. The recorder
+  // window drives MediaRecorder and talks to this overlay by tab id.
   let bubbleTabId = null;
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab && tab.id && /^https?:/.test(tab.url || '')) {
-      // Save options first so the overlay can read camera mode on inject.
-      await chrome.storage.local.set({
-        recOptions: { audio: opts.audio, quality: opts.quality, camera: opts.camera, bubbleSize: opts.bubbleSize, countdown: opts.countdown, surface: opts.surface, bubbleTabId: tab.id },
-      });
+  if (onWebTab) {
+    try {
+      recOptions.bubbleTabId = tab.id;
+      await chrome.storage.local.set({ recOptions });   // overlay reads camera mode on inject
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['overlay.js'] });
       bubbleTabId = tab.id;
-    }
-  } catch (e) {}
-  await chrome.storage.local.set({
-    recOptions: { audio: opts.audio, quality: opts.quality, camera: opts.camera, bubbleSize: opts.bubbleSize, countdown: opts.countdown, surface: opts.surface, bubbleTabId },
-  });
+    } catch (e) { recOptions.bubbleTabId = null; }
+  }
+  recOptions.bubbleTabId = bubbleTabId;
+  await chrome.storage.local.set({ recOptions });
   chrome.windows.create({ url: chrome.runtime.getURL('recorder.html'), type: 'popup', width: 420, height: 560 });
   window.close();
 });

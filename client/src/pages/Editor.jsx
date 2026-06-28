@@ -89,7 +89,10 @@ export default function Editor() {
     loadedKey.current = c.key;
     const off = here.off;
     const go = () => { try { v.currentTime = c.in + off; } catch (e) {} if (playing) v.play().catch(() => {}); };
-    if (v.src !== c.src) { v.src = c.src; v.onloadeddata = () => { v.onloadeddata = null; go(); }; }
+    // Guard against a stale load callback from a previous clip firing after a
+    // rapid seek moved us to a different clip (would seek the new source to the
+    // old time). Only apply if this is still the clip we want.
+    if (v.src !== c.src) { v.src = c.src; v.onloadeddata = () => { if (loadedKey.current === c.key) { v.onloadeddata = null; go(); } }; }
     else go();
     // eslint-disable-next-line
   }, [hereClip && hereClip.key]);

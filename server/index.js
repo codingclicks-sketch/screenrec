@@ -198,7 +198,8 @@ app.post('/api/auth/google', async (req, res) => {
     if (process.env.GOOGLE_CLIENT_ID && info.aud !== process.env.GOOGLE_CLIENT_ID) {
       return res.status(401).json({ error: 'Google token audience mismatch' });
     }
-    if (info.email_verified === 'false') return res.status(401).json({ error: 'Google email not verified' });
+    // tokeninfo returns a STRING ("true"/"false"); guard the boolean form too.
+    if (info.email_verified === 'false' || info.email_verified === false) return res.status(401).json({ error: 'Google email not verified' });
 
     const email = info.email.toLowerCase();
     let user = users.findByEmail(email);
@@ -1231,7 +1232,14 @@ app.post('/api/recordings/:id/compose', requireAuth, async (req, res) => {
     }
     const tmpId = `${publicId}__compose_${Date.now()}`;
     const uploaded = await cloudinary.uploader.upload(derivedUrl, { resource_type: 'video', public_id: tmpId, overwrite: true });
-    await cloudinary.uploader.rename(tmpId, publicId, { resource_type: 'video', overwrite: true, invalidate: true });
+    // If the rename fails the original is untouched (good) but tmpId would be
+    // orphaned — destroy it so a failed overwrite doesn't leak storage.
+    try {
+      await cloudinary.uploader.rename(tmpId, publicId, { resource_type: 'video', overwrite: true, invalidate: true });
+    } catch (e) {
+      try { await cloudinary.uploader.destroy(tmpId, { resource_type: 'video' }); } catch {}
+      throw e;
+    }
     try { await cloudinary.uploader.add_context(buildContext({ title: keepTitle, duration: Math.round(uploaded.duration || 0), rec_id: req.params.id, user_id: req.userId, edited: 1 }), [publicId], { resource_type: 'video' }); } catch {}
     meta.set(req.params.id, { segments: null, trimStart: null, trimEnd: null });
     res.json({ ok: true, mode: 'overwrite' });
