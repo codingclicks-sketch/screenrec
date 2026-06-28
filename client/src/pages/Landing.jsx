@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Video, Link2, LineChart, FolderOpen, Clapperboard, MessageSquare,
   CheckCircle2, Mic, Gauge, Timer, Sparkles, Play, Check,
-  Plus, PlaySquare, BarChart3, Monitor, AppWindow,
+  Plus, PlaySquare, BarChart3, Monitor, AppWindow, Crown, X,
 } from 'lucide-react';
 import API from '../api';
 import s from './Landing.module.css';
@@ -17,11 +17,54 @@ const FALLBACK = [
     maxVideos: null, recordingLimitMinutes: 600, storageLimitGB: 1024, exportQuality: '1080p' },
 ];
 
-const FEATURES = [
-  { Icon: Video, color: '#6366f1', tint: s.tintPurple, title: 'Record effortlessly', text: 'Capture your screen, camera and mic in stunning quality.' },
-  { Icon: Link2, color: '#16a34a', tint: s.tintGreen, title: 'Share instantly', text: 'Get a shareable link in seconds. No uploads. No waiting.' },
-  { Icon: LineChart, color: '#ec4899', tint: s.tintPink, title: 'Powerful insights', text: 'See who watched, how much, and what they clicked.' },
-  { Icon: FolderOpen, color: '#f59e0b', tint: s.tintAmber, title: 'Stay organized', text: 'Folders, workspace and everything in its place.' },
+// Full capability map, grouped — each item tagged free or pro.
+const CATEGORIES = [
+  { Icon: Video, color: '#6366f1', tint: s.tintPurple, title: 'Record & capture', items: [
+    { t: 'Screen, camera & mic', tier: 'free' },
+    { t: 'Screenshot capture', tier: 'free' },
+    { t: 'Draw & annotate while recording', tier: 'free' },
+    { t: 'Click highlights', tier: 'free' },
+    { t: 'Up to 1080p HD', tier: 'pro' },
+    { t: 'Unlimited recording length', tier: 'pro' },
+  ] },
+  { Icon: Sparkles, color: '#16a34a', tint: s.tintGreen, title: 'AI, built in', items: [
+    { t: 'Transcription in 99+ languages', tier: 'free' },
+    { t: 'Auto-generated titles', tier: 'free' },
+    { t: 'AI summaries', tier: 'pro' },
+    { t: 'Auto chapters', tier: 'pro' },
+    { t: 'Transcript translation', tier: 'pro' },
+  ] },
+  { Icon: Clapperboard, color: '#f59e0b', tint: s.tintAmber, title: 'Edit, no re-render', items: [
+    { t: 'Trim, split & cut', tier: 'free' },
+    { t: 'Remove silences', tier: 'free' },
+    { t: 'Combine clips into one', tier: 'pro' },
+    { t: 'Custom thumbnails', tier: 'pro' },
+  ] },
+  { Icon: Link2, color: '#ec4899', tint: s.tintPink, title: 'Share & grow', items: [
+    { t: 'Instant link, embed & comments', tier: 'free' },
+    { t: 'Share to Gmail', tier: 'free' },
+    { t: 'Viewer analytics & view-through %', tier: 'pro' },
+    { t: 'Email capture for lead gen', tier: 'pro' },
+    { t: 'Password-protected videos', tier: 'pro' },
+    { t: 'Remove VeoRec branding', tier: 'pro' },
+    { t: 'Post to Slack', tier: 'pro' },
+  ] },
+];
+
+// VeoRec vs Loom — yes / no / note per row.
+const COMPARE = [
+  { label: 'Free plan', veorec: { v: '30 videos, 10-min', ok: true }, loom: { v: '25 videos, 5-min', ok: false } },
+  { label: 'Pro price', veorec: { v: '$7.99/mo flat', ok: true }, loom: { v: 'Higher, per creator', ok: false } },
+  { label: 'AI transcription on free', veorec: { ok: true }, loom: { v: 'Paid', ok: false } },
+  { label: 'Transcription in 99+ languages', veorec: { ok: true }, loom: { v: 'Limited', ok: false } },
+  { label: 'AI summaries & chapters', veorec: { ok: true }, loom: { v: 'Paid', ok: false } },
+  { label: 'Transcript translation', veorec: { ok: true }, loom: { ok: false } },
+  { label: 'Screen, cam, mic & screenshot', veorec: { ok: true }, loom: { ok: true } },
+  { label: 'Draw & click highlights', veorec: { ok: true }, loom: { ok: true } },
+  { label: 'Remove silences', veorec: { ok: true }, loom: { v: 'Paid', ok: false } },
+  { label: 'Combine clips', veorec: { ok: true }, loom: { v: 'Limited', ok: false } },
+  { label: 'Email capture for lead gen', veorec: { ok: true }, loom: { ok: false } },
+  { label: 'Watermark-free on Pro', veorec: { ok: true }, loom: { ok: true } },
 ];
 
 const STEPS = [
@@ -32,10 +75,26 @@ const STEPS = [
 ];
 
 function planRows(plan) {
-  if (plan.slug === 'free') return [`Up to ${plan.maxVideos || 30} videos`, `Up to ${plan.recordingLimitMinutes || 10} minutes each`,
-    '720p quality', 'AI transcription & subtitles', 'Shareable links & comments'];
-  return ['Everything in Free', 'Unlimited videos', 'Unlimited recording length',
-    `${plan.exportQuality || '1080p'} HD quality`, 'Remove VeoRec branding', 'Viewer analytics', 'Password-protected videos'];
+  if (plan.slug === 'free') return [
+    `Up to ${plan.maxVideos || 30} videos`,
+    `${plan.recordingLimitMinutes || 10}-minute recordings`,
+    '720p HD',
+    'Screen, camera, mic & screenshot',
+    'Draw & click highlights',
+    'AI transcription & auto-titles',
+    'Remove silences',
+    'Links, embeds & comments',
+  ];
+  return [
+    'Everything in Free, plus:',
+    'Unlimited videos & length',
+    '1080p HD, no watermark',
+    'AI summaries, chapters & translation',
+    'Viewer analytics & view-through %',
+    'Email capture for lead gen',
+    'Password-protected videos',
+    'Combine clips & post to Slack',
+  ];
 }
 
 export default function Landing() {
@@ -165,14 +224,28 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Feature cards ───────────────────────────────────────────────────── */}
+      {/* ── Everything VeoRec does ──────────────────────────────────────────── */}
       <section id="features" className={s.section}>
-        <div className={s.featureGrid}>
-          {FEATURES.map((f, i) => (
-            <div key={i} className={s.featureCard}>
-              <div className={`${s.featureIcon} ${f.tint}`}><f.Icon size={24} color={f.color} strokeWidth={2.2} /></div>
-              <h3>{f.title}</h3>
-              <p>{f.text}</p>
+        <h2 className={s.h2}>Everything you need to <span className={s.accent}>record, edit &amp; share</span></h2>
+        <p className={s.sectionSub}>A full Loom alternative with free AI built in. Each tag shows what is Free vs Pro.</p>
+        <div className={s.capGrid}>
+          {CATEGORIES.map((c, i) => (
+            <div key={i} className={s.capCard}>
+              <div className={s.capHead}>
+                <span className={`${s.capIcon} ${c.tint}`}><c.Icon size={20} color={c.color} strokeWidth={2.2} /></span>
+                <h3>{c.title}</h3>
+              </div>
+              <ul className={s.capList}>
+                {c.items.map((it, j) => (
+                  <li key={j} className={s.capItem}>
+                    <Check size={15} className={s.capCheck} />
+                    <span className={s.capText}>{it.t}</span>
+                    {it.tier === 'pro'
+                      ? <span className={s.tierPro}>Pro</span>
+                      : <span className={s.tierFree}>Free</span>}
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
         </div>
@@ -191,6 +264,38 @@ export default function Landing() {
               {i < STEPS.length - 1 && <div className={s.stepLine} />}
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── VeoRec vs Loom ──────────────────────────────────────────────────── */}
+      <section className={s.section}>
+        <h2 className={s.h2}>VeoRec vs <span className={s.accent}>Loom</span></h2>
+        <p className={s.sectionSub}>The same async-video workflow, with free AI and a flat price.</p>
+        <div className={s.compWrap}>
+          <table className={s.compTable}>
+            <thead>
+              <tr>
+                <th className={s.compCorner}></th>
+                <th className={s.compUs}><img src="/logo.png" alt="" className={s.compLogo} />VeoRec</th>
+                <th className={s.compThem}>Loom</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARE.map((row, i) => (
+                <tr key={i}>
+                  <td className={s.compLabel}>{row.label}</td>
+                  <td className={s.compCellUs}>
+                    {row.veorec.ok ? <Check size={16} className={s.compYes} /> : <X size={16} className={s.compNo} />}
+                    {row.veorec.v && <span className={s.compVal}>{row.veorec.v}</span>}
+                  </td>
+                  <td className={s.compCell}>
+                    {row.loom.ok ? <Check size={16} className={s.compYesMuted} /> : <X size={16} className={s.compNo} />}
+                    {row.loom.v && <span className={s.compVal}>{row.loom.v}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 

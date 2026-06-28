@@ -67,6 +67,12 @@ const PLANS = {
       // AI transcription + auto-title run on our self-hosted Whisper, so they're
       // free & unlimited for everyone (matches the in-app "free & unlimited" copy).
       transcriptionEnabled: true,
+      // Advanced AI (summaries/chapters/translation), clip stitching, lead
+      // capture and Slack sharing are Pro.
+      aiDocsEnabled: false,
+      clipStitchEnabled: false,
+      leadCaptureEnabled: false,
+      slackEnabled: false,
     },
     paddle: { monthlyPriceId: null, yearlyPriceId: null },
   },
@@ -98,6 +104,10 @@ const PLANS = {
       priorityProcessingEnabled: true,
       passwordProtectedVideosEnabled: true,
       transcriptionEnabled: true,
+      aiDocsEnabled: true,
+      clipStitchEnabled: true,
+      leadCaptureEnabled: true,
+      slackEnabled: true,
     },
     paddle: {
       monthlyPriceId: priceEnv('PADDLE_PRICE_PRO_MONTHLY', 'PADDLE_PRICE_ID'),
