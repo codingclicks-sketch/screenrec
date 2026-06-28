@@ -107,11 +107,14 @@ async function generateTitle(transcriptText) {
   const text = String(transcriptText || '').trim();
   if (text.length < 12 || !isLLMConfigured()) return null;
   try {
+    // Don't force the transcript's language/script — forcing a low-resource script
+    // (e.g. Urdu) made the model hallucinate gibberish. A clear, accurate title in
+    // plain language is what we want.
     const out = await chat([
-      { role: 'system', content: 'Write a short, specific video title (3–8 words) for this screen-recording transcript. Use the SAME language and script as the transcript. Output ONLY the title — no quotes, no preamble, no trailing punctuation, no "this video".' },
+      { role: 'system', content: 'Write one short, specific video title (4–8 words) describing what this screen recording is about. Output ONLY the title text — no quotes, no preamble, no trailing punctuation, no "this video".' },
       { role: 'user', content: `Transcript:\n\n${text.slice(0, 4000)}` },
-    ], { maxTokens: 32, temperature: 0.3 });
-    const title = String(out || '').replace(/\s+/g, ' ').replace(/^["'“”\s]+|["'“”.\s]+$/g, '').slice(0, 80).trim();
+    ], { maxTokens: 24, temperature: 0.2 });
+    const title = String(out || '').split('\n')[0].replace(/\s+/g, ' ').replace(/^["'“”\s]+|["'“”.\s]+$/g, '').slice(0, 80).trim();
     return title || null;
   } catch (e) { return null; }
 }
