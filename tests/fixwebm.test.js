@@ -1,5 +1,7 @@
-// Correctness test for fix-webm-duration.js (run: node _test_fixwebm.js)
-const lib = require('./fix-webm-duration.js');
+// Correctness test for fix-webm-duration.js (run: node tests/fixwebm.test.js)
+// Kept OUT of extension/ — Chrome rejects unpacked folders containing files
+// whose names start with "_".
+const lib = require('../extension/fix-webm-duration.js');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; } else { fail++; console.log('  FAIL:', m); } };
 const parse = (arr) => { const f = lib.newFile(); f.setSource(new Uint8Array(arr)); return f; };
