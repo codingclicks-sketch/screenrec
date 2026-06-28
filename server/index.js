@@ -1177,13 +1177,19 @@ app.post('/api/recordings/:id/compose', requireAuth, async (req, res) => {
   const publicId = `screenrec/${req.userId}/${req.params.id}`;            // overwrite target
   const basePublic = `screenrec/${req.userId}/${seq[0].id}`;              // first clip = render base
   const overlayOf = (vid) => `video:${`screenrec/${req.userId}/${vid}`.replace(/\//g, ':')}`;
-  const transformation = [];
-  if (!seq[0].whole) transformation.push({ start_offset: r2(seq[0].start), end_offset: r2(seq[0].end) });
+  // Clips may come from different source videos at different resolutions, and
+  // Cloudinary's "splice" concat REQUIRES a common canvas (mismatched sizes →
+  // 400). Normalise every segment to 720p with letterbox padding (preserves
+  // aspect ratio, no distortion, no cropping).
+  const fit = { width: 1280, height: 720, crop: 'pad', background: 'black' };
+  const base0 = { ...fit };
+  if (!seq[0].whole) { base0.start_offset = r2(seq[0].start); base0.end_offset = r2(seq[0].end); }
+  const transformation = [base0];
   for (let i = 1; i < seq.length; i++) {
     const c = seq[i];
-    transformation.push(c.whole
-      ? { overlay: overlayOf(c.id), flags: 'splice' }
-      : { overlay: overlayOf(c.id), flags: 'splice', start_offset: r2(c.start), end_offset: r2(c.end) });
+    const ov = { overlay: overlayOf(c.id), flags: 'splice', ...fit };
+    if (!c.whole) { ov.start_offset = r2(c.start); ov.end_offset = r2(c.end); }
+    transformation.push(ov);
     transformation.push({ flags: 'layer_apply' });
   }
 
