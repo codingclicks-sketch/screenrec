@@ -29,8 +29,20 @@ const LANGUAGE = process.env.WHISPER_LANGUAGE || (/\.en\.bin$/.test(MODEL_PATH) 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_STT_MODEL = process.env.GROQ_STT_MODEL || 'whisper-large-v3';   // NOT turbo — accuracy wins for Urdu
 const GROQ_STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
-const GROQ_MAX_BYTES = 24 * 1024 * 1024;   // stay under the 25 MB free-tier cap
-const CHUNK_SECONDS = 600;                  // 10-min chunks when a recording exceeds the cap
+const FFPROBE_BIN = process.env.FFPROBE_BIN || 'ffprobe';
+
+// ── Code-switch (multi-language) config — silence-VAD chunking ────────────────
+// A single Whisper call auto-detects ONE language from the first 30s window and
+// locks the WHOLE file to it (Urdu spoken after an English open → mis-transcribed
+// as English). Fix: split on natural pauses and transcribe each utterance with its
+// OWN independent auto-detect, then merge — so English stays English, Urdu stays Urdu.
+const VAD_NOISE = process.env.STT_VAD_NOISE || '-30dB';            // silence threshold (looser than ffmpeg's -60dB default)
+const VAD_MIN_SIL = Number(process.env.STT_VAD_MIN_SIL || 0.5);    // min silence (s) to count as a pause
+const CHUNK_MAX_SEC = Number(process.env.STT_CHUNK_MAX || 40);     // hard cap so no chunk exceeds Whisper's window
+const CHUNK_MIN_SEC = Number(process.env.STT_CHUNK_MIN || 1.5);    // merge sub-1.5s slivers (avoid 10s-billed waste)
+const CHUNK_PAD_SEC = 0.15;                                        // pad into surrounding silence so boundary words aren't clipped
+const MAX_CHUNKS = Number(process.env.STT_MAX_CHUNKS || 40);       // rate-limit safety: never exceed this many Groq calls
+const CHUNK_GAP_MS = Number(process.env.STT_CHUNK_GAP_MS || 3100); // ≥3s spacing → stays under Groq's 20 RPM
 
 // Available when Groq is keyed OR the local model is present (dev box → 501).
 function isConfigured() {
@@ -62,18 +74,17 @@ function sh(cmd, args, { timeout } = {}) {
   });
 }
 
-// ── Groq path: re-encode → (chunk if needed) → whisper-large-v3 → segments ────
-async function groqTranscribeFile(filePath, fileName, language) {
+// ── Groq path: VAD-chunk → per-chunk AUTO-DETECT → merge (true multi-language) ─
+// Each chunk auto-detects its OWN language (no `language` param). That is the whole
+// point: an Urdu utterance detects 'ur', an English one detects 'en'.
+async function groqTranscribeFile(filePath, fileName) {
   const buf = fs.readFileSync(filePath);
   const form = new FormData();                       // Node 18+ global
   form.append('file', new Blob([buf]), fileName);    // filename drives Groq's format sniffing
   form.append('model', GROQ_STT_MODEL);
   form.append('response_format', 'verbose_json');    // REQUIRED for timestamped segments
   form.append('temperature', '0');                   // deterministic → avoids repeated-line hallucination
-  // FORCE the spoken language when the user set one (ISO-639-1, e.g. 'ur') — this is
-  // what makes a mixed/Urdu video transcribe NATIVELY instead of being mis-detected
-  // as English. Omitted → auto-detect (so untagged English recordings still work).
-  if (language && language !== 'auto') form.append('language', language);
+  form.append('timestamp_granularities[]', 'segment');
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 180_000);
   let r;
@@ -88,8 +99,7 @@ async function groqTranscribeFile(filePath, fileName, language) {
 // verbose_json → VeoRec {text, language, segments:[{start,end,text}]} (Groq is already in SECONDS).
 function mapGroqJson(j, offsetSec = 0) {
   const segments = (j.segments || [])
-    // Whisper's own silence/low-confidence signature — drops the garbage repeated
-    // lines the tiny base model produced.
+    // Whisper's own silence/low-confidence signature — drops garbage repeated lines.
     .filter(s => !((s.no_speech_prob > 0.6) && (s.avg_logprob < -1)))
     .map(s => ({
       start: Math.round(((s.start || 0) + offsetSec) * 100) / 100,
@@ -100,24 +110,106 @@ function mapGroqJson(j, offsetSec = 0) {
   return { text: segments.map(s => s.text).join(' ').trim(), language: j.language || 'auto', segments };
 }
 
-async function transcribeViaGroq(inPath, tmp, language) {
-  // 16 kHz mono mp3 (~0.5 MB/min) so files stay well under the 25 MB cap.
-  const mp3Path = path.join(tmp, 'audio.mp3');
-  await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'libmp3lame', '-b:a', '64k', mp3Path], { timeout: 120_000 });
-  if (fs.statSync(mp3Path).size <= GROQ_MAX_BYTES) {
-    return mapGroqJson(await groqTranscribeFile(mp3Path, 'audio.mp3', language));
+// ffprobe → media duration in seconds (0 if unreadable).
+async function probeDuration(filePath) {
+  try {
+    const { out } = await sh(FFPROBE_BIN, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', filePath], { timeout: 30_000 });
+    const d = parseFloat(String(out).trim());
+    return Number.isFinite(d) ? d : 0;
+  } catch { return 0; }
+}
+
+// ffmpeg silencedetect (logs to STDERR) → array of {start,end} silence intervals.
+async function detectSilences(filePath) {
+  let err = '';
+  try {
+    const res = await sh(FFMPEG_BIN, ['-hide_banner', '-nostats', '-nostdin', '-i', filePath, '-af', `silencedetect=noise=${VAD_NOISE}:d=${VAD_MIN_SIL}`, '-f', 'null', '-'], { timeout: 180_000 });
+    err = res.err;
+  } catch (e) { err = String(e && e.message || ''); }   // defensive — parse whatever we captured
+  const sils = [];
+  const re = /silence_start:\s*([\d.]+)|silence_end:\s*([\d.]+)/g;
+  let m, cur = null;
+  while ((m = re.exec(err))) {
+    if (m[1] !== undefined) cur = { start: parseFloat(m[1]), end: null };
+    else if (m[2] !== undefined && cur) { cur.end = parseFloat(m[2]); sils.push(cur); cur = null; }
   }
-  // Over the cap → split into fixed CHUNK_SECONDS pieces; merge with a time offset.
-  const pat = path.join(tmp, 'chunk_%03d.mp3');
-  await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', mp3Path, '-f', 'segment', '-segment_time', String(CHUNK_SECONDS), '-ar', '16000', '-ac', '1', '-c:a', 'libmp3lame', '-b:a', '64k', pat], { timeout: 300_000 });
-  const chunks = fs.readdirSync(tmp).filter(f => /^chunk_\d+\.mp3$/.test(f)).sort();
-  let allSegs = [], lang = 'auto';
+  return sils;
+}
+
+// Invert silences → speech chunks; pad into silence; merge slivers; cap length.
+function buildSpeechChunks(silences, duration) {
+  if (!duration || duration <= 0) return [];
+  let chunks = [], cursor = 0;
+  for (const s of silences) {
+    if (s.start > cursor) chunks.push({ start: cursor, end: Math.min(s.start, duration) });
+    cursor = Math.max(cursor, s.end);
+  }
+  if (cursor < duration) chunks.push({ start: cursor, end: duration });
+  chunks = chunks.map(c => ({ start: Math.max(0, c.start - CHUNK_PAD_SEC), end: Math.min(duration, c.end + CHUNK_PAD_SEC) }));
+  const merged = [];
+  for (const c of chunks) {
+    const prev = merged[merged.length - 1];
+    if (prev && (c.end - c.start < CHUNK_MIN_SEC)) prev.end = c.end;   // fold a sliver into the previous chunk
+    else merged.push({ ...c });
+  }
+  const capped = [];
+  for (const c of merged) {
+    let s = c.start;
+    while (c.end - s > CHUNK_MAX_SEC) { capped.push({ start: s, end: s + CHUNK_MAX_SEC }); s += CHUNK_MAX_SEC; }
+    if (c.end - s > 0.05) capped.push({ start: s, end: c.end });
+  }
+  return capped;
+}
+
+async function transcribeViaGroq(inPath, tmp) {
+  // 16 kHz mono WAV — Whisper's native rate; used for silence analysis + chunk cuts.
+  const wavPath = path.join(tmp, 'audio.wav');
+  await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wavPath], { timeout: 120_000 });
+
+  const duration = await probeDuration(wavPath);
+  const silences = await detectSilences(wavPath);
+  let chunks = buildSpeechChunks(silences, duration);
+
+  // FALLBACK: no usable pauses (continuous speech / very short clip / unknown
+  // duration) → single whole-file auto-detect call (best a single model can do).
+  if (!chunks.length || (chunks.length === 1 && (!duration || chunks[0].end - chunks[0].start >= duration - 0.5))) {
+    const mp3Path = path.join(tmp, 'whole.mp3');
+    await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', wavPath, '-c:a', 'libmp3lame', '-b:a', '64k', mp3Path], { timeout: 120_000 });
+    return mapGroqJson(await groqTranscribeFile(mp3Path, 'audio.mp3'));
+  }
+
+  // Rate-limit safety: if VAD over-split, pairwise-merge until ≤ MAX_CHUNKS calls.
+  while (chunks.length > MAX_CHUNKS) {
+    const merged = [];
+    for (let i = 0; i < chunks.length; i += 2) { const a = chunks[i], b = chunks[i + 1]; merged.push(b ? { start: a.start, end: b.end } : a); }
+    chunks = merged;
+  }
+
+  const allSegs = [], langDur = {};
   for (let i = 0; i < chunks.length; i++) {
-    const j = await groqTranscribeFile(path.join(tmp, chunks[i]), chunks[i], language);
-    if (i === 0) lang = j.language || 'auto';
-    allSegs = allSegs.concat(mapGroqJson(j, i * CHUNK_SECONDS).segments);   // fixed-width offset = i * T
+    const c = chunks[i];
+    const flac = path.join(tmp, `chunk_${String(i).padStart(3, '0')}.flac`);
+    await sh(FFMPEG_BIN, ['-nostdin', '-y', '-ss', String(c.start), '-to', String(c.end), '-i', wavPath, '-ac', '1', '-ar', '16000', '-c:a', 'flac', flac], { timeout: 60_000 });
+    let j;
+    try { j = await groqTranscribeFile(flac, `chunk_${i}.flac`); }
+    catch (e) {                                       // one retry after a backoff, then skip this chunk (keep the rest)
+      await new Promise(r => setTimeout(r, CHUNK_GAP_MS * 2));
+      try { j = await groqTranscribeFile(flac, `chunk_${i}.flac`); }
+      catch (e2) { console.error(`[transcribe] chunk ${i} skipped:`, e2.message); continue; }
+    }
+    const lang = j.language || 'auto';
+    langDur[lang] = (langDur[lang] || 0) + (c.end - c.start);
+    for (const s of mapGroqJson(j, c.start).segments) allSegs.push({ ...s, language: lang });   // absolute offset = chunk.start
+    if (i < chunks.length - 1) await new Promise(r => setTimeout(r, CHUNK_GAP_MS));              // pace under 20 RPM
   }
-  return { text: allSegs.map(s => s.text).join(' ').trim(), language: lang, segments: allSegs };
+  allSegs.sort((a, b) => a.start - b.start);
+
+  // Top-level language: one detected → that code; multiple → the language covering
+  // the most audio DURATION (chunk counts are skewed by pause frequency).
+  const langs = Object.keys(langDur);
+  const language = langs.length === 1 ? langs[0]
+    : langs.length > 1 ? langs.sort((a, b) => langDur[b] - langDur[a])[0] : 'auto';
+  return { text: allSegs.map(s => s.text).join(' ').trim(), language, segments: allSegs };
 }
 
 // ── Local whisper.cpp path (fallback when no Groq key) ───────────────────────
@@ -163,8 +255,10 @@ async function transcribeSource(srcUrlOrPath, language) {
       fs.copyFileSync(srcUrlOrPath, inPath);
     }
 
-    // 2. Prefer Groq's whisper-large-v3 when keyed; else local whisper.cpp.
-    if (GROQ_API_KEY) return await transcribeViaGroq(inPath, tmp, language);
+    // 2. Prefer Groq's whisper-large-v3 (multi-language VAD pipeline — `language`
+    //    is intentionally ignored: one behaviour = native mixed "Original"); else
+    //    local whisper.cpp (still honours `language` as a fallback).
+    if (GROQ_API_KEY) return await transcribeViaGroq(inPath, tmp);
     return await transcribeViaWhisperCli(inPath, tmp, language);
   } finally {
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
