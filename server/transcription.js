@@ -63,14 +63,17 @@ function sh(cmd, args, { timeout } = {}) {
 }
 
 // ── Groq path: re-encode → (chunk if needed) → whisper-large-v3 → segments ────
-async function groqTranscribeFile(filePath, fileName) {
+async function groqTranscribeFile(filePath, fileName, language) {
   const buf = fs.readFileSync(filePath);
   const form = new FormData();                       // Node 18+ global
   form.append('file', new Blob([buf]), fileName);    // filename drives Groq's format sniffing
   form.append('model', GROQ_STT_MODEL);
   form.append('response_format', 'verbose_json');    // REQUIRED for timestamped segments
   form.append('temperature', '0');                   // deterministic → avoids repeated-line hallucination
-  // NO 'language' field → auto-detect (so English recordings still transcribe correctly)
+  // FORCE the spoken language when the user set one (ISO-639-1, e.g. 'ur') — this is
+  // what makes a mixed/Urdu video transcribe NATIVELY instead of being mis-detected
+  // as English. Omitted → auto-detect (so untagged English recordings still work).
+  if (language && language !== 'auto') form.append('language', language);
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 180_000);
   let r;
@@ -97,12 +100,12 @@ function mapGroqJson(j, offsetSec = 0) {
   return { text: segments.map(s => s.text).join(' ').trim(), language: j.language || 'auto', segments };
 }
 
-async function transcribeViaGroq(inPath, tmp) {
+async function transcribeViaGroq(inPath, tmp, language) {
   // 16 kHz mono mp3 (~0.5 MB/min) so files stay well under the 25 MB cap.
   const mp3Path = path.join(tmp, 'audio.mp3');
   await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'libmp3lame', '-b:a', '64k', mp3Path], { timeout: 120_000 });
   if (fs.statSync(mp3Path).size <= GROQ_MAX_BYTES) {
-    return mapGroqJson(await groqTranscribeFile(mp3Path, 'audio.mp3'));
+    return mapGroqJson(await groqTranscribeFile(mp3Path, 'audio.mp3', language));
   }
   // Over the cap → split into fixed CHUNK_SECONDS pieces; merge with a time offset.
   const pat = path.join(tmp, 'chunk_%03d.mp3');
@@ -110,7 +113,7 @@ async function transcribeViaGroq(inPath, tmp) {
   const chunks = fs.readdirSync(tmp).filter(f => /^chunk_\d+\.mp3$/.test(f)).sort();
   let allSegs = [], lang = 'auto';
   for (let i = 0; i < chunks.length; i++) {
-    const j = await groqTranscribeFile(path.join(tmp, chunks[i]), chunks[i]);
+    const j = await groqTranscribeFile(path.join(tmp, chunks[i]), chunks[i], language);
     if (i === 0) lang = j.language || 'auto';
     allSegs = allSegs.concat(mapGroqJson(j, i * CHUNK_SECONDS).segments);   // fixed-width offset = i * T
   }
@@ -118,13 +121,14 @@ async function transcribeViaGroq(inPath, tmp) {
 }
 
 // ── Local whisper.cpp path (fallback when no Groq key) ───────────────────────
-async function transcribeViaWhisperCli(inPath, tmp) {
+async function transcribeViaWhisperCli(inPath, tmp, language) {
   const wavPath = path.join(tmp, 'audio.wav');
   const outPrefix = path.join(tmp, 'out');
   await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wavPath], { timeout: 120_000 });
   const args = ['-m', MODEL_PATH, '-f', wavPath, '-oj', '-of', outPrefix, '-np'];
   if (THREADS) args.push('-t', String(THREADS));
-  if (LANGUAGE) args.push('-l', LANGUAGE);
+  const forceLang = (language && language !== 'auto') ? language : LANGUAGE;
+  if (forceLang) args.push('-l', forceLang);
   await sh(WHISPER_BIN, args, { timeout: 1000 * 60 * 30 });
   const j = JSON.parse(fs.readFileSync(`${outPrefix}.json`, 'utf8'));
   const segments = (j.transcription || [])
@@ -141,7 +145,7 @@ async function transcribeViaWhisperCli(inPath, tmp) {
   };
 }
 
-async function transcribeSource(srcUrlOrPath) {
+async function transcribeSource(srcUrlOrPath, language) {
   if (!isConfigured()) throw Object.assign(new Error('Transcription is not available on this server'), { code: 'unconfigured' });
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'veorec-stt-'));
@@ -160,15 +164,16 @@ async function transcribeSource(srcUrlOrPath) {
     }
 
     // 2. Prefer Groq's whisper-large-v3 when keyed; else local whisper.cpp.
-    if (GROQ_API_KEY) return await transcribeViaGroq(inPath, tmp);
-    return await transcribeViaWhisperCli(inPath, tmp);
+    if (GROQ_API_KEY) return await transcribeViaGroq(inPath, tmp, language);
+    return await transcribeViaWhisperCli(inPath, tmp, language);
   } finally {
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
   }
 }
 
-// Same signature the route already uses; accepts a URL or a local file path.
-function transcribeUrl(srcUrlOrPath) { return enqueue(() => transcribeSource(srcUrlOrPath)); }
+// Accepts a URL or local file path; `language` (ISO-639-1, e.g. 'ur') forces the
+// spoken language, or 'auto'/undefined to auto-detect.
+function transcribeUrl(srcUrlOrPath, language) { return enqueue(() => transcribeSource(srcUrlOrPath, language)); }
 
 // ── Title generation (100% free, unlimited, self-hosted — no API/LLM) ─────────
 // Derives a short, descriptive title from the transcript text using extractive
