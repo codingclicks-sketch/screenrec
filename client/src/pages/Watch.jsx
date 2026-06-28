@@ -49,6 +49,7 @@ export default function Watch() {
   const [pw, setPw] = useState('');
   const [pwErr, setPwErr] = useState('');
   const [copied, setCopied] = useState('');
+  const [videoReady, setVideoReady] = useState(false); // player can actually play
   const [menuOpen, setMenuOpen] = useState(false);   // header "more" (⋯) menu
   const [avatarOpen, setAvatarOpen] = useState(false); // account dropdown
   const [viewsOpen, setViewsOpen] = useState(false);   // views/insights popup
@@ -324,6 +325,24 @@ export default function Watch() {
 
   useEffect(() => { loadVideo(); /* eslint-disable-next-line */ }, [id]);
 
+  // Reveal the player only once the video can actually play — until then show a
+  // "processing" animation (a just-recorded video may still be finalising on
+  // Cloudinary). A safety timeout guarantees the overlay never traps the viewer.
+  useEffect(() => {
+    if (state !== 'ok') { setVideoReady(false); return; }
+    setVideoReady(false);
+    let done = false;
+    const ready = () => { if (!done) { done = true; setVideoReady(true); } };
+    const v = videoRef.current;
+    if (v) {
+      if (v.readyState >= 2) ready();
+      else { v.addEventListener('loadeddata', ready); v.addEventListener('canplay', ready); v.addEventListener('error', ready); }
+    }
+    const t = setTimeout(ready, 12000);
+    return () => { if (v) { v.removeEventListener('loadeddata', ready); v.removeEventListener('canplay', ready); v.removeEventListener('error', ready); } clearTimeout(t); };
+    /* eslint-disable-next-line */
+  }, [state, id]);
+
   async function unlock(e) {
     e.preventDefault();
     setPwErr('');
@@ -378,7 +397,12 @@ export default function Watch() {
       <Link to="/" className="btn-primary" style={{ marginTop: 16, display: 'inline-block' }}>← Dashboard</Link>
     </div>
   );
-  if (state === 'loading') return <div className={styles.center}><p>Loading…</p></div>;
+  if (state === 'loading') return (
+    <div className={styles.center}>
+      <Loader2 size={34} className={styles.spin} style={{ color: '#5b5bf6' }} />
+      <p style={{ marginTop: 14, color: '#9090a0' }}>Preparing your video…</p>
+    </div>
+  );
 
   if (state === 'login') return (
     <div className={styles.center}>
@@ -843,21 +867,36 @@ export default function Watch() {
           </div>
 
           {/* Custom player — reaction/comment markers sit ON the progress bar */}
-          <VideoPlayer
-            videoRef={videoRef}
-            src={src}
-            segments={Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null}
-            trimStart={rec.trimStart}
-            trimEnd={rec.trimEnd}
-            recommendedSpeed={rec.recommendedSpeed}
-            markers={markers.filter(m => m.kind === 'comment'
-              ? rec.audience?.comments !== false
-              : rec.audience?.reactions !== false)}
-            captions={(isOwner || rec.audience?.transcript !== false) ? (transcript?.segments || []) : []}
-            onMarkerClick={seekTo}
-            onTime={setVideoTime}
-            branding={rec.branding}
-          />
+          <div style={{ position: 'relative' }}>
+            <VideoPlayer
+              videoRef={videoRef}
+              src={src}
+              segments={Array.isArray(rec.segments) && rec.segments.length ? rec.segments : null}
+              trimStart={rec.trimStart}
+              trimEnd={rec.trimEnd}
+              recommendedSpeed={rec.recommendedSpeed}
+              markers={markers.filter(m => m.kind === 'comment'
+                ? rec.audience?.comments !== false
+                : rec.audience?.reactions !== false)}
+              captions={(isOwner || rec.audience?.transcript !== false) ? (transcript?.segments || []) : []}
+              onMarkerClick={seekTo}
+              onTime={setVideoTime}
+              branding={rec.branding}
+            />
+            {!videoReady && (
+              <div style={{
+                position: 'absolute', inset: 0, zIndex: 6, borderRadius: 12,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
+                background: 'rgba(15,15,25,0.86)', backdropFilter: 'blur(2px)',
+              }}>
+                <Loader2 size={40} className={styles.spin} style={{ color: '#fff' }} />
+                <strong style={{ color: '#fff', fontSize: 15 }}>Processing your video…</strong>
+                <span style={{ color: '#c7c7d6', fontSize: 13, textAlign: 'center', maxWidth: 320 }}>
+                  This usually takes a few seconds — it’ll start playing automatically.
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Loom-style floating reaction dock */}
           {(rec.audience?.reactions !== false || rec.audience?.comments !== false) && (

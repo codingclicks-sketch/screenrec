@@ -22,10 +22,13 @@ RUN cmake -B build \
       -DWHISPER_BUILD_EXAMPLES=ON \
     && cmake --build build -j --config Release --target whisper-cli
 
-# Base English model (~142 MB): fast + accurate for screen-recording narration.
+# Base MULTILINGUAL model (~142 MB): supports ~99 languages incl. Urdu, Hindi,
+# Arabic, Spanish, etc. Language is auto-detected per recording (WHISPER_LANGUAGE
+# below). For higher non-English accuracy, swap to ggml-small.bin (~466 MB, more
+# RAM) — change this URL + the COPY/ENV in stage 2.
 RUN mkdir -p /opt/models \
-    && curl -fL -o /opt/models/ggml-base.en.bin \
-       https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
+    && curl -fL -o /opt/models/ggml-base.bin \
+       https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
 
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim
@@ -44,10 +47,11 @@ COPY . .
 
 # whisper binary + model from the build stage.
 COPY --from=whisper-build /opt/whisper.cpp/build/bin/whisper-cli /usr/local/bin/whisper-cli
-COPY --from=whisper-build /opt/models/ggml-base.en.bin /app/models/ggml-base.en.bin
+COPY --from=whisper-build /opt/models/ggml-base.bin /app/models/ggml-base.bin
 
 ENV WHISPER_BIN=/usr/local/bin/whisper-cli \
-    WHISPER_MODEL_PATH=/app/models/ggml-base.en.bin \
+    WHISPER_MODEL_PATH=/app/models/ggml-base.bin \
+    WHISPER_LANGUAGE=auto \
     NODE_ENV=production
 
 EXPOSE 3001

@@ -15,9 +15,11 @@ const path = require('path');
 
 const WHISPER_BIN = process.env.WHISPER_BIN || 'whisper-cli';
 const FFMPEG_BIN = process.env.FFMPEG_BIN || 'ffmpeg';
-const MODEL_PATH = process.env.WHISPER_MODEL_PATH || path.join(__dirname, 'models', 'ggml-base.en.bin');
+const MODEL_PATH = process.env.WHISPER_MODEL_PATH || path.join(__dirname, 'models', 'ggml-base.bin');
 const THREADS = process.env.WHISPER_THREADS || '';      // empty → whisper.cpp default
-const LANGUAGE = process.env.WHISPER_LANGUAGE || '';     // e.g. 'auto' for multilingual models
+// Multilingual model → 'auto' lets whisper detect the spoken language per file
+// (Urdu, Hindi, Arabic, etc.). For the English-only .en model this is ignored.
+const LANGUAGE = process.env.WHISPER_LANGUAGE || (/\.en\.bin$/.test(MODEL_PATH) ? '' : 'auto');
 
 // Available whenever the compiled model is present (i.e. in the built image).
 // Lets the dev box (no model) degrade gracefully to a 501 instead of crashing.
