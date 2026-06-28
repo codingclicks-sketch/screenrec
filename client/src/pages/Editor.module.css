@@ -89,3 +89,39 @@
 .pickerItem:hover { border-color: #5b5bf6; color: #fff; }
 .pickerItem span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pickerEmpty { font-size: 13px; color: #8a8aa0; text-align: center; padding: 12px; }
+
+/* ── Multi-clip timeline blocks (drag to reorder · split · delete) ────────── */
+.clip { position: absolute; top: 3px; bottom: 3px; background: linear-gradient(180deg, rgba(91,91,246,.55), rgba(91,91,246,.3)); border: 1.5px solid #5b5bf6; border-radius: 9px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; padding: 0 11px; overflow: hidden; cursor: grab; user-select: none; transition: box-shadow .12s, transform .08s; }
+.clip:hover { box-shadow: 0 0 0 1px #8a8aff inset; }
+.clipAlt { background: linear-gradient(180deg, rgba(124,92,246,.6), rgba(124,92,246,.3)); border-color: #9b7cff; }
+.clipSel { box-shadow: 0 0 0 2px #fff inset; }
+.clipDrag { cursor: grabbing; opacity: .9; box-shadow: 0 10px 26px rgba(0,0,0,.45); z-index: 6; }
+.clipName { font-size: 11.5px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.clipDur { font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,.72); pointer-events: none; margin-top: 1px; }
+.clipDel { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 6px; background: rgba(13,13,21,.7); color: #ffb0b0; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .12s; }
+.clip:hover .clipDel { opacity: 1; }
+.clipDel:hover { background: #ff4b4b; color: #fff; }
+
+/* ── Add-video popup (tabs: gallery / upload) ─────────────────────────────── */
+.modalBg { position: fixed; inset: 0; background: rgba(8,8,14,.82); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; z-index: 120; padding: 20px; }
+.modal { background: #14141d; border: 1px solid #2a2a3a; border-radius: 18px; width: 100%; max-width: 720px; max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 24px 70px rgba(0,0,0,.55); overflow: hidden; }
+.modalHead { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #23232e; }
+.tabs { display: flex; gap: 6px; background: #1c1c28; padding: 4px; border-radius: 11px; }
+.tab { background: none; border: none; color: #9a9ab0; font-size: 13.5px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; }
+.tab:hover { color: #fff; }
+.tabActive, .tabActive:hover { background: #5b5bf6; color: #fff; }
+.modalClose { background: #1e1e2a; border: 1px solid #2c2c3a; color: #b8b8c8; width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.modalClose:hover { color: #fff; background: #262633; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; padding: 18px; overflow-y: auto; }
+.galCard { display: flex; flex-direction: column; gap: 8px; background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
+.galThumb { position: relative; aspect-ratio: 16/9; border-radius: 11px; overflow: hidden; background: #1a1a2e; border: 1.5px solid #2c2c3a; display: block; }
+.galThumb img, .galThumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.galCard:hover .galThumb { border-color: #5b5bf6; }
+.galPh { position: absolute; inset: 0; background: #1a1a2e; }
+.galDur { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.78); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 5px; }
+.galTitle { font-size: 13px; font-weight: 600; color: #e6e6ef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.galEmpty { grid-column: 1/-1; text-align: center; color: #8a8aa0; font-size: 14px; padding: 46px 0; }
+.uploadZone { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin: 18px; padding: 50px 24px; border: 2px dashed #3a3a4c; border-radius: 14px; color: #b8b8c8; cursor: pointer; text-align: center; }
+.uploadZone:hover { border-color: #5b5bf6; color: #fff; background: #16161f; }
+.uploadZone strong { font-size: 15.5px; color: #fff; }
+.uploadZone span { font-size: 12.5px; color: #8a8aa0; max-width: 320px; }

@@ -1,338 +1,245 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Play, Pause, Scissors, Trash2, RotateCcw, ArrowLeft, Save, SkipBack, SkipForward, Plus, Upload, X, Film } from 'lucide-react';
+import { Play, Pause, Scissors, RotateCcw, ArrowLeft, Save, SkipBack, SkipForward, Plus, Upload, Film, X } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import API from '../api';
 import s from './Editor.module.css';
 
 function fmt(t) {
   if (!isFinite(t)) t = 0;
-  const m = Math.floor(t / 60);
-  const sec = Math.floor(t % 60);
+  const m = Math.floor(t / 60), sec = Math.floor(t % 60);
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-// The editor works in "keep-segments": an ordered list of {start,end} ranges to
-// keep. Splitting divides a segment; deleting removes one; the preview plays only
-// the kept ranges (skipping cut gaps). Saved virtually — no re-encoding.
+let KEY = 1;
+const mkKey = () => 'c' + (KEY++);
+
+// Gallery card thumbnail — static poster + muted autoplay video on hover (matches
+// the library's animated thumbnail).
+function GalThumb({ v }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <span className={s.galThumb} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      {v.thumbnail ? <img src={v.thumbnail} alt="" loading="lazy" /> : <span className={s.galPh} />}
+      {hover && <video src={v.filename} muted autoPlay loop playsInline />}
+      <span className={s.galDur}>{fmt(v.duration || 0)}</span>
+    </span>
+  );
+}
+
+// The editor is a horizontal multi-clip timeline. Each clip is {id, in, out} from
+// some owned video. You can reorder (drag), split, delete and add clips. Saving
+// trims (base-only) or composes (multi-video) server-side via Cloudinary.
 export default function Editor() {
   const { id } = useParams();
   const { authFetch } = useAuth();
   const navigate = useNavigate();
   const videoRef = useRef(null);
   const trackRef = useRef(null);
+  const loadedKey = useRef(null);
 
   const [rec, setRec] = useState(null);
-  const [duration, setDuration] = useState(0);
-  const [segments, setSegments] = useState([]); // [{start,end}]
-  const [playhead, setPlayhead] = useState(0);
+  const [clips, setClips] = useState([]); // [{key,id,src,title,dur,in,out}]
+  const [playhead, setPlayhead] = useState(0); // global seconds
   const [playing, setPlaying] = useState(false);
+  const [selKey, setSelKey] = useState(null);
+  const [dragKey, setDragKey] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [drag, setDrag] = useState(null); // { segIndex, edge } while dragging a handle
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [exportMsg, setExportMsg] = useState('');
   const [indeterminate, setIndeterminate] = useState(false);
-  const [chooser, setChooser] = useState(false); // overwrite-vs-copy dialog
-  const [appendClips, setAppendClips] = useState([]); // [{id,title}] clips to add after
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [myVideos, setMyVideos] = useState(null);
-  const [loadingClip, setLoadingClip] = useState(false);
+  const [chooser, setChooser] = useState(false);
+  const [picker, setPicker] = useState(null); // { tab, videos, uploading }
 
   useEffect(() => {
     authFetch(`${API}/api/recordings/${id}`).then((r) => r.json()).then((d) => {
       setRec(d);
       const dur = d.duration || 0;
-      setDuration(dur);
-      if (Array.isArray(d.segments) && d.segments.length) setSegments(d.segments);
-      else {
-        const start = d.trimStart != null ? d.trimStart : 0;
-        const end = d.trimEnd != null ? d.trimEnd : dur;
-        setSegments([{ start, end: end || dur }]);
+      let init;
+      if (Array.isArray(d.segments) && d.segments.length) {
+        init = d.segments.map((sg) => ({ key: mkKey(), id, src: d.filename, title: d.title, dur, in: sg.start, out: sg.end }));
+      } else {
+        const st = d.trimStart != null ? d.trimStart : 0, en = d.trimEnd != null ? d.trimEnd : dur;
+        init = [{ key: mkKey(), id, src: d.filename, title: d.title, dur, in: st, out: en || dur }];
       }
+      setClips(init);
     }).catch(() => {});
   }, [id]);
 
-  // When metadata loads, prefer the real measured duration.
-  function onMeta() {
-    const v = videoRef.current;
-    if (v && isFinite(v.duration) && v.duration > 0) {
-      setDuration(v.duration);
-      setSegments((segs) => (segs.length ? segs.map((sg, i) => (i === segs.length - 1 && (!sg.end || sg.end > v.duration) ? { ...sg, end: v.duration } : sg)) : [{ start: 0, end: v.duration }]));
+  const len = (c) => Math.max(0, c.out - c.in);
+  const total = useMemo(() => clips.reduce((a, c) => a + len(c), 0), [clips]);
+  const startOf = (i) => clips.slice(0, i).reduce((a, c) => a + len(c), 0);
+  function locate(g) {
+    let a = 0;
+    for (let i = 0; i < clips.length; i++) {
+      const l = len(clips[i]);
+      if (g < a + l || i === clips.length - 1) return { i, off: Math.max(0, Math.min(l, g - a)) };
+      a += l;
     }
+    return { i: 0, off: 0 };
   }
 
-  // ── Playback that skips cut gaps ──────────────────────────────────────────────
+  // ── Preview: load the clip under the playhead; switch <video> src per clip ─────
+  const here = useMemo(() => locate(playhead), [playhead, clips]);
+  const hereClip = clips[here.i];
+  useEffect(() => {
+    const v = videoRef.current; const c = hereClip; if (!v || !c) return;
+    if (loadedKey.current === c.key) return;
+    loadedKey.current = c.key;
+    const off = here.off;
+    const go = () => { try { v.currentTime = c.in + off; } catch (e) {} if (playing) v.play().catch(() => {}); };
+    if (v.src !== c.src) { v.src = c.src; v.onloadeddata = () => { v.onloadeddata = null; go(); }; }
+    else go();
+    // eslint-disable-next-line
+  }, [hereClip && hereClip.key]);
+
   function onTimeUpdate() {
-    const v = videoRef.current;
-    if (!v) return;
-    const t = v.currentTime;
-    setPlayhead(t);
-    // Find the kept segment we're in; if in a gap, jump to next segment start.
-    const inSeg = segments.find((sg) => t >= sg.start - 0.05 && t < sg.end);
-    if (!inSeg) {
-      const next = segments.find((sg) => sg.start > t);
-      if (next) { v.currentTime = next.start; }
-      else { v.pause(); setPlaying(false); v.currentTime = segments[0]?.start || 0; }
+    const v = videoRef.current; if (!v) return;
+    const c = clips.find((x) => x.key === loadedKey.current); if (!c) return;
+    const i = clips.indexOf(c);
+    if (v.currentTime >= c.out - 0.05) {
+      if (i < clips.length - 1) setPlayhead(startOf(i + 1) + 0.01);
+      else { v.pause(); setPlaying(false); setPlayhead(total); }
+    } else {
+      setPlayhead(Math.min(total, startOf(i) + Math.max(0, v.currentTime - c.in)));
     }
   }
-
   function togglePlay() {
     const v = videoRef.current; if (!v) return;
-    if (v.paused) {
-      // start from first kept segment if outside
-      if (!segments.some((sg) => v.currentTime >= sg.start && v.currentTime < sg.end)) v.currentTime = segments[0]?.start || 0;
-      v.play(); setPlaying(true);
-    } else { v.pause(); setPlaying(false); }
+    if (v.paused) { setPlaying(true); if (playhead >= total - 0.1) seekGlobal(0); v.play().catch(() => {}); }
+    else { v.pause(); setPlaying(false); }
   }
-
-  function seekTo(t) {
-    const v = videoRef.current; if (!v) return;
-    v.currentTime = Math.max(0, Math.min(duration, t));
-    setPlayhead(v.currentTime);
-  }
-
-  // px ↔ seconds on the timeline track
-  function clientXToTime(clientX) {
+  function clientXToGlobal(clientX) {
     const rect = trackRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    return ratio * duration;
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * total;
   }
-
-  function onTrackClick(e) {
-    if (drag) return;
-    seekTo(clientXToTime(e.clientX));
+  function seekGlobal(g) {
+    g = Math.max(0, Math.min(total, g));
+    const { i, off } = locate(g);
+    const c = clips[i];
+    setPlayhead(g);
+    if (c && loadedKey.current === c.key) { const v = videoRef.current; if (v) v.currentTime = c.in + off; }
   }
 
   // ── Edits ─────────────────────────────────────────────────────────────────────
   function splitAtPlayhead() {
-    const t = playhead;
-    setSegments((segs) => {
-      const i = segs.findIndex((sg) => t > sg.start + 0.2 && t < sg.end - 0.2);
-      if (i === -1) return segs;
-      const sg = segs[i];
-      const next = [...segs];
-      next.splice(i, 1, { start: sg.start, end: t }, { start: t, end: sg.end });
+    const { i, off } = locate(playhead);
+    if (!clips[i] || off < 0.2 || off > len(clips[i]) - 0.2) return;
+    setClips((cs) => {
+      const c = cs[i]; const next = [...cs];
+      next.splice(i, 1, { ...c, key: mkKey(), out: c.in + off }, { ...c, key: mkKey(), in: c.in + off });
       return next;
     });
   }
-  function deleteSegment(i) {
-    setSegments((segs) => (segs.length <= 1 ? segs : segs.filter((_, idx) => idx !== i)));
+  function delClip(key) {
+    setClips((cs) => (cs.length <= 1 ? cs : cs.filter((c) => c.key !== key)));
+    if (selKey === key) setSelKey(null);
   }
   function resetEdits() {
-    setSegments([{ start: 0, end: duration }]);
-    setAppendClips([]);
+    if (!rec) return;
+    const dur = rec.duration || 0;
+    loadedKey.current = null;
+    setClips([{ key: mkKey(), id, src: rec.filename, title: rec.title, dur, in: 0, out: dur }]);
+    setPlayhead(0);
   }
 
-  // ── Add other clips (library or upload) ───────────────────────────────────────
-  function upsell() {
-    if (window.confirm('Combining clips is a Pro feature. Open pricing to upgrade?')) navigate('/pricing');
-  }
-  function openPicker() {
-    if (rec && rec.canStitch === false) { upsell(); return; }
-    setPickerOpen((o) => !o);
-    if (myVideos == null) {
-      authFetch(`${API}/api/recordings`).then((r) => (r.ok ? r.json() : []))
-        .then((d) => setMyVideos(Array.isArray(d) ? d.filter((v) => v.id !== id) : []))
-        .catch(() => setMyVideos([]));
-    }
-  }
-  function addFromLibrary(v) { setAppendClips((c) => [...c, { id: v.id, title: v.title }]); setPickerOpen(false); }
-  function removeAppend(i) { setAppendClips((c) => c.filter((_, idx) => idx !== i)); }
-  async function uploadClip(file) {
-    if (!file) return;
-    setLoadingClip(true);
-    try {
-      const name = (file.name || 'Uploaded clip').replace(/\.[^.]+$/, '').slice(0, 60);
-      const form = new FormData();
-      form.append('video', file, file.name || 'clip.mp4');
-      form.append('title', name || 'Uploaded clip');
-      form.append('duration', '0');
-      const res = await authFetch(`${API}/api/upload`, { method: 'POST', body: form });
-      const d = await res.json().catch(() => ({}));
-      if (res.ok && d.id) { setAppendClips((c) => [...c, { id: d.id, title: name || 'Uploaded clip' }]); setPickerOpen(false); }
-      else alert(d.error || 'Could not upload that clip.');
-    } catch { alert('Upload failed — please try again.'); }
-    finally { setLoadingClip(false); }
-  }
-
-  // Drag a segment edge (trim handle)
+  // Pointer drag to reorder a clip on the timeline.
   useEffect(() => {
-    if (!drag) return;
+    if (!dragKey) return;
     function move(e) {
-      const t = clientXToTime(e.clientX);
-      setSegments((segs) => segs.map((sg, i) => {
-        if (i !== drag.segIndex) return sg;
-        if (drag.edge === 'start') return { ...sg, start: Math.max(i > 0 ? segs[i - 1].end : 0, Math.min(t, sg.end - 0.3)) };
-        return { ...sg, end: Math.min(i < segs.length - 1 ? segs[i + 1].start : duration, Math.max(t, sg.start + 0.3)) };
-      }));
+      const g = clientXToGlobal(e.clientX);
+      const { i: target } = locate(g);
+      setClips((cs) => {
+        const from = cs.findIndex((c) => c.key === dragKey);
+        if (from === -1 || from === target) return cs;
+        const next = [...cs]; const [m] = next.splice(from, 1); next.splice(target, 0, m); return next;
+      });
     }
-    function up() { setDrag(null); }
+    function up() { setDragKey(null); }
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
     return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-  }, [drag, duration]);
+    // eslint-disable-next-line
+  }, [dragKey, total]);
 
-  const keptDuration = useMemo(() => segments.reduce((a, sg) => a + (sg.end - sg.start), 0), [segments]);
-
-  // Seek a media element and resolve once the frame is ready.
-  function seek(video, t) {
-    return new Promise((res) => {
-      const on = () => { video.removeEventListener('seeked', on); res(); };
-      video.addEventListener('seeked', on);
-      video.currentTime = Math.min(t, (video.duration || t));
-    });
+  // ── Add clips (popup: gallery / upload) ───────────────────────────────────────
+  function openPicker() {
+    if (rec && rec.canStitch === false) { if (window.confirm('Adding clips is a Pro feature. Open pricing to upgrade?')) navigate('/pricing'); return; }
+    setPicker({ tab: 'gallery', videos: null, uploading: false });
+    authFetch(`${API}/api/recordings`).then((r) => (r.ok ? r.json() : []))
+      .then((d) => setPicker((p) => p && { ...p, videos: Array.isArray(d) ? d.filter((v) => v.id !== id) : [] }))
+      .catch(() => setPicker((p) => p && { ...p, videos: [] }));
   }
-
-  // Physically re-render only the kept segments into a new WebM (real trim).
-  // Video via canvas.captureStream; audio routed through WebAudio to a stream
-  // destination (so nothing plays aloud) and recorded together.
-  async function renderTrimmed(srcUrl, segs, onProgress) {
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.src = srcUrl; video.playsInline = true; video.muted = false; video.preload = 'auto';
-    await new Promise((res, rej) => { video.onloadedmetadata = res; video.onerror = () => rej(new Error('Could not load video')); });
-    const w = video.videoWidth || 1280, h = video.videoHeight || 720;
-    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    const canvasStream = canvas.captureStream(30);
-
-    const AC = window.AudioContext || window.webkitAudioContext;
-    const ac = new AC();
-    let audioTracks = [];
+  function addClip(vid, src, title, dur) {
+    setClips((cs) => [...cs, { key: mkKey(), id: vid, src, title, dur: dur || 0, in: 0, out: dur || 0 }]);
+    setPicker(null);
+  }
+  function addFromGallery(v) { addClip(v.id, v.filename, v.title, v.duration || 0); }
+  async function uploadClip(file) {
+    if (!file) return;
+    setPicker((p) => p && { ...p, uploading: true });
     try {
-      const srcNode = ac.createMediaElementSource(video);
-      const dest = ac.createMediaStreamDestination();
-      srcNode.connect(dest); // NOT connected to ac.destination → silent to user
-      audioTracks = dest.stream.getAudioTracks();
-    } catch { /* no audio — proceed video-only */ }
-
-    const stream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
-    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus'
-      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
-    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
-    const chunks = [];
-    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-
-    const total = segs.reduce((a, s) => a + (s.end - s.start), 0) || 1;
-    let done = 0, raf;
-    const draw = () => { try { ctx.drawImage(video, 0, 0, w, h); } catch {} raf = requestAnimationFrame(draw); };
-
-    const blob = await new Promise(async (resolve) => {
-      rec.onstop = () => { cancelAnimationFrame(raf); try { ac.close(); } catch {} resolve(new Blob(chunks, { type: 'video/webm' })); };
-      rec.start();
-      draw();
-      for (const sg of segs) {
-        await seek(video, sg.start);
-        try { await video.play(); } catch {}
-        await new Promise((res) => {
-          let settled = false;
-          const finish = () => { if (settled) return; settled = true; try { video.pause(); } catch {} res(); };
-          const check = () => {
-            if (settled) return;
-            // Resolve when we reach the segment end OR the video naturally ends
-            // (at the natural end the element is PAUSED, so this must be checked
-            // independently of paused state — that was the 99% stall bug).
-            if (video.ended || video.currentTime >= sg.end - 0.04) { finish(); return; }
-            onProgress(Math.min(0.99, (done + Math.max(0, video.currentTime - sg.start)) / total));
-            requestAnimationFrame(check);
-          };
-          video.addEventListener('ended', finish, { once: true });
-          check();
-        });
-        done += (sg.end - sg.start);
-        onProgress(Math.min(0.99, done / total));
-      }
-      // give the recorder a tick to flush the last frames, then stop
-      await new Promise((r) => setTimeout(r, 120));
-      rec.stop();
-    });
-    return blob;
+      const name = (file.name || 'Uploaded clip').replace(/\.[^.]+$/, '').slice(0, 60) || 'Uploaded clip';
+      const form = new FormData();
+      form.append('video', file, file.name || 'clip.mp4');
+      form.append('title', name); form.append('duration', '0');
+      const res = await authFetch(`${API}/api/upload`, { method: 'POST', body: form });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.id) { alert(d.error || 'Could not upload that clip.'); setPicker((p) => p && { ...p, uploading: false }); return; }
+      // grab the playable URL + measured duration of the new asset
+      let meta = {};
+      try { meta = await authFetch(`${API}/api/recordings/${d.id}`).then((x) => x.json()); } catch (e) {}
+      addClip(d.id, meta.filename || '', name, meta.duration || 0);
+    } catch (e) { alert('Upload failed — please try again.'); setPicker((p) => p && { ...p, uploading: false }); }
   }
 
-  async function clientRender(mode = 'overwrite') {
-    // Fallback path: render in the browser and replace (or copy) the original.
-    setIndeterminate(false); setProgress(0); setExportMsg('Rendering your trimmed video in your browser… keep this tab open.');
-    const blob = await renderTrimmed(rec.filename, segments, (p) => setProgress(p));
-    setProgress(1); setExportMsg(mode === 'copy' ? 'Uploading your trimmed copy…' : 'Uploading trimmed video…');
-    const form = new FormData();
-    form.append('video', blob, 'trimmed.webm');
-    form.append('duration', String(Math.round(keptDuration)));
-    if (mode === 'copy') form.append('mode', 'copy');
-    const res = await authFetch(`${API}/api/recordings/${id}/replace`, { method: 'POST', body: form });
-    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Upload failed'); }
-  }
-
-  // The Save button: if there's an actual trim, ask how to save it; otherwise
-  // there's nothing to bake, so just clear any virtual edits.
+  // ── Save ──────────────────────────────────────────────────────────────────────
+  const hasOther = clips.some((c) => c.id !== id);
   function onSaveClick() {
-    const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
-    if (appendClips.length === 0 && isFull) { save('overwrite'); return; }
+    const baseFull = !hasOther && clips.length === 1 && clips[0].in <= 0.05 && clips[0].out >= (rec.duration || 0) - 0.05;
+    if (baseFull) { saveTrim('overwrite'); return; }
     setChooser(true);
   }
-
-  async function save(mode = 'overwrite') {
-    setChooser(false);
-    // Compose path — trim the base AND append the added clips (Pro feature).
-    if (appendClips.length) {
-      if (rec.canStitch === false) { upsell(); return; }
-      try { videoRef.current && videoRef.current.pause(); } catch {}
-      setExporting(true); setIndeterminate(true); setProgress(0);
-      setExportMsg(mode === 'copy' ? 'Combining your clips into a new copy…' : 'Combining your clips on our servers…');
-      try {
-        const res = await authFetch(`${API}/api/recordings/${id}/compose`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ segments, appendIds: appendClips.map((c) => c.id), mode }),
-        });
-        const d = await res.json().catch(() => ({}));
-        if (res.ok) { setIndeterminate(false); setProgress(1); setExportMsg('Saved ✓ Your clips are combined.'); setTimeout(() => navigate(d.id ? `/watch/${d.id}` : '/'), 1100); return; }
-        if (res.status === 403 && d.code === 'feature_locked') { setExporting(false); upsell(); return; }
-        throw new Error(d.error || 'Combine failed');
-      } catch (e) {
-        setIndeterminate(false); setExportMsg('Could not combine: ' + (e.message || 'error'));
-        setTimeout(() => setExporting(false), 2800);
-      }
-      return;
-    }
-    const copy = mode === 'copy';
-    const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
+  function doSave(mode) { setChooser(false); if (hasOther) saveCompose(mode); else saveTrim(mode); }
+  async function saveCompose(mode) {
+    if (rec.canStitch === false) { if (window.confirm('Adding clips is a Pro feature. Upgrade?')) navigate('/pricing'); return; }
+    try { videoRef.current && videoRef.current.pause(); } catch (e) {}
+    setExporting(true); setIndeterminate(true); setProgress(0);
+    setExportMsg(mode === 'copy' ? 'Building your video into a new copy…' : 'Building your video on our servers…');
+    try {
+      const res = await authFetch(`${API}/api/recordings/${id}/compose`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clips: clips.map((c) => ({ id: c.id, start: c.in, end: c.out })), mode }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) { setIndeterminate(false); setProgress(1); setExportMsg('Saved ✓ Your video is ready.'); setTimeout(() => navigate(d.id ? `/watch/${d.id}` : '/'), 1100); return; }
+      if (res.status === 403 && d.code === 'feature_locked') { setExporting(false); if (window.confirm('Adding clips is a Pro feature. Upgrade?')) navigate('/pricing'); return; }
+      throw new Error(d.error || 'Save failed');
+    } catch (e) { setIndeterminate(false); setExportMsg('Could not save: ' + (e.message || 'error')); setTimeout(() => setExporting(false), 2800); }
+  }
+  async function saveTrim(mode) {
+    const segments = clips.map((c) => ({ start: c.in, end: c.out }));
+    const isFull = clips.length === 1 && segments[0].start <= 0.05 && segments[0].end >= (rec.duration || 0) - 0.05;
     if (isFull) {
       setSaving(true);
       await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments: null, trimStart: null, trimEnd: null }) });
-      setSaving(false); setSaved(true); setTimeout(() => navigate('/'), 900);
-      return;
+      setSaving(false); setTimeout(() => navigate('/'), 800); return;
     }
-    try { videoRef.current && videoRef.current.pause(); } catch {}
+    try { videoRef.current && videoRef.current.pause(); } catch (e) {}
     setExporting(true); setIndeterminate(true); setProgress(0);
-    setExportMsg(copy ? 'Creating a trimmed copy on our servers…' : 'Trimming your video on our servers…');
-    const doneMsg = copy ? 'Saved ✓ Trimmed copy added to your library.' : 'Saved ✓ Your video is trimmed.';
+    setExportMsg(mode === 'copy' ? 'Creating a trimmed copy…' : 'Trimming your video…');
     try {
-      // Fast path: let the server (Cloudinary) cut + splice the segments.
-      const res = await authFetch(`${API}/api/recordings/${id}/trim`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments, mode }),
-      });
-      if (res.ok) { setIndeterminate(false); setProgress(1); setExportMsg(doneMsg); setTimeout(() => navigate('/'), 1100); return; }
-      // Server can't do it (e.g. local/dev) → render in the browser instead.
-      if (res.status === 501) { await clientRender(mode); setExportMsg(doneMsg); setTimeout(() => navigate('/'), 1100); return; }
+      const res = await authFetch(`${API}/api/recordings/${id}/trim`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments, mode }) });
       const d = await res.json().catch(() => ({}));
-      throw new Error(d.error || 'Server trim failed');
-    } catch (e) {
-      // Last-resort: browser render; if that also fails, save a virtual trim.
-      try {
-        await clientRender(mode);
-        setExportMsg(doneMsg); setTimeout(() => navigate('/'), 1100);
-      } catch (e2) {
-        setIndeterminate(false);
-        setExportMsg('Could not render (' + (e2.message || e.message) + '). Saved as a virtual trim instead.');
-        await authFetch(`${API}/api/recordings/${id}/meta`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ segments, trimStart: segments[0].start, trimEnd: segments[segments.length - 1].end }) }).catch(() => {});
-        setTimeout(() => setExporting(false), 2800);
-      }
-    }
+      if (res.ok) { setIndeterminate(false); setProgress(1); setExportMsg('Saved ✓'); setTimeout(() => navigate('/'), 1100); return; }
+      throw new Error(d.error || 'Trim failed');
+    } catch (e) { setIndeterminate(false); setExportMsg('Could not trim: ' + (e.message || 'error')); setTimeout(() => setExporting(false), 2800); }
   }
 
   if (!rec) return <div className={s.loading}>Loading editor…</div>;
-  const pct = (t) => (duration ? (t / duration) * 100 : 0);
+  const pctL = (i) => (total ? (startOf(i) / total) * 100 : 0);
+  const pctW = (c) => (total ? (len(c) / total) * 100 : 0);
 
   return (
     <div className={s.page}>
@@ -342,117 +249,100 @@ export default function Editor() {
         <div className={s.topActions}>
           <button className={s.ghost} onClick={resetEdits}><RotateCcw size={15} /> Reset</button>
           <button className={s.primary} onClick={onSaveClick} disabled={saving}>
-            <Save size={15} /> {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
+            <Save size={15} /> {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </header>
 
       <div className={s.stage}>
-        <video
-          ref={videoRef}
-          className={s.video}
-          src={rec.filename}
-          onLoadedMetadata={onMeta}
-          onTimeUpdate={onTimeUpdate}
-          onClick={togglePlay}
-          playsInline
-        />
+        <video ref={videoRef} className={s.video} onTimeUpdate={onTimeUpdate} onClick={togglePlay} playsInline />
       </div>
 
-      {/* Transport */}
+      {/* Transport — Add video sits beside Split */}
       <div className={s.transport}>
-        <button className={s.tbtn} onClick={() => seekTo(playhead - 5)} title="Back 5s"><SkipBack size={18} /></button>
+        <button className={s.tbtn} onClick={() => seekGlobal(playhead - 5)} title="Back 5s"><SkipBack size={18} /></button>
         <button className={s.playBtn} onClick={togglePlay}>{playing ? <Pause size={20} /> : <Play size={20} fill="currentColor" />}</button>
-        <button className={s.tbtn} onClick={() => seekTo(playhead + 5)} title="Forward 5s"><SkipForward size={18} /></button>
-        <div className={s.time}>{fmt(playhead)} <span>/ {fmt(duration)}</span></div>
+        <button className={s.tbtn} onClick={() => seekGlobal(playhead + 5)} title="Forward 5s"><SkipForward size={18} /></button>
+        <div className={s.time}>{fmt(playhead)} <span>/ {fmt(total)}</span></div>
         <div className={s.spacer} />
+        <button className={s.tbtn} onClick={openPicker} title="Add a video clip">
+          <Plus size={17} /> Add video{rec.canStitch === false && <span className={s.proTag}>Pro</span>}
+        </button>
         <button className={s.tbtn} onClick={splitAtPlayhead} title="Split at playhead"><Scissors size={17} /> Split</button>
       </div>
 
-      {/* Timeline */}
+      {/* Multi-clip timeline */}
       <div className={s.timelineWrap}>
-        <div className={s.track} ref={trackRef} onClick={onTrackClick}>
-          {/* cut gaps are the empty track; kept segments are blocks */}
-          {segments.map((sg, i) => (
-            <div key={i} className={s.segment} style={{ left: `${pct(sg.start)}%`, width: `${pct(sg.end - sg.start)}%` }}>
-              <span className={s.handle} onMouseDown={(e) => { e.stopPropagation(); setDrag({ segIndex: i, edge: 'start' }); }} />
-              <span className={s.segLabel}>{fmt(sg.end - sg.start)}</span>
-              {segments.length > 1 && (
-                <button className={s.segDel} onClick={(e) => { e.stopPropagation(); deleteSegment(i); }} title="Delete this part"><Trash2 size={13} /></button>
+        <div className={s.track} ref={trackRef} onClick={(e) => { if (!dragKey) seekGlobal(clientXToGlobal(e.clientX)); }}>
+          {clips.map((c, i) => (
+            <div
+              key={c.key}
+              className={`${s.clip} ${selKey === c.key ? s.clipSel : ''} ${dragKey === c.key ? s.clipDrag : ''} ${c.id !== id ? s.clipAlt : ''}`}
+              style={{ left: `${pctL(i)}%`, width: `${pctW(c)}%` }}
+              onMouseDown={(e) => { if (e.target.closest('[data-nodrag]')) return; e.stopPropagation(); setSelKey(c.key); setDragKey(c.key); }}
+              title={c.title}
+            >
+              <span className={s.clipName}>{c.title}</span>
+              <span className={s.clipDur}>{fmt(len(c))}</span>
+              {clips.length > 1 && (
+                <button data-nodrag className={s.clipDel} onClick={(e) => { e.stopPropagation(); delClip(c.key); }} title="Remove clip"><X size={12} /></button>
               )}
-              <span className={`${s.handle} ${s.handleEnd}`} onMouseDown={(e) => { e.stopPropagation(); setDrag({ segIndex: i, edge: 'end' }); }} />
             </div>
           ))}
-          {/* playhead */}
-          <div className={s.playhead} style={{ left: `${pct(playhead)}%` }} />
+          <div className={s.playhead} style={{ left: `${total ? (playhead / total) * 100 : 0}%` }} />
         </div>
         <div className={s.tlMeta}>
-          <span>Drag the handles to trim · Split &amp; delete parts to cut</span>
-          <span>Final length: <strong>{fmt(keptDuration)}</strong></span>
+          <span>Drag a clip to reorder · Split &amp; delete to cut · Add video to append</span>
+          <span>Final length: <strong>{fmt(total)}</strong></span>
         </div>
       </div>
 
-      {/* Clips bar — trim the base video and add more clips after it */}
-      <div className={s.clipsBar}>
-        <div className={s.clipsHead}>
-          <span className={s.clipsLabel}>Clips in this video</span>
-          <span className={s.clipsHint}>Plays in order, top to bottom. The base video is trimmed above.</span>
-        </div>
-        <div className={s.clipsStrip}>
-          <div className={s.clipCard}>
-            <span className={s.clipNum}>1</span>
-            <span className={s.clipInfo}><strong>This video</strong><em>{fmt(keptDuration)} · trimmed</em></span>
-          </div>
-          {appendClips.map((c, i) => (
-            <div key={c.id} className={s.clipCard}>
-              <span className={s.clipNum}>{i + 2}</span>
-              <span className={s.clipInfo}><strong className={s.clipTitle}>{c.title}</strong><em>added clip</em></span>
-              <button className={s.clipDel} onClick={() => removeAppend(i)} title="Remove clip"><X size={14} /></button>
+      {/* Add-video popup */}
+      {picker && (
+        <div className={s.modalBg} onClick={() => setPicker(null)}>
+          <div className={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={s.modalHead}>
+              <div className={s.tabs}>
+                <button className={`${s.tab} ${picker.tab === 'gallery' ? s.tabActive : ''}`} onClick={() => setPicker((p) => ({ ...p, tab: 'gallery' }))}>Gallery</button>
+                <button className={`${s.tab} ${picker.tab === 'upload' ? s.tabActive : ''}`} onClick={() => setPicker((p) => ({ ...p, tab: 'upload' }))}>Upload new</button>
+              </div>
+              <button className={s.modalClose} onClick={() => setPicker(null)}><X size={18} /></button>
             </div>
-          ))}
-          <button className={s.addClip} onClick={openPicker}>
-            <Plus size={18} /> Add clip{rec.canStitch === false && <span className={s.proTag}>Pro</span>}
-          </button>
-        </div>
-        {pickerOpen && (
-          <div className={s.picker}>
-            <label className={s.uploadBtn}>
-              <Upload size={15} /> {loadingClip ? 'Uploading…' : 'Upload from computer'}
-              <input type="file" accept="video/*" hidden disabled={loadingClip}
-                onChange={(e) => uploadClip(e.target.files && e.target.files[0])} />
-            </label>
-            <div className={s.pickerSub}>or pick from your library</div>
-            <div className={s.pickerList}>
-              {myVideos == null ? <p className={s.pickerEmpty}>Loading…</p>
-                : myVideos.length === 0 ? <p className={s.pickerEmpty}>No other videos yet.</p>
-                : myVideos.map((v) => (
-                  <button key={v.id} className={s.pickerItem} onClick={() => addFromLibrary(v)}>
-                    <Film size={14} /> <span>{v.title}</span>
-                  </button>
-                ))}
-            </div>
+            {picker.tab === 'upload' ? (
+              <label className={s.uploadZone}>
+                <Upload size={30} />
+                <strong>{picker.uploading ? 'Uploading…' : 'Upload a video'}</strong>
+                <span>Choose a file from your computer to add to the timeline</span>
+                <input type="file" accept="video/*" hidden disabled={picker.uploading} onChange={(e) => uploadClip(e.target.files && e.target.files[0])} />
+              </label>
+            ) : (
+              <div className={s.gallery}>
+                {picker.videos == null ? <p className={s.galEmpty}>Loading your videos…</p>
+                  : picker.videos.length === 0 ? <p className={s.galEmpty}>No other videos in your library yet.</p>
+                  : picker.videos.map((v) => (
+                    <button key={v.id} className={s.galCard} onClick={() => addFromGallery(v)}>
+                      <GalThumb v={v} />
+                      <span className={s.galTitle}>{v.title}</span>
+                    </button>
+                  ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {chooser && (
         <div className={s.exportOverlay} onClick={() => setChooser(false)}>
           <div className={s.chooserCard} onClick={(e) => e.stopPropagation()}>
             <div className={s.chooserTitle}>How do you want to save?</div>
-            <div className={s.chooserSub}>Trimmed length <strong>{fmt(keptDuration)}</strong> · original is {fmt(duration)}</div>
-            <button className={s.chooserOpt} onClick={() => save('overwrite')}>
+            <div className={s.chooserSub}>Final length <strong>{fmt(total)}</strong>{hasOther ? ` · ${clips.length} clips` : ''}</div>
+            <button className={s.chooserOpt} onClick={() => doSave('overwrite')}>
               <span className={s.chooserOptIcon}>♻️</span>
-              <span className={s.chooserOptText}>
-                <strong>Overwrite original</strong>
-                <em>Replace this video with the trimmed version.</em>
-              </span>
+              <span className={s.chooserOptText}><strong>Overwrite original</strong><em>Replace this video with the edited version.</em></span>
             </button>
-            <button className={s.chooserOpt} onClick={() => save('copy')}>
+            <button className={s.chooserOpt} onClick={() => doSave('copy')}>
               <span className={s.chooserOptIcon}>➕</span>
-              <span className={s.chooserOptText}>
-                <strong>Save as a new copy</strong>
-                <em>Keep the original and add the trimmed clip to your library.</em>
-              </span>
+              <span className={s.chooserOptText}><strong>Save as a new copy</strong><em>Keep the original and add the edit to your library.</em></span>
             </button>
             <button className={s.chooserCancel} onClick={() => setChooser(false)}>Cancel</button>
           </div>
@@ -466,12 +356,9 @@ export default function Editor() {
             {indeterminate ? (
               <div className={s.exportBar}><div className={s.exportIndet} /></div>
             ) : (
-              <>
-                <div className={s.exportBar}><div className={s.exportFill} style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-                <div className={s.exportPct}>{Math.round(progress * 100)}%</div>
-              </>
+              <><div className={s.exportBar}><div className={s.exportFill} style={{ width: `${Math.round(progress * 100)}%` }} /></div><div className={s.exportPct}>{Math.round(progress * 100)}%</div></>
             )}
-            <div className={s.exportNote}>{indeterminate ? 'Our servers are cutting and stitching your clip — this is usually quick.' : 'Re-rendering in your browser runs about as long as the trimmed video. Please keep this tab focused.'}</div>
+            <div className={s.exportNote}>Our servers are cutting and stitching your clips — this is usually quick.</div>
           </div>
         </div>
       )}

@@ -1152,34 +1152,43 @@ app.post('/api/recordings/:id/compose', requireAuth, async (req, res) => {
   const cCheck = permissions.canStitchClips(users.findById(req.userId));
   if (!cCheck.allowed) return res.status(403).json({ error: cCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'clipStitch' });
 
-  const segments = (Array.isArray(req.body.segments) ? req.body.segments : [])
-    .filter(s => s && Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
-    .map(s => ({ start: Math.max(0, +s.start), end: +s.end }))
-    .sort((a, b) => a.start - b.start);
-  const appendIds = Array.isArray(req.body.appendIds) ? req.body.appendIds.filter(v => typeof v === 'string').slice(0, 10) : [];
-  if (!segments.length) return res.status(400).json({ error: 'Nothing to keep from the base video.' });
-  if (!appendIds.length) return res.status(400).json({ error: 'No clips to add — use Trim instead.' });
-  for (const vid of appendIds) {
-    if (!(await userOwns(req.userId, vid))) return res.status(404).json({ error: 'One of the added clips was not found.' });
+  // Ordered timeline: a list of {id, start, end} segments from any owned video
+  // (the editor's clip strip). Falls back to the older {segments + appendIds} shape.
+  let seq;
+  if (Array.isArray(req.body.clips)) {
+    seq = req.body.clips
+      .filter(c => c && typeof c.id === 'string' && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start)
+      .map(c => ({ id: c.id, start: Math.max(0, +c.start), end: +c.end }));
+  } else {
+    const segs = (Array.isArray(req.body.segments) ? req.body.segments : [])
+      .filter(s => s && Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
+      .map(s => ({ start: Math.max(0, +s.start), end: +s.end })).sort((a, b) => a.start - b.start);
+    const appendIds = Array.isArray(req.body.appendIds) ? req.body.appendIds.filter(v => typeof v === 'string') : [];
+    seq = [...segs.map(s => ({ id: req.params.id, start: s.start, end: s.end })), ...appendIds.map(v => ({ id: v, whole: true }))];
+  }
+  seq = seq.slice(0, 40);
+  if (seq.length < 2) return res.status(400).json({ error: 'Add at least one more clip — use Trim for a single clip.' });
+  const distinct = [...new Set(seq.map(c => c.id))];
+  for (const vid of distinct) {
+    if (!(await userOwns(req.userId, vid))) return res.status(404).json({ error: 'One of the clips was not found.' });
   }
 
   const r2 = (n) => Math.round(n * 100) / 100;
-  const publicId = `screenrec/${req.userId}/${req.params.id}`;
-  const overlayId = `video:${publicId.replace(/\//g, ':')}`;
-  // base = first kept segment of the main video; splice the remaining main
-  // segments, then splice each appended clip (whole).
-  const transformation = [{ start_offset: r2(segments[0].start), end_offset: r2(segments[0].end) }];
-  for (let i = 1; i < segments.length; i++) {
-    transformation.push({ overlay: overlayId, flags: 'splice', start_offset: r2(segments[i].start), end_offset: r2(segments[i].end) });
-    transformation.push({ flags: 'layer_apply' });
-  }
-  for (const vid of appendIds) {
-    transformation.push({ overlay: `video:screenrec:${req.userId}:${vid}`, flags: 'splice' });
+  const publicId = `screenrec/${req.userId}/${req.params.id}`;            // overwrite target
+  const basePublic = `screenrec/${req.userId}/${seq[0].id}`;              // first clip = render base
+  const overlayOf = (vid) => `video:${`screenrec/${req.userId}/${vid}`.replace(/\//g, ':')}`;
+  const transformation = [];
+  if (!seq[0].whole) transformation.push({ start_offset: r2(seq[0].start), end_offset: r2(seq[0].end) });
+  for (let i = 1; i < seq.length; i++) {
+    const c = seq[i];
+    transformation.push(c.whole
+      ? { overlay: overlayOf(c.id), flags: 'splice' }
+      : { overlay: overlayOf(c.id), flags: 'splice', start_offset: r2(c.start), end_offset: r2(c.end) });
     transformation.push({ flags: 'layer_apply' });
   }
 
   try {
-    const derivedUrl = cloudinary.url(publicId, { resource_type: 'video', transformation, secure: true, format: 'mp4' });
+    const derivedUrl = cloudinary.url(basePublic, { resource_type: 'video', transformation, secure: true, format: 'mp4' });
     let prevCtx = {};
     try { const sx = await cloudinary.search.expression(`public_id=${publicId}`).with_field('context').max_results(1).execute(); if (sx.resources.length) prevCtx = sx.resources[0].context?.custom || {}; } catch {}
     const keepTitle = cleanTitle(prevCtx.title) || 'Combined recording';
