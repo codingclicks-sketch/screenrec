@@ -57,6 +57,26 @@ function canUseTranscription(user) {
     'AI transcription is a Pro feature. Upgrade to auto-generate searchable transcripts.');
 }
 
+function canUseAiDocs(user) {
+  return gate(user, 'aiDocsEnabled',
+    'AI summaries, chapters & translation are Pro features. Upgrade to unlock the advanced AI.');
+}
+
+function canStitchClips(user) {
+  return gate(user, 'clipStitchEnabled',
+    'Combining clips is a Pro feature. Upgrade to stitch recordings into one video.');
+}
+
+function canCaptureLeads(user) {
+  return gate(user, 'leadCaptureEnabled',
+    'Email capture is a Pro feature. Upgrade to gate videos and collect viewer emails.');
+}
+
+function canUseSlack(user) {
+  return gate(user, 'slackEnabled',
+    'Slack sharing is a Pro feature. Upgrade to post recordings to your Slack channels.');
+}
+
 // ── Recording length ──────────────────────────────────────────────────────────
 /**
  * Validate a recording's duration against the plan limit.
@@ -137,4 +157,8 @@ module.exports = {
   canUsePasswordProtectedVideos,
   canUseAdvancedSharing,
   canUseTranscription,
+  canUseAiDocs,
+  canStitchClips,
+  canCaptureLeads,
+  canUseSlack,
 };

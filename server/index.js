@@ -352,8 +352,10 @@ if (!USE_CLOUDINARY) {
         meta.set(id, { title });
         try { await cloudinary.uploader.add_context(buildContext({ title }), [`screenrec/${userId}/${id}`], { resource_type: 'video' }); } catch {}
       }
-      // Also auto-fill an AI summary (free; gpt-oss via Groq, extractive fallback).
-      try { const summary = await ai.summarize(result.text); if (summary) meta.set(id, { description: summary }); } catch {}
+      // Auto-fill an AI summary for Pro users (advanced AI is a Pro feature).
+      if (permissions.canUseAiDocs(user).allowed) {
+        try { const summary = await ai.summarize(result.text); if (summary) meta.set(id, { description: summary }); } catch {}
+      }
     } catch (e) { console.error('[auto-process] failed:', e.message); }
   }
 
@@ -790,6 +792,8 @@ app.get('/api/recordings/:id/analytics', requireAuth, async (req, res) => {
 app.post('/api/recordings/:id/share/slack', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
   const user = users.findById(req.userId);
+  const sCheck = permissions.canUseSlack(user);
+  if (!sCheck.allowed) return res.status(403).json({ error: sCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'slack' });
   if (!user || !user.slackWebhook) return res.status(400).json({ error: 'Add your Slack webhook in account settings first.', needsWebhook: true });
   const m = meta.get(req.params.id);
   const clientBase = process.env.CLIENT_URL || process.env.PUBLIC_URL || 'https://veorec.com';
@@ -906,8 +910,16 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (audience && typeof audience === 'object') {
     const cur = meta.get(req.params.id).audience || {};
     const next = { ...cur };
-    for (const k of ['comments', 'reactions', 'download', 'transcript', 'requireEmail']) {
+    for (const k of ['comments', 'reactions', 'download', 'transcript']) {
       if (typeof audience[k] === 'boolean') next[k] = audience[k];
+    }
+    // Email capture (lead gate) is a Pro feature.
+    if (typeof audience.requireEmail === 'boolean') {
+      const lc = permissions.canCaptureLeads(user);
+      if (audience.requireEmail === true && !lc.allowed) {
+        return res.status(403).json({ error: lc.reason, upgradeRequired: true, code: 'feature_locked', feature: 'leadCapture' });
+      }
+      next.requireEmail = audience.requireEmail;
     }
     fields.audience = next;
   }
@@ -1191,6 +1203,9 @@ app.post('/api/recordings/stitch', requireAuth, async (req, res) => {
   for (const vid of ids) {
     if (!(await userOwns(req.userId, vid))) return res.status(404).json({ error: 'One of the selected videos was not found.' });
   }
+  // Combining clips is a Pro feature.
+  const stitchCheck = permissions.canStitchClips(users.findById(req.userId));
+  if (!stitchCheck.allowed) return res.status(403).json({ error: stitchCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'clipStitch' });
   // count-limit guard (free plan video count)
   const countCheck = permissions.canCreateVideo(users.findById(req.userId));
   if (!countCheck.allowed) return res.status(403).json({ error: countCheck.reason, upgradeRequired: true, code: 'video_limit', meta: countCheck.meta });
@@ -1312,9 +1327,9 @@ app.post('/api/recordings/:id/title/auto', requireAuth, async (req, res) => {
 // first if there's no transcript yet. Saves to the video's summary (description).
 app.post('/api/recordings/:id/summary', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
-  const tCheck = permissions.canUseTranscription(users.findById(req.userId));
+  const tCheck = permissions.canUseAiDocs(users.findById(req.userId));
   if (!tCheck.allowed) {
-    return res.status(403).json({ error: tCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'transcription' });
+    return res.status(403).json({ error: tCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'aiDocs' });
   }
   try {
     const m = meta.get(req.params.id);
@@ -1345,8 +1360,8 @@ app.post('/api/recordings/:id/summary', requireAuth, async (req, res) => {
 // Generate chapters from the transcript (free — LLM via Groq, heuristic fallback).
 app.post('/api/recordings/:id/chapters', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
-  const tCheck = permissions.canUseTranscription(users.findById(req.userId));
-  if (!tCheck.allowed) return res.status(403).json({ error: tCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'transcription' });
+  const tCheck = permissions.canUseAiDocs(users.findById(req.userId));
+  if (!tCheck.allowed) return res.status(403).json({ error: tCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'aiDocs' });
   try {
     const m = meta.get(req.params.id);
     let segments = m.transcript?.segments;
@@ -1371,6 +1386,8 @@ app.post('/api/recordings/:id/chapters', requireAuth, async (req, res) => {
 // Translate the transcript into another language (needs GROQ_API_KEY).
 app.post('/api/recordings/:id/transcript/translate', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const aCheck = permissions.canUseAiDocs(users.findById(req.userId));
+  if (!aCheck.allowed) return res.status(403).json({ error: aCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'aiDocs' });
   const lang = String(req.body.lang || '').trim().slice(0, 40);
   if (!lang) return res.status(400).json({ error: 'Target language required' });
   try {

@@ -199,3 +199,45 @@
 .footBottom span { font-size: 12.5px; color: var(--ink3); }
 @media (max-width: 760px) { .footTop { grid-template-columns: 1fr; gap: 28px; padding: 36px 20px 24px; } .footCols { grid-template-columns: repeat(3, 1fr); } .footBottom { padding: 16px 20px; } }
 @media (max-width: 480px) { .footCols { grid-template-columns: 1fr 1fr; } }
+
+/* ── Section subtitle ─────────────────────────────────────────────────────── */
+.sectionSub { text-align: center; color: var(--ink2); font-size: 16px; line-height: 1.55; max-width: 560px; margin: 12px auto 0; }
+
+/* ── Capabilities grid (Everything VeoRec does) ───────────────────────────── */
+.capGrid { max-width: 1120px; margin: 40px auto 0; padding: 0 40px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.capCard { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 22px 20px;
+  transition: box-shadow .2s, transform .2s; }
+.capCard:hover { box-shadow: 0 16px 40px rgba(40,40,80,.10); transform: translateY(-3px); }
+.capHead { display: flex; align-items: center; gap: 11px; margin-bottom: 16px; }
+.capHead h3 { font-size: 15.5px; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+.capIcon { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.capList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.capItem { display: flex; align-items: center; gap: 9px; font-size: 13.5px; line-height: 1.3; }
+.capCheck { color: #16a34a; flex-shrink: 0; }
+.capText { flex: 1; color: var(--ink); }
+.tierFree { font-size: 10px; font-weight: 700; color: var(--ink3); background: var(--soft); padding: 2px 7px; border-radius: 6px; letter-spacing: .02em; }
+.tierPro { font-size: 10px; font-weight: 800; color: var(--ac); background: #eef0ff; padding: 2px 7px; border-radius: 6px; letter-spacing: .02em; }
+@media (max-width: 1000px) { .capGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .capGrid { grid-template-columns: 1fr; padding: 0 20px; } }
+
+/* ── VeoRec vs Loom comparison ────────────────────────────────────────────── */
+.compWrap { max-width: 760px; margin: 38px auto 0; padding: 0 40px; }
+.compTable { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line);
+  border-radius: 16px; overflow: hidden; }
+.compTable th { padding: 16px 14px; font-size: 14.5px; font-weight: 800; text-align: center; }
+.compCorner { background: var(--soft); }
+.compUs { color: var(--ac); background: #eef0ff; border-bottom: 2px solid var(--ac); }
+.compUs .compLogo, .compLogo { width: 18px; height: 18px; border-radius: 5px; vertical-align: -4px; margin-right: 6px; }
+.compThem { color: var(--ink2); background: var(--soft); }
+.compTable td { padding: 13px 14px; border-top: 1px solid var(--line); vertical-align: middle; }
+.compLabel { text-align: left; font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.compCell, .compCellUs { text-align: center; }
+.compCellUs { background: rgba(91,91,246,.045); }
+.compCellUs, .compCell { }
+.compCell > span, .compCellUs > span { display: block; }
+.compYes { color: #16a34a; display: inline-block; }
+.compYesMuted { color: var(--ink3); display: inline-block; }
+.compNo { color: #d2d2dd; display: inline-block; }
+.compVal { font-size: 11.5px; color: var(--ink2); margin-top: 2px; font-weight: 600; }
+@media (max-width: 560px) { .compWrap { padding: 0 14px; } .compTable th, .compTable td { padding: 11px 9px; } .compLabel { font-size: 12.5px; } }
