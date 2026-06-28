@@ -322,6 +322,31 @@ if (!USE_CLOUDINARY) {
 
 } else {
   // ── Cloudinary routes ──────────────────────────────────────────────────────
+
+  // Background post-upload processing: transcribe (multilingual, auto-detect) →
+  // derive a title → persist it (meta + Cloudinary context). Only runs when the
+  // user left the default placeholder title and the clip is long enough to have
+  // speech. Free & unlimited (self-hosted whisper). Never blocks the upload.
+  const DEFAULT_TITLES = new Set(['screen recording', 'untitled recording', '']);
+  async function autoProcessRecording(userId, id, currentTitle, durationSec) {
+    if (!transcription.isConfigured()) return;
+    if (!DEFAULT_TITLES.has(String(currentTitle || '').trim().toLowerCase())) return; // keep a user-set title
+    const user = users.findById(userId);
+    if (!user || !permissions.canUseTranscription(user).allowed) return;
+    if (durationSec && durationSec < 3) return;   // too short to transcribe usefully
+    try {
+      const audioUrl = cloudinary.url(`screenrec/${userId}/${id}`, { resource_type: 'video', format: 'mp3', secure: true });
+      const result = await transcription.transcribeUrl(audioUrl);
+      if (!result || !result.segments || !result.segments.length) return;
+      meta.set(id, { transcript: { ...result, status: 'done', created_at: Date.now() } });
+      const title = transcription.generateTitle(result.text);
+      if (title) {
+        meta.set(id, { title });
+        try { await cloudinary.uploader.add_context(buildContext({ title }), [`screenrec/${userId}/${id}`], { resource_type: 'video' }); } catch {}
+      }
+    } catch (e) { console.error('[auto-process] failed:', e.message); }
+  }
+
   // Disk-backed (not memory) so large recordings can't OOM the process → no 502.
   const upload = multer({
     storage: multer.diskStorage({
@@ -390,6 +415,13 @@ if (!USE_CLOUDINARY) {
       const base = process.env.PUBLIC_URL || `https://${req.get('host')}`;
       const clientBase = process.env.CLIENT_URL || base;
       res.json({ id, url: `${clientBase}/watch/${id}` });
+
+      // Fire-and-forget: transcribe + auto-name the video so it lands in the
+      // library with a real title (not "Screen recording") and the transcript is
+      // ready by the time the watch page opens. Never blocks/affects the response.
+      if (process.env.AUTO_PROCESS_ON_UPLOAD !== 'false') {
+        autoProcessRecording(req.userId, id, recTitle, durationSec).catch(() => {});
+      }
     } catch (e) {
       console.error('[upload] failed:', (e && e.message) || e);
       // Cloudinary rejects videos over the account's per-file size limit (100MB
