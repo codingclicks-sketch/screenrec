@@ -11,6 +11,7 @@ const db = require('./db');
 const users = require('./users');
 const { meta, folders, notifReads } = require('./meta');
 const transcription = require('./transcription');
+const ai = require('./ai');
 const { signToken, requireAuth, verifyToken } = require('./auth');
 
 // ── Monetization layer ────────────────────────────────────────────────────────
@@ -344,6 +345,8 @@ if (!USE_CLOUDINARY) {
         meta.set(id, { title });
         try { await cloudinary.uploader.add_context(buildContext({ title }), [`screenrec/${userId}/${id}`], { resource_type: 'video' }); } catch {}
       }
+      // Also auto-fill an AI summary (free; gpt-oss via Groq, extractive fallback).
+      try { const summary = await ai.summarize(result.text); if (summary) meta.set(id, { description: summary }); } catch {}
     } catch (e) { console.error('[auto-process] failed:', e.message); }
   }
 
@@ -1157,6 +1160,41 @@ app.post('/api/recordings/:id/title/auto', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('[auto-title] failed:', e.message);
     res.status(500).json({ error: e.message || 'Could not generate a title' });
+  }
+});
+
+// Generate an AI summary from the video's transcript (free — gpt-oss via Groq,
+// with a transcript-extractive fallback when no GROQ_API_KEY is set). Transcribes
+// first if there's no transcript yet. Saves to the video's summary (description).
+app.post('/api/recordings/:id/summary', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const tCheck = permissions.canUseTranscription(users.findById(req.userId));
+  if (!tCheck.allowed) {
+    return res.status(403).json({ error: tCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'transcription' });
+  }
+  try {
+    const m = meta.get(req.params.id);
+    let text = m.transcript?.text;
+    if (!text) {
+      if (!transcription.isConfigured()) return res.status(501).json({ error: 'Transcription isn’t available on this server yet, so a summary can’t be generated.' });
+      let audioUrl;
+      if (USE_CLOUDINARY) {
+        audioUrl = cloudinary.url(`screenrec/${req.userId}/${req.params.id}`, { resource_type: 'video', format: 'mp3', secure: true });
+      } else {
+        const row = db.get(req.params.id);
+        if (!row) return res.status(404).json({ error: 'Not found' });
+        audioUrl = `${req.protocol}://${req.get('host')}/uploads/${row.filename}`;
+      }
+      const result = await transcription.transcribeUrl(audioUrl);
+      if (result.segments.length) { meta.set(req.params.id, { transcript: { ...result, status: 'done', created_at: Date.now() } }); text = result.text; }
+    }
+    const summary = await ai.summarize(text);
+    if (!summary) return res.status(422).json({ error: 'Not enough speech in this video to summarize.' });
+    meta.set(req.params.id, { description: summary });
+    res.json({ summary, ai: ai.isLLMConfigured() });
+  } catch (e) {
+    console.error('[summary] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Could not generate a summary' });
   }
 });
 
