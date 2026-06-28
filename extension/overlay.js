@@ -16,7 +16,6 @@
   window.__srOverlayActive = true;
 
   const Z = '2147483647';
-  let camStream = null;
 
   // Make an element draggable by a given handle (defaults to the element itself).
   function makeDraggable(el, handle) {
@@ -255,7 +254,7 @@
   }
 
   // ── Camera bubble (only when camera bubble mode is on) ───────────────────────
-  let bubble = null, bubbleVideo = null, cameraEnabled = false, bubbleSize = 150;
+  let bubble = null, bubbleFrame = null, cameraEnabled = false, bubbleSize = 150;
   const BUBBLE_SIZES = { sm: 110, md: 150, lg: 200 };
   function makeBubble() {
     if (bubble) return;
@@ -266,10 +265,15 @@
       `width:${bubbleSize}px`, `height:${bubbleSize}px`, 'border-radius:50%', 'overflow:hidden',
       'box-shadow:0 8px 28px rgba(0,0,0,.45)', 'border:3px solid #7c5cfc', 'background:#000',
     ].join(';');
-    bubbleVideo = document.createElement('video');
-    bubbleVideo.autoplay = true; bubbleVideo.muted = true; bubbleVideo.playsInline = true;
-    bubbleVideo.style.cssText = 'width:100%;height:100%;object-fit:cover;transform:scaleX(-1)';
-    bubble.append(bubbleVideo);
+    // The webcam renders inside an EXTENSION-origin iframe (bubble.html), NOT the
+    // host page — so camera permission is granted ONCE for the extension and never
+    // re-prompts when you switch sites. It's still captured in the recording (it's
+    // composited page DOM). The iframe self-manages the device by its own visibility.
+    bubbleFrame = document.createElement('iframe');
+    bubbleFrame.src = chrome.runtime.getURL('bubble.html');
+    bubbleFrame.allow = 'camera; microphone';
+    bubbleFrame.style.cssText = 'width:100%;height:100%;border:0;border-radius:50%;background:#000;display:block';
+    bubble.append(bubbleFrame);
     (document.body || document.documentElement).appendChild(bubble);
     makeDraggable(bubble, bubble);
 
@@ -305,8 +309,6 @@
     // keep the bar glued under the bubble while it's dragged
     bubble.addEventListener('__srmoved', positionBar);
     window.addEventListener('mousemove', () => { if (bubble) positionBar(); });
-
-    if (!document.hidden) startCam();
   }
   function positionBar() {
     if (!bubble || !bubble.__bar) return;
@@ -321,32 +323,16 @@
     bubble.style.height = bubbleSize + 'px';
     positionBar();
   }
-  function startCam() {
-    if (!bubble || camStream) return;
-    navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 480 }, audio: false })
-      .then((s) => { camStream = s; if (bubbleVideo) bubbleVideo.srcObject = s; })
-      .catch(() => { if (bubbleVideo) bubbleVideo.style.display = 'none'; if (bubble) { bubble.style.background = '#14141f';
-        bubble.insertAdjacentHTML('beforeend', '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font:600 12px Inter,sans-serif;text-align:center;padding:0 12px">Camera blocked on this site</div>'); } });
-  }
-  function stopCam() {
-    try { if (camStream) camStream.getTracks().forEach((t) => t.stop()); } catch (e) {}
-    camStream = null;
-  }
+  // The camera lives inside bubble.html (extension origin) and self-manages its
+  // device by its own visibility — so the host page never calls getUserMedia and
+  // never re-prompts. hideBubble just removes the iframe (which releases the camera).
   function hideBubble() {
-    stopCam();
     const el = document.getElementById('__sr_camera_bubble');
     if (el) el.remove();
     const bar = document.getElementById('__sr_bubble_bar');
     if (bar) bar.remove();
-    bubble = null; bubbleVideo = null; cameraEnabled = false;
+    bubble = null; bubbleFrame = null; cameraEnabled = false;
   }
-
-  // Only the visible tab holds the webcam — release it when this tab is hidden so
-  // the tab you switch TO can acquire the camera, then re-acquire when visible.
-  document.addEventListener('visibilitychange', () => {
-    if (!cameraEnabled || !bubble) return;
-    if (document.hidden) stopCam(); else startCam();
-  });
 
   chrome.storage.local.get('recOptions', (d) => {
     const o = d && d.recOptions;

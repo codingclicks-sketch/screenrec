@@ -21,9 +21,20 @@ const THREADS = process.env.WHISPER_THREADS || '';      // empty → whisper.cpp
 // (Urdu, Hindi, Arabic, etc.). For the English-only .en model this is ignored.
 const LANGUAGE = process.env.WHISPER_LANGUAGE || (/\.en\.bin$/.test(MODEL_PATH) ? '' : 'auto');
 
-// Available whenever the compiled model is present (i.e. in the built image).
-// Lets the dev box (no model) degrade gracefully to a 501 instead of crashing.
+// ── Groq hosted Whisper (PREFERRED) ──────────────────────────────────────────
+// When GROQ_API_KEY is set we transcribe with Groq's real whisper-large-v3 — SOTA
+// multilingual, strong on Urdu/Hindi — instead of the tiny self-hosted ggml-base
+// model (whose garbled/repeated Urdu was the root problem). Free tier covers early
+// usage; falls back to local whisper-cli only when no key is present.
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_STT_MODEL = process.env.GROQ_STT_MODEL || 'whisper-large-v3';   // NOT turbo — accuracy wins for Urdu
+const GROQ_STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
+const GROQ_MAX_BYTES = 24 * 1024 * 1024;   // stay under the 25 MB free-tier cap
+const CHUNK_SECONDS = 600;                  // 10-min chunks when a recording exceeds the cap
+
+// Available when Groq is keyed OR the local model is present (dev box → 501).
 function isConfigured() {
+  if (GROQ_API_KEY) return true;
   try { return fs.existsSync(MODEL_PATH); } catch { return false; }
 }
 
@@ -51,15 +62,92 @@ function sh(cmd, args, { timeout } = {}) {
   });
 }
 
+// ── Groq path: re-encode → (chunk if needed) → whisper-large-v3 → segments ────
+async function groqTranscribeFile(filePath, fileName) {
+  const buf = fs.readFileSync(filePath);
+  const form = new FormData();                       // Node 18+ global
+  form.append('file', new Blob([buf]), fileName);    // filename drives Groq's format sniffing
+  form.append('model', GROQ_STT_MODEL);
+  form.append('response_format', 'verbose_json');    // REQUIRED for timestamped segments
+  form.append('temperature', '0');                   // deterministic → avoids repeated-line hallucination
+  // NO 'language' field → auto-detect (so English recordings still transcribe correctly)
+  const ac = new AbortController();
+  const to = setTimeout(() => ac.abort(), 180_000);
+  let r;
+  try {
+    r = await fetch(GROQ_STT_URL, { method: 'POST', headers: { Authorization: `Bearer ${GROQ_API_KEY}` }, body: form, signal: ac.signal });
+  } finally { clearTimeout(to); }
+  if (r.status === 429) throw Object.assign(new Error('Transcription is busy right now — please try again shortly.'), { code: 'rate_limited' });
+  if (!r.ok) throw new Error(`Groq STT ${r.status}: ${(await r.text()).slice(-300)}`);
+  return r.json();
+}
+
+// verbose_json → VeoRec {text, language, segments:[{start,end,text}]} (Groq is already in SECONDS).
+function mapGroqJson(j, offsetSec = 0) {
+  const segments = (j.segments || [])
+    // Whisper's own silence/low-confidence signature — drops the garbage repeated
+    // lines the tiny base model produced.
+    .filter(s => !((s.no_speech_prob > 0.6) && (s.avg_logprob < -1)))
+    .map(s => ({
+      start: Math.round(((s.start || 0) + offsetSec) * 100) / 100,
+      end: Math.round(((s.end || 0) + offsetSec) * 100) / 100,
+      text: String(s.text || '').trim(),
+    }))
+    .filter(s => s.text);
+  return { text: segments.map(s => s.text).join(' ').trim(), language: j.language || 'auto', segments };
+}
+
+async function transcribeViaGroq(inPath, tmp) {
+  // 16 kHz mono mp3 (~0.5 MB/min) so files stay well under the 25 MB cap.
+  const mp3Path = path.join(tmp, 'audio.mp3');
+  await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'libmp3lame', '-b:a', '64k', mp3Path], { timeout: 120_000 });
+  if (fs.statSync(mp3Path).size <= GROQ_MAX_BYTES) {
+    return mapGroqJson(await groqTranscribeFile(mp3Path, 'audio.mp3'));
+  }
+  // Over the cap → split into fixed CHUNK_SECONDS pieces; merge with a time offset.
+  const pat = path.join(tmp, 'chunk_%03d.mp3');
+  await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', mp3Path, '-f', 'segment', '-segment_time', String(CHUNK_SECONDS), '-ar', '16000', '-ac', '1', '-c:a', 'libmp3lame', '-b:a', '64k', pat], { timeout: 300_000 });
+  const chunks = fs.readdirSync(tmp).filter(f => /^chunk_\d+\.mp3$/.test(f)).sort();
+  let allSegs = [], lang = 'auto';
+  for (let i = 0; i < chunks.length; i++) {
+    const j = await groqTranscribeFile(path.join(tmp, chunks[i]), chunks[i]);
+    if (i === 0) lang = j.language || 'auto';
+    allSegs = allSegs.concat(mapGroqJson(j, i * CHUNK_SECONDS).segments);   // fixed-width offset = i * T
+  }
+  return { text: allSegs.map(s => s.text).join(' ').trim(), language: lang, segments: allSegs };
+}
+
+// ── Local whisper.cpp path (fallback when no Groq key) ───────────────────────
+async function transcribeViaWhisperCli(inPath, tmp) {
+  const wavPath = path.join(tmp, 'audio.wav');
+  const outPrefix = path.join(tmp, 'out');
+  await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wavPath], { timeout: 120_000 });
+  const args = ['-m', MODEL_PATH, '-f', wavPath, '-oj', '-of', outPrefix, '-np'];
+  if (THREADS) args.push('-t', String(THREADS));
+  if (LANGUAGE) args.push('-l', LANGUAGE);
+  await sh(WHISPER_BIN, args, { timeout: 1000 * 60 * 30 });
+  const j = JSON.parse(fs.readFileSync(`${outPrefix}.json`, 'utf8'));
+  const segments = (j.transcription || [])
+    .map(s => ({
+      start: Math.round(((s.offsets?.from ?? 0) / 1000) * 100) / 100,   // whisper.cpp gives ms → s
+      end: Math.round(((s.offsets?.to ?? 0) / 1000) * 100) / 100,
+      text: String(s.text || '').trim(),
+    }))
+    .filter(s => s.text);
+  return {
+    text: segments.map(s => s.text).join(' ').trim(),
+    language: j.result?.language || j.params?.language || (MODEL_PATH.includes('.en') ? 'en' : 'auto'),
+    segments,
+  };
+}
+
 async function transcribeSource(srcUrlOrPath) {
   if (!isConfigured()) throw Object.assign(new Error('Transcription is not available on this server'), { code: 'unconfigured' });
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'veorec-stt-'));
   const inPath = path.join(tmp, 'input');
-  const wavPath = path.join(tmp, 'audio.wav');
-  const outPrefix = path.join(tmp, 'out');
   try {
-    // 1. Get the source audio bytes.
+    // 1. Get the source audio bytes (Cloudinary mp3 derivative or a local file).
     if (/^https?:\/\//i.test(srcUrlOrPath)) {
       const ac = new AbortController();
       const to = setTimeout(() => ac.abort(), 120_000);
@@ -71,30 +159,9 @@ async function transcribeSource(srcUrlOrPath) {
       fs.copyFileSync(srcUrlOrPath, inPath);
     }
 
-    // 2. Normalise to 16 kHz mono PCM WAV for whisper.cpp.
-    await sh(FFMPEG_BIN, ['-nostdin', '-y', '-i', inPath, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', wavPath], { timeout: 120_000 });
-
-    // 3. Transcribe → JSON (writes `${outPrefix}.json`).
-    const args = ['-m', MODEL_PATH, '-f', wavPath, '-oj', '-of', outPrefix, '-np'];
-    if (THREADS) args.push('-t', String(THREADS));
-    if (LANGUAGE) args.push('-l', LANGUAGE);
-    await sh(WHISPER_BIN, args, { timeout: 1000 * 60 * 30 });
-
-    // 4. Parse segments (whisper.cpp gives offsets in milliseconds).
-    const j = JSON.parse(fs.readFileSync(`${outPrefix}.json`, 'utf8'));
-    const segments = (j.transcription || [])
-      .map(s => ({
-        start: Math.round(((s.offsets?.from ?? 0) / 1000) * 100) / 100,
-        end: Math.round(((s.offsets?.to ?? 0) / 1000) * 100) / 100,
-        text: String(s.text || '').trim(),
-      }))
-      .filter(s => s.text);
-
-    return {
-      text: segments.map(s => s.text).join(' ').trim(),
-      language: j.result?.language || j.params?.language || (MODEL_PATH.includes('.en') ? 'en' : 'auto'),
-      segments,
-    };
+    // 2. Prefer Groq's whisper-large-v3 when keyed; else local whisper.cpp.
+    if (GROQ_API_KEY) return await transcribeViaGroq(inPath, tmp);
+    return await transcribeViaWhisperCli(inPath, tmp);
   } finally {
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
   }

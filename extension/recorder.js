@@ -243,6 +243,22 @@ async function beginRecording() {
   limitReached = false;
   timerEl.classList.remove('limitWarn');
 
+  // A suspended AudioContext records pure SILENCE (no error) — this auto-opened
+  // window often has no user gesture, so force it running BEFORE recording starts,
+  // and re-resume if the OS interrupts audio mid-recording.
+  if (audioCtx) {
+    try { if (audioCtx.state !== 'running') await audioCtx.resume(); } catch (e) {}
+    if (audioCtx.state !== 'running') {
+      await new Promise((res) => {
+        const t = setTimeout(res, 1500);
+        audioCtx.addEventListener('statechange', function h() {
+          if (audioCtx.state === 'running') { clearTimeout(t); audioCtx.removeEventListener('statechange', h); res(); }
+        });
+      });
+    }
+    audioCtx.onstatechange = () => { if (audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {}); };
+  }
+
   const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
     ? 'video/webm;codecs=vp9' : 'video/webm';
   const bitsPerSecond = opts.quality === 'high' ? 4_000_000 : opts.quality === 'medium' ? 2_500_000 : 1_000_000;
@@ -285,13 +301,15 @@ async function beginRecording() {
   timerEl.classList.add('show');
   updateTimer();
   timerInterval = setInterval(updateTimer, 500);
-  // Audio warnings, most-severe first. (Tab mode always returns tab audio, so
-  // the "no other audio" warning only applies to the getDisplayMedia path.)
+  // Audio warnings, most-severe first.
+  const tabAudioMissing = opts.mode === 'tab' && screenStream && screenStream.getAudioTracks().length === 0;
   const noSystemAudio = cam !== 'only' && opts.mode !== 'tab' && screenStream && screenStream.getAudioTracks().length === 0;
   const recMsg = cam === 'bubble' ? '● Recording… (camera bubble is on your tab)' : '● Recording…';
   let warnText = '';
   if (noAudioAtAll) {
     warnText = 'No audio is being captured. Allow microphone access (or share a tab/screen WITH audio), then re-record.';
+  } else if (tabAudioMissing) {
+    warnText = 'This tab’s audio didn’t come through — Stop and try again, or use “Entire Screen” with system audio.';
   } else if (noSystemAudio && wantMic) {
     warnText = 'Only YOUR mic is captured — others’ audio isn’t. To record everyone, Stop and use “This Tab” mode, or re-share a TAB/whole SCREEN with audio.';
   }
