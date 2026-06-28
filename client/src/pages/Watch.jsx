@@ -13,24 +13,43 @@ import VideoPlayer from '../components/VideoPlayer';
 
 const REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏'];
 
-// Languages for transcription (force the spoken language, ISO-639-1) AND translation
-// (translate the transcript into any of these via the LLM). Urdu/Hindi first.
+// Translation targets — the full set of languages Whisper large-v3 supports (99),
+// translated via the LLM. Urdu/Hindi/English first. "Original" (the native mixed
+// transcript) is added as the first option in the dropdown itself.
 const LANGUAGES = [
-  { name: 'English', code: 'en' }, { name: 'Urdu', code: 'ur' }, { name: 'Hindi', code: 'hi' },
-  { name: 'Arabic', code: 'ar' }, { name: 'Spanish', code: 'es' }, { name: 'French', code: 'fr' },
-  { name: 'German', code: 'de' }, { name: 'Portuguese', code: 'pt' }, { name: 'Italian', code: 'it' },
-  { name: 'Dutch', code: 'nl' }, { name: 'Russian', code: 'ru' }, { name: 'Chinese', code: 'zh' },
-  { name: 'Japanese', code: 'ja' }, { name: 'Korean', code: 'ko' }, { name: 'Turkish', code: 'tr' },
-  { name: 'Persian (Farsi)', code: 'fa' }, { name: 'Bengali', code: 'bn' }, { name: 'Punjabi', code: 'pa' },
-  { name: 'Indonesian', code: 'id' }, { name: 'Malay', code: 'ms' }, { name: 'Vietnamese', code: 'vi' },
-  { name: 'Thai', code: 'th' }, { name: 'Filipino', code: 'tl' }, { name: 'Polish', code: 'pl' },
-  { name: 'Ukrainian', code: 'uk' }, { name: 'Romanian', code: 'ro' }, { name: 'Greek', code: 'el' },
-  { name: 'Czech', code: 'cs' }, { name: 'Hungarian', code: 'hu' }, { name: 'Swedish', code: 'sv' },
-  { name: 'Norwegian', code: 'no' }, { name: 'Danish', code: 'da' }, { name: 'Finnish', code: 'fi' },
-  { name: 'Hebrew', code: 'he' }, { name: 'Tamil', code: 'ta' }, { name: 'Telugu', code: 'te' },
-  { name: 'Marathi', code: 'mr' }, { name: 'Gujarati', code: 'gu' }, { name: 'Kannada', code: 'kn' },
-  { name: 'Malayalam', code: 'ml' }, { name: 'Pashto', code: 'ps' }, { name: 'Nepali', code: 'ne' },
-  { name: 'Sinhala', code: 'si' }, { name: 'Swahili', code: 'sw' },
+  { name: 'Urdu', code: 'ur' }, { name: 'Hindi', code: 'hi' }, { name: 'English', code: 'en' },
+  { name: 'Arabic', code: 'ar' }, { name: 'Chinese', code: 'zh' }, { name: 'Spanish', code: 'es' },
+  { name: 'French', code: 'fr' }, { name: 'German', code: 'de' }, { name: 'Japanese', code: 'ja' },
+  { name: 'Korean', code: 'ko' }, { name: 'Portuguese', code: 'pt' }, { name: 'Russian', code: 'ru' },
+  { name: 'Italian', code: 'it' }, { name: 'Turkish', code: 'tr' }, { name: 'Dutch', code: 'nl' },
+  { name: 'Polish', code: 'pl' }, { name: 'Indonesian', code: 'id' }, { name: 'Catalan', code: 'ca' },
+  { name: 'Swedish', code: 'sv' }, { name: 'Ukrainian', code: 'uk' }, { name: 'Hebrew', code: 'he' },
+  { name: 'Greek', code: 'el' }, { name: 'Czech', code: 'cs' }, { name: 'Romanian', code: 'ro' },
+  { name: 'Danish', code: 'da' }, { name: 'Hungarian', code: 'hu' }, { name: 'Tamil', code: 'ta' },
+  { name: 'Norwegian', code: 'no' }, { name: 'Thai', code: 'th' }, { name: 'Vietnamese', code: 'vi' },
+  { name: 'Malayalam', code: 'ml' }, { name: 'Finnish', code: 'fi' }, { name: 'Persian (Farsi)', code: 'fa' },
+  { name: 'Bengali', code: 'bn' }, { name: 'Norwegian Nynorsk', code: 'nn' }, { name: 'Bulgarian', code: 'bg' },
+  { name: 'Slovak', code: 'sk' }, { name: 'Croatian', code: 'hr' }, { name: 'Lithuanian', code: 'lt' },
+  { name: 'Latin', code: 'la' }, { name: 'Malay', code: 'ms' }, { name: 'Maori', code: 'mi' },
+  { name: 'Welsh', code: 'cy' }, { name: 'Telugu', code: 'te' }, { name: 'Kazakh', code: 'kk' },
+  { name: 'Slovenian', code: 'sl' }, { name: 'Tagalog (Filipino)', code: 'tl' }, { name: 'Marathi', code: 'mr' },
+  { name: 'Macedonian', code: 'mk' }, { name: 'Icelandic', code: 'is' }, { name: 'Armenian', code: 'hy' },
+  { name: 'Estonian', code: 'et' }, { name: 'Serbian', code: 'sr' }, { name: 'Latvian', code: 'lv' },
+  { name: 'Azerbaijani', code: 'az' }, { name: 'Galician', code: 'gl' }, { name: 'Belarusian', code: 'be' },
+  { name: 'Kannada', code: 'kn' }, { name: 'Swahili', code: 'sw' }, { name: 'Afrikaans', code: 'af' },
+  { name: 'Albanian', code: 'sq' }, { name: 'Tajik', code: 'tg' }, { name: 'Yiddish', code: 'yi' },
+  { name: 'Gujarati', code: 'gu' }, { name: 'Punjabi', code: 'pa' }, { name: 'Burmese', code: 'my' },
+  { name: 'Bosnian', code: 'bs' }, { name: 'Basque', code: 'eu' }, { name: 'Khmer', code: 'km' },
+  { name: 'Sinhala', code: 'si' }, { name: 'Shona', code: 'sn' }, { name: 'Lao', code: 'lo' },
+  { name: 'Somali', code: 'so' }, { name: 'Maltese', code: 'mt' }, { name: 'Sundanese', code: 'su' },
+  { name: 'Pashto', code: 'ps' }, { name: 'Javanese', code: 'jw' }, { name: 'Nepali', code: 'ne' },
+  { name: 'Amharic', code: 'am' }, { name: 'Mongolian', code: 'mn' }, { name: 'Hausa', code: 'ha' },
+  { name: 'Haitian Creole', code: 'ht' }, { name: 'Lingala', code: 'ln' }, { name: 'Tibetan', code: 'bo' },
+  { name: 'Turkmen', code: 'tk' }, { name: 'Assamese', code: 'as' }, { name: 'Tatar', code: 'tt' },
+  { name: 'Hawaiian', code: 'haw' }, { name: 'Malagasy', code: 'mg' }, { name: 'Georgian', code: 'ka' },
+  { name: 'Occitan', code: 'oc' }, { name: 'Faroese', code: 'fo' }, { name: 'Breton', code: 'br' },
+  { name: 'Luxembourgish', code: 'lb' }, { name: 'Bashkir', code: 'ba' }, { name: 'Sindhi', code: 'sd' },
+  { name: 'Yoruba', code: 'yo' }, { name: 'Sanskrit', code: 'sa' }, { name: 'Cantonese', code: 'yue' },
 ];
 
 function fmt(s) {
@@ -104,7 +123,6 @@ export default function Watch() {
   const [pickedIds, setPickedIds] = useState([]);
   const [combining, setCombining] = useState(false);
   const [transLang, setTransLang] = useState('Original');   // transcript translation (output)
-  const [sttLang, setSttLang] = useState('auto');           // spoken language for transcription (input)
   const [translated, setTranslated] = useState(null);       // translated segments
   const [translating, setTranslating] = useState(false);
   const [commentDockOpen, setCommentDockOpen] = useState(false);
@@ -402,14 +420,15 @@ export default function Watch() {
   // Lazy-load the transcript the first time the tab is opened.
   useEffect(() => { if (tab === 'transcript' && !transcript) loadTranscript(); /* eslint-disable-next-line */ }, [tab]);
 
-  async function generateTranscript(langOverride) {
-    const language = langOverride != null ? langOverride : sttLang;
+  async function generateTranscript() {
     setTranscribing(true); setTranscriptErr('');
     setTranslated(null); setTransLang('Original');   // a fresh transcript invalidates any translation
     try {
+      // No language sent — the server returns the native MIXED "Original" (each
+      // part in the language actually spoken).
       const res = await fetch(`${API}/api/recordings/${id}/transcribe`, {
         method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language: language === 'auto' ? '' : language }),
+        body: JSON.stringify({}),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -423,8 +442,6 @@ export default function Watch() {
       setTranscriptErr('Network error — please try again.');
     } finally { setTranscribing(false); }
   }
-  // Change the spoken language → re-transcribe natively in that language.
-  function changeSttLang(code) { setSttLang(code); generateTranscript(code); }
 
   const segs = transcript?.segments || [];
   const shownSegs = (translated && translated.length) ? translated : segs;
@@ -888,17 +905,9 @@ export default function Watch() {
             <Search size={15} />
             <input className={styles.tSearch} placeholder="Search transcript…" value={tQuery} onChange={e => setTQuery(e.target.value)} />
             {isOwner && (
-              <select className={styles.audSelect} style={{ fontSize: 12, padding: '5px 6px', maxWidth: 110 }}
-                value={sttLang} disabled={transcribing} onChange={e => changeSttLang(e.target.value)}
-                title="Spoken language — re-transcribes the audio natively in this language (fixes mixed-language videos)">
-                <option value="auto">🎙 Auto</option>
-                {LANGUAGES.map(l => <option key={l.code} value={l.code}>🎙 {l.name}</option>)}
-              </select>
-            )}
-            {isOwner && (
-              <select className={styles.audSelect} style={{ fontSize: 12, padding: '5px 6px', maxWidth: 110 }}
+              <select className={styles.audSelect} style={{ fontSize: 12, padding: '5px 6px', maxWidth: 124 }}
                 value={transLang} disabled={translating} onChange={e => translateTo(e.target.value)}
-                title="Translate the transcript into another language">
+                title="Original = spoken languages as-is. Pick a language to translate the whole transcript.">
                 <option value="Original">🌐 Original</option>
                 {LANGUAGES.map(l => <option key={l.name} value={l.name}>🌐 {l.name}</option>)}
               </select>
