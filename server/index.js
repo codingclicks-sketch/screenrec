@@ -1174,14 +1174,32 @@ app.post('/api/recordings/:id/compose', requireAuth, async (req, res) => {
   }
 
   const r2 = (n) => Math.round(n * 100) / 100;
-  const publicId = `screenrec/${req.userId}/${req.params.id}`;            // overwrite target
+  const publicId = `screenrec/${req.userId}/${req.params.id}`;            // overwrite target + resolution donor
   const basePublic = `screenrec/${req.userId}/${seq[0].id}`;              // first clip = render base
   const overlayOf = (vid) => `video:${`screenrec/${req.userId}/${vid}`.replace(/\//g, ':')}`;
-  // Clips may come from different source videos at different resolutions, and
-  // Cloudinary's "splice" concat REQUIRES a common canvas (mismatched sizes →
-  // 400). Normalise every segment to 720p with letterbox padding (preserves
-  // aspect ratio, no distortion, no cropping).
-  const fit = { width: 1280, height: 720, crop: 'pad', background: 'black' };
+
+  // The combined output keeps the EDITED video's NATIVE resolution. Cloudinary's
+  // "splice" concat still needs a COMMON canvas (mismatched sizes → 400), so
+  // every segment is padded (letterboxed — no crop, no distortion) to the edited
+  // video's dimensions. Read them authoritatively from the Admin API (the search
+  // index lags); snap DOWN to even (H.264 needs divisible-by-2); cap the long
+  // edge so large frames still render on the synchronous path. Falls back to 720p.
+  let canvasW = 1280, canvasH = 720;
+  try {
+    const info = await cloudinary.api.resource(publicId, { resource_type: 'video' });
+    let w = Number(info.width), h = Number(info.height);
+    if (w > 0 && h > 0) {
+      const MAX_EDGE = 1920;                       // 1080p-class; above this synchronous renders time out
+      const longEdge = Math.max(w, h);
+      if (longEdge > MAX_EDGE) { const s = MAX_EDGE / longEdge; w = Math.round(w * s); h = Math.round(h * s); }
+      canvasW = Math.max(2, w - (w % 2));
+      canvasH = Math.max(2, h - (h % 2));
+    }
+  } catch (e) { console.warn('[compose] native-dim lookup failed, using 720p:', e && e.message); }
+
+  // Same w/h/crop on the base, every spliced overlay, AND every layer_apply step —
+  // any single mismatch makes Cloudinary reject the splice with a 400.
+  const fit = { width: canvasW, height: canvasH, crop: 'pad', background: 'black' };
   const base0 = { ...fit };
   if (!seq[0].whole) { base0.start_offset = r2(seq[0].start); base0.end_offset = r2(seq[0].end); }
   const transformation = [base0];
@@ -1190,8 +1208,9 @@ app.post('/api/recordings/:id/compose', requireAuth, async (req, res) => {
     const ov = { overlay: overlayOf(c.id), flags: 'splice', ...fit };
     if (!c.whole) { ov.start_offset = r2(c.start); ov.end_offset = r2(c.end); }
     transformation.push(ov);
-    transformation.push({ flags: 'layer_apply' });
+    transformation.push({ ...fit, flags: 'layer_apply' });
   }
+  transformation.push({ quality: 'auto:best' });   // preserve quality through the splice re-encode
 
   try {
     const derivedUrl = cloudinary.url(basePublic, { resource_type: 'video', transformation, secure: true, format: 'mp4' });
