@@ -151,12 +151,23 @@ async function beginRecording() {
   // floating DOM overlay already injected onto the page, so it's captured as
   // part of the screen — no canvas, which means recording survives minimize.)
   if (cam !== 'only') {
-    const videoConstraints = { width: { ideal: maxW }, height: { ideal: maxH }, frameRate: { ideal: 30 } };
-    // Hint the picker toward the surface the user chose (monitor/browser/window)
-    if (['monitor', 'browser', 'window'].includes(opts.surface)) videoConstraints.displaySurface = opts.surface;
-    // `systemAudio: 'include'` asks Chrome to offer the "share audio" option so we
-    // can capture other meeting participants (only works for a TAB or whole SCREEN).
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints, audio: true, systemAudio: 'include' });
+    if (opts.mode === 'tab' && opts.tabStreamId) {
+      // No-picker capture of the CURRENT tab via chrome.tabCapture. The tab's
+      // audio (everyone in a web meeting) ALWAYS comes through — no "share audio"
+      // checkbox to forget. The legacy `mandatory` constraint shape is REQUIRED
+      // for chromeMediaSource:'tab' (the modern { video:true } form is ignored).
+      screenStream = await navigator.mediaDevices.getUserMedia({
+        video: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: opts.tabStreamId, maxWidth: maxW, maxHeight: maxH, maxFrameRate: 30 } },
+        audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: opts.tabStreamId } },
+      });
+    } else {
+      const videoConstraints = { width: { ideal: maxW }, height: { ideal: maxH }, frameRate: { ideal: 30 } };
+      // Hint the picker toward the surface the user chose (monitor/browser/window)
+      if (['monitor', 'browser', 'window'].includes(opts.surface)) videoConstraints.displaySurface = opts.surface;
+      // `systemAudio: 'include'` asks Chrome to offer the "share audio" option so we
+      // can capture other meeting participants (only works for a TAB or whole SCREEN).
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints, audio: true, systemAudio: 'include' });
+    }
     activeStreams.push(screenStream);
   }
   if (cam === 'only') {
@@ -169,7 +180,7 @@ async function beginRecording() {
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       activeStreams.push(micStream);
-    } catch { /* mic unavailable */ }
+    } catch (e) { console.warn('VeoRec: microphone unavailable —', e && e.name, e && e.message); }
   }
 
   // If the user ends screen share via the browser bar, stop.
@@ -196,16 +207,27 @@ async function beginRecording() {
     previewWrap.classList.remove('show');
   }
 
-  // ── Mix audio (screen audio + mic) ────────────────────────────────────────
+  // ── Mix audio (tab/screen audio + mic) into ONE track ─────────────────────
+  // Everyone else (tab/screen audio) AND the user (mic) feed a single mixed
+  // track, so the recording always carries both sides of a meeting.
   const audioTracks = [];
   const screenAudio = screenStream ? screenStream.getAudioTracks() : [];
-  if ((screenAudio.length || micStream) ) {
+  if (screenAudio.length > 0 || micStream) {
     audioCtx = new AudioContext();
     const dest = audioCtx.createMediaStreamDestination();
-    if (screenAudio.length) audioCtx.createMediaStreamSource(screenStream).connect(dest);
+    if (screenAudio.length > 0) {
+      const screenSrc = audioCtx.createMediaStreamSource(screenStream);
+      screenSrc.connect(dest);
+      // chrome.tabCapture MUTES the captured tab for the user — route the tab
+      // audio back to the speakers so the host still hears the call live.
+      if (opts.mode === 'tab') screenSrc.connect(audioCtx.destination);
+    }
     if (micStream) audioCtx.createMediaStreamSource(micStream).connect(dest);
     audioTracks.push(...dest.stream.getAudioTracks());
   }
+  // Wanted audio but got none (mic denied + no system/tab audio) — we'll warn
+  // loudly below instead of silently recording a muted video.
+  const noAudioAtAll = wantMic && audioTracks.length === 0;
 
   const finalStream = new MediaStream([videoTrack, ...audioTracks]);
 
@@ -263,17 +285,18 @@ async function beginRecording() {
   timerEl.classList.add('show');
   updateTimer();
   timerInterval = setInterval(updateTimer, 500);
-  // Warn when only the mic is captured — no system/tab audio track came back, so
-  // other meeting participants won't be in the recording.
-  const noSystemAudio = cam !== 'only' && screenStream && screenStream.getAudioTracks().length === 0;
+  // Audio warnings, most-severe first. (Tab mode always returns tab audio, so
+  // the "no other audio" warning only applies to the getDisplayMedia path.)
+  const noSystemAudio = cam !== 'only' && opts.mode !== 'tab' && screenStream && screenStream.getAudioTracks().length === 0;
   const recMsg = cam === 'bubble' ? '● Recording… (camera bubble is on your tab)' : '● Recording…';
-  setStatus(
-    noSystemAudio && wantMic
-      ? '● Recording… ⚠ Only YOUR mic is captured — other people’s audio isn’t. To record them: Stop, then re-share a browser TAB with “Share tab audio” on, or your whole SCREEN with system audio.'
-      : recMsg,
-    'recording'
-  );
-  if (noSystemAudio && wantMic) overlayMsg({ type: 'SR_OVERLAY_WARN', text: 'Only your mic is being recorded — re-share with audio to capture others.' });
+  let warnText = '';
+  if (noAudioAtAll) {
+    warnText = 'No audio is being captured. Allow microphone access (or share a tab/screen WITH audio), then re-record.';
+  } else if (noSystemAudio && wantMic) {
+    warnText = 'Only YOUR mic is captured — others’ audio isn’t. To record everyone, Stop and use “This Tab” mode, or re-share a TAB/whole SCREEN with audio.';
+  }
+  setStatus(warnText ? '● Recording… ⚠ ' + warnText : recMsg, 'recording');
+  if (warnText) overlayMsg({ type: 'SR_OVERLAY_WARN', text: warnText });
 
   chrome.storage.local.set({ recording: true, startTime });
   // Shared state the on-screen overlay (on any tab) reads to render the timer.
