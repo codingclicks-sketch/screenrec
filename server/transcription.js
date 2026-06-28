@@ -39,7 +39,8 @@ const FFPROBE_BIN = process.env.FFPROBE_BIN || 'ffprobe';
 const VAD_NOISE = process.env.STT_VAD_NOISE || '-30dB';            // silence threshold (looser than ffmpeg's -60dB default)
 const VAD_MIN_SIL = Number(process.env.STT_VAD_MIN_SIL || 0.5);    // min silence (s) to count as a pause
 const CHUNK_MAX_SEC = Number(process.env.STT_CHUNK_MAX || 40);     // hard cap so no chunk exceeds Whisper's window
-const CHUNK_MIN_SEC = Number(process.env.STT_CHUNK_MIN || 1.5);    // merge sub-1.5s slivers (avoid 10s-billed waste)
+const CHUNK_MIN_SEC = Number(process.env.STT_CHUNK_MIN || 3);      // merge short chunks (short snippets mis-detect language)
+const DOMINANT_MIN_SHARE = Number(process.env.STT_DOMINANT_SHARE || 0.15); // a language must cover ≥ this share of audio to be kept
 const CHUNK_PAD_SEC = 0.15;                                        // pad into surrounding silence so boundary words aren't clipped
 const MAX_CHUNKS = Number(process.env.STT_MAX_CHUNKS || 40);       // rate-limit safety: never exceed this many Groq calls
 const CHUNK_GAP_MS = Number(process.env.STT_CHUNK_GAP_MS || 3100); // ≥3s spacing → stays under Groq's 20 RPM
@@ -77,7 +78,7 @@ function sh(cmd, args, { timeout } = {}) {
 // ── Groq path: VAD-chunk → per-chunk AUTO-DETECT → merge (true multi-language) ─
 // Each chunk auto-detects its OWN language (no `language` param). That is the whole
 // point: an Urdu utterance detects 'ur', an English one detects 'en'.
-async function groqTranscribeFile(filePath, fileName) {
+async function groqTranscribeFile(filePath, fileName, language) {
   const buf = fs.readFileSync(filePath);
   const form = new FormData();                       // Node 18+ global
   form.append('file', new Blob([buf]), fileName);    // filename drives Groq's format sniffing
@@ -85,6 +86,7 @@ async function groqTranscribeFile(filePath, fileName) {
   form.append('response_format', 'verbose_json');    // REQUIRED for timestamped segments
   form.append('temperature', '0');                   // deterministic → avoids repeated-line hallucination
   form.append('timestamp_granularities[]', 'segment');
+  if (language) form.append('language', language);   // pass 2 only: force the dominant language on a mis-detected chunk
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 180_000);
   let r;
@@ -161,6 +163,25 @@ function buildSpeechChunks(silences, duration) {
   return capped;
 }
 
+// Whisper returns the language as a lowercase NAME; map → ISO code so we can FORCE
+// the dominant language on a mis-detected chunk (pass 2). Covers the languages that
+// realistically dominate a recording.
+const WHISPER_NAME_TO_CODE = {
+  english: 'en', urdu: 'ur', hindi: 'hi', arabic: 'ar', persian: 'fa', farsi: 'fa',
+  chinese: 'zh', mandarin: 'zh', cantonese: 'yue', spanish: 'es', castilian: 'es',
+  french: 'fr', german: 'de', japanese: 'ja', korean: 'ko', portuguese: 'pt',
+  russian: 'ru', italian: 'it', turkish: 'tr', dutch: 'nl', flemish: 'nl', polish: 'pl',
+  indonesian: 'id', malay: 'ms', ukrainian: 'uk', hebrew: 'he', greek: 'el',
+  czech: 'cs', romanian: 'ro', moldovan: 'ro', danish: 'da', hungarian: 'hu',
+  tamil: 'ta', norwegian: 'no', nynorsk: 'nn', thai: 'th', vietnamese: 'vi',
+  bengali: 'bn', telugu: 'te', marathi: 'mr', gujarati: 'gu', kannada: 'kn',
+  malayalam: 'ml', punjabi: 'pa', panjabi: 'pa', swahili: 'sw', pashto: 'ps', pushto: 'ps',
+  nepali: 'ne', sinhala: 'si', sinhalese: 'si', swedish: 'sv', finnish: 'fi',
+  catalan: 'ca', valencian: 'ca', serbian: 'sr', croatian: 'hr', bulgarian: 'bg',
+  slovak: 'sk', hausa: 'ha', amharic: 'am', somali: 'so', azerbaijani: 'az',
+  kazakh: 'kk', uzbek: 'uz', sindhi: 'sd', tagalog: 'tl',
+};
+
 async function transcribeViaGroq(inPath, tmp) {
   // 16 kHz mono WAV — Whisper's native rate; used for silence analysis + chunk cuts.
   const wavPath = path.join(tmp, 'audio.wav');
@@ -185,7 +206,8 @@ async function transcribeViaGroq(inPath, tmp) {
     chunks = merged;
   }
 
-  const allSegs = [], langDur = {};
+  // ── Pass 1: transcribe each chunk with independent auto-detect ────────────────
+  const results = [], langDur = {};                   // results: {chunk, flac, lang, segments}
   for (let i = 0; i < chunks.length; i++) {
     const c = chunks[i];
     const flac = path.join(tmp, `chunk_${String(i).padStart(3, '0')}.flac`);
@@ -197,19 +219,38 @@ async function transcribeViaGroq(inPath, tmp) {
       try { j = await groqTranscribeFile(flac, `chunk_${i}.flac`); }
       catch (e2) { console.error(`[transcribe] chunk ${i} skipped:`, e2.message); continue; }
     }
-    const lang = j.language || 'auto';
+    const lang = String(j.language || 'auto').toLowerCase();
     langDur[lang] = (langDur[lang] || 0) + (c.end - c.start);
-    for (const s of mapGroqJson(j, c.start).segments) allSegs.push({ ...s, language: lang });   // absolute offset = chunk.start
+    results.push({ chunk: c, flac, lang, segments: mapGroqJson(j, c.start).segments });
     if (i < chunks.length - 1) await new Promise(r => setTimeout(r, CHUNK_GAP_MS));              // pace under 20 RPM
   }
-  allSegs.sort((a, b) => a.start - b.start);
 
-  // Top-level language: one detected → that code; multiple → the language covering
-  // the most audio DURATION (chunk counts are skewed by pause frequency).
-  const langs = Object.keys(langDur);
-  const language = langs.length === 1 ? langs[0]
-    : langs.length > 1 ? langs.sort((a, b) => langDur[b] - langDur[a])[0] : 'auto';
-  return { text: allSegs.map(s => s.text).join(' ').trim(), language, segments: allSegs };
+  // ── Pass 2: suppress spurious languages ───────────────────────────────────────
+  // Short/noisy chunks mis-detect into random languages (e.g. Korean/Arabic creeping
+  // into an Urdu video). Keep only languages that cover a real share of the audio;
+  // re-transcribe the rest FORCED to the dominant language so the script/text is right.
+  const totalDur = Object.values(langDur).reduce((a, b) => a + b, 0) || 1;
+  const dominant = Object.keys(langDur).sort((a, b) => langDur[b] - langDur[a])[0] || 'auto';
+  const legit = new Set(Object.keys(langDur).filter(l => langDur[l] >= DOMINANT_MIN_SHARE * totalDur));
+  legit.add(dominant);
+  const domCode = WHISPER_NAME_TO_CODE[dominant];
+  if (domCode) {
+    for (const r of results) {
+      if (legit.has(r.lang)) continue;
+      try {
+        const j = await groqTranscribeFile(r.flac, 'rechunk.flac', domCode);   // force the dominant language
+        r.segments = mapGroqJson(j, r.chunk.start).segments;
+        r.lang = dominant;
+        await new Promise(rs => setTimeout(rs, CHUNK_GAP_MS));
+      } catch (e) { /* keep the pass-1 result on failure */ }
+    }
+  }
+
+  // ── Merge (absolute offsets already applied per chunk) ────────────────────────
+  const allSegs = [];
+  for (const r of results) for (const s of r.segments) allSegs.push({ ...s, language: r.lang });
+  allSegs.sort((a, b) => a.start - b.start);
+  return { text: allSegs.map(s => s.text).join(' ').trim(), language: dominant, segments: allSegs };
 }
 
 // ── Local whisper.cpp path (fallback when no Groq key) ───────────────────────
