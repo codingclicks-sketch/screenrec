@@ -62,3 +62,30 @@
 .chooserOptText em { font-style: normal; font-size: 12.5px; color: #9a9ab0; line-height: 1.45; }
 .chooserCancel { display: block; margin: 4px auto 0; background: none; border: none; color: #8a8aa0; font-size: 13px; cursor: pointer; padding: 6px 10px; border-radius: 8px; }
 .chooserCancel:hover { color: #cfcfe6; }
+
+/* ── Clips bar (trim base + add more clips) ───────────────────────────────── */
+.clipsBar { padding: 18px 24px 30px; border-top: 1px solid #23232e; }
+.clipsHead { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.clipsLabel { font-size: 14px; font-weight: 700; color: #fff; }
+.clipsHint { font-size: 12px; color: #8a8aa0; }
+.clipsStrip { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+.clipCard { display: flex; align-items: center; gap: 10px; background: #1a1a24; border: 1px solid #2c2c3a; border-radius: 12px; padding: 10px 13px; position: relative; min-width: 175px; }
+.clipNum { width: 24px; height: 24px; border-radius: 7px; background: #5b5bf6; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+.clipInfo { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.clipInfo strong { font-size: 13.5px; color: #fff; font-weight: 600; }
+.clipInfo em { font-style: normal; font-size: 11.5px; color: #8a8aa0; }
+.clipTitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+.clipDel { width: 24px; height: 24px; border-radius: 7px; background: #23232e; color: #ff8080; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.clipDel:hover { background: #ff4b4b; color: #fff; }
+.addClip { display: flex; align-items: center; gap: 7px; background: #1d1d2a; border: 1px dashed #3a3a4c; border-radius: 12px; padding: 10px 16px; color: #cfcfe6; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.addClip:hover { border-color: #5b5bf6; color: #fff; }
+.proTag { font-size: 9.5px; font-weight: 800; color: #8a8aff; background: #23234a; padding: 2px 6px; border-radius: 5px; margin-left: 5px; }
+.picker { margin-top: 14px; background: #16161f; border: 1px solid #2a2a3a; border-radius: 14px; padding: 16px; max-width: 420px; }
+.uploadBtn { display: flex; align-items: center; justify-content: center; gap: 8px; background: #5b5bf6; color: #fff; border-radius: 10px; padding: 11px; font-weight: 700; font-size: 13.5px; cursor: pointer; }
+.uploadBtn:hover { background: #4848d6; }
+.pickerSub { font-size: 12px; color: #8a8aa0; text-align: center; margin: 12px 0 8px; }
+.pickerList { display: flex; flex-direction: column; gap: 4px; max-height: 210px; overflow-y: auto; }
+.pickerItem { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: #1d1d2a; border: 1px solid #2c2c40; border-radius: 9px; padding: 9px 12px; color: #d6d6e2; cursor: pointer; font-size: 13px; }
+.pickerItem:hover { border-color: #5b5bf6; color: #fff; }
+.pickerItem span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pickerEmpty { font-size: 13px; color: #8a8aa0; text-align: center; padding: 12px; }

@@ -543,6 +543,7 @@ if (!USE_CLOUDINARY) {
         public_id: r.public_id,
         trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments,
         canTranscribe: permissions.canUseTranscription(users.findById(req.userId)).allowed,
+        canStitch: permissions.canStitchClips(users.findById(req.userId)).allowed,
       });
     } catch (e) {
       res.status(404).json({ error: 'Not found' });
@@ -1140,6 +1141,69 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('[trim] failed:', e.message);
     res.status(500).json({ error: e.message || 'Trim failed' });
+  }
+});
+
+// Compose = trim the base video's kept segments AND append other clips, in one
+// Cloudinary "splice" render. Powers the editor's "add a clip" flow. Pro feature.
+app.post('/api/recordings/:id/compose', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  if (!USE_CLOUDINARY) return res.status(501).json({ error: 'Composing needs Cloudinary.' });
+  const cCheck = permissions.canStitchClips(users.findById(req.userId));
+  if (!cCheck.allowed) return res.status(403).json({ error: cCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'clipStitch' });
+
+  const segments = (Array.isArray(req.body.segments) ? req.body.segments : [])
+    .filter(s => s && Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
+    .map(s => ({ start: Math.max(0, +s.start), end: +s.end }))
+    .sort((a, b) => a.start - b.start);
+  const appendIds = Array.isArray(req.body.appendIds) ? req.body.appendIds.filter(v => typeof v === 'string').slice(0, 10) : [];
+  if (!segments.length) return res.status(400).json({ error: 'Nothing to keep from the base video.' });
+  if (!appendIds.length) return res.status(400).json({ error: 'No clips to add — use Trim instead.' });
+  for (const vid of appendIds) {
+    if (!(await userOwns(req.userId, vid))) return res.status(404).json({ error: 'One of the added clips was not found.' });
+  }
+
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const publicId = `screenrec/${req.userId}/${req.params.id}`;
+  const overlayId = `video:${publicId.replace(/\//g, ':')}`;
+  // base = first kept segment of the main video; splice the remaining main
+  // segments, then splice each appended clip (whole).
+  const transformation = [{ start_offset: r2(segments[0].start), end_offset: r2(segments[0].end) }];
+  for (let i = 1; i < segments.length; i++) {
+    transformation.push({ overlay: overlayId, flags: 'splice', start_offset: r2(segments[i].start), end_offset: r2(segments[i].end) });
+    transformation.push({ flags: 'layer_apply' });
+  }
+  for (const vid of appendIds) {
+    transformation.push({ overlay: `video:screenrec:${req.userId}:${vid}`, flags: 'splice' });
+    transformation.push({ flags: 'layer_apply' });
+  }
+
+  try {
+    const derivedUrl = cloudinary.url(publicId, { resource_type: 'video', transformation, secure: true, format: 'mp4' });
+    let prevCtx = {};
+    try { const sx = await cloudinary.search.expression(`public_id=${publicId}`).with_field('context').max_results(1).execute(); if (sx.resources.length) prevCtx = sx.resources[0].context?.custom || {}; } catch {}
+    const keepTitle = cleanTitle(prevCtx.title) || 'Combined recording';
+    const mode = req.body.mode === 'overwrite' ? 'overwrite' : 'copy';
+
+    if (mode === 'copy') {
+      const newId = uuidv4();
+      const uploaded = await cloudinary.uploader.upload(derivedUrl, {
+        resource_type: 'video', public_id: `screenrec/${req.userId}/${newId}`,
+        context: buildContext({ title: `${keepTitle} (edited)`, created_at: Date.now(), rec_id: newId, user_id: req.userId, edited: 1 }),
+      });
+      usageService.updateUsage(req.userId, { bytes: uploaded.bytes || 0, videos: 1, seconds: Math.round(uploaded.duration || 0) });
+      meta.set(newId, { title: `${keepTitle} (edited)` });
+      return res.json({ ok: true, id: newId, mode: 'copy' });
+    }
+    const tmpId = `${publicId}__compose_${Date.now()}`;
+    const uploaded = await cloudinary.uploader.upload(derivedUrl, { resource_type: 'video', public_id: tmpId, overwrite: true });
+    await cloudinary.uploader.rename(tmpId, publicId, { resource_type: 'video', overwrite: true, invalidate: true });
+    try { await cloudinary.uploader.add_context(buildContext({ title: keepTitle, duration: Math.round(uploaded.duration || 0), rec_id: req.params.id, user_id: req.userId, edited: 1 }), [publicId], { resource_type: 'video' }); } catch {}
+    meta.set(req.params.id, { segments: null, trimStart: null, trimEnd: null });
+    res.json({ ok: true, mode: 'overwrite' });
+  } catch (e) {
+    console.error('[compose] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Could not combine the clips.' });
   }
 });
 

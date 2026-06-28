@@ -682,11 +682,11 @@ export default function Watch() {
           <span>Trim, split and cut parts of your recording.</span>
         </span>
       </button>
-      <button className={styles.action} onClick={openCombine}>
+      <button className={styles.action} onClick={() => navigate(`/edit/${id}`)}>
         <span className={styles.actionIcon}><CopyPlus size={18} /></span>
         <span className={styles.actionText}>
           <strong>Combine clips</strong>
-          <span>Stitch this with your other recordings into one video.</span>
+          <span>Trim &amp; add other clips in the editor.</span>
         </span>
       </button>
       {combineOpen && (

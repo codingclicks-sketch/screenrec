@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Play, Pause, Scissors, Trash2, RotateCcw, ArrowLeft, Save, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, Scissors, Trash2, RotateCcw, ArrowLeft, Save, SkipBack, SkipForward, Plus, Upload, X, Film } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import API from '../api';
 import s from './Editor.module.css';
@@ -35,6 +35,10 @@ export default function Editor() {
   const [exportMsg, setExportMsg] = useState('');
   const [indeterminate, setIndeterminate] = useState(false);
   const [chooser, setChooser] = useState(false); // overwrite-vs-copy dialog
+  const [appendClips, setAppendClips] = useState([]); // [{id,title}] clips to add after
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [myVideos, setMyVideos] = useState(null);
+  const [loadingClip, setLoadingClip] = useState(false);
 
   useEffect(() => {
     authFetch(`${API}/api/recordings/${id}`).then((r) => r.json()).then((d) => {
@@ -118,6 +122,39 @@ export default function Editor() {
   }
   function resetEdits() {
     setSegments([{ start: 0, end: duration }]);
+    setAppendClips([]);
+  }
+
+  // ── Add other clips (library or upload) ───────────────────────────────────────
+  function upsell() {
+    if (window.confirm('Combining clips is a Pro feature. Open pricing to upgrade?')) navigate('/pricing');
+  }
+  function openPicker() {
+    if (rec && rec.canStitch === false) { upsell(); return; }
+    setPickerOpen((o) => !o);
+    if (myVideos == null) {
+      authFetch(`${API}/api/recordings`).then((r) => (r.ok ? r.json() : []))
+        .then((d) => setMyVideos(Array.isArray(d) ? d.filter((v) => v.id !== id) : []))
+        .catch(() => setMyVideos([]));
+    }
+  }
+  function addFromLibrary(v) { setAppendClips((c) => [...c, { id: v.id, title: v.title }]); setPickerOpen(false); }
+  function removeAppend(i) { setAppendClips((c) => c.filter((_, idx) => idx !== i)); }
+  async function uploadClip(file) {
+    if (!file) return;
+    setLoadingClip(true);
+    try {
+      const name = (file.name || 'Uploaded clip').replace(/\.[^.]+$/, '').slice(0, 60);
+      const form = new FormData();
+      form.append('video', file, file.name || 'clip.mp4');
+      form.append('title', name || 'Uploaded clip');
+      form.append('duration', '0');
+      const res = await authFetch(`${API}/api/upload`, { method: 'POST', body: form });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.id) { setAppendClips((c) => [...c, { id: d.id, title: name || 'Uploaded clip' }]); setPickerOpen(false); }
+      else alert(d.error || 'Could not upload that clip.');
+    } catch { alert('Upload failed — please try again.'); }
+    finally { setLoadingClip(false); }
   }
 
   // Drag a segment edge (trim handle)
@@ -231,12 +268,33 @@ export default function Editor() {
   // there's nothing to bake, so just clear any virtual edits.
   function onSaveClick() {
     const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
-    if (isFull) { save('overwrite'); return; }
+    if (appendClips.length === 0 && isFull) { save('overwrite'); return; }
     setChooser(true);
   }
 
   async function save(mode = 'overwrite') {
     setChooser(false);
+    // Compose path — trim the base AND append the added clips (Pro feature).
+    if (appendClips.length) {
+      if (rec.canStitch === false) { upsell(); return; }
+      try { videoRef.current && videoRef.current.pause(); } catch {}
+      setExporting(true); setIndeterminate(true); setProgress(0);
+      setExportMsg(mode === 'copy' ? 'Combining your clips into a new copy…' : 'Combining your clips on our servers…');
+      try {
+        const res = await authFetch(`${API}/api/recordings/${id}/compose`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segments, appendIds: appendClips.map((c) => c.id), mode }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (res.ok) { setIndeterminate(false); setProgress(1); setExportMsg('Saved ✓ Your clips are combined.'); setTimeout(() => navigate(d.id ? `/watch/${d.id}` : '/'), 1100); return; }
+        if (res.status === 403 && d.code === 'feature_locked') { setExporting(false); upsell(); return; }
+        throw new Error(d.error || 'Combine failed');
+      } catch (e) {
+        setIndeterminate(false); setExportMsg('Could not combine: ' + (e.message || 'error'));
+        setTimeout(() => setExporting(false), 2800);
+      }
+      return;
+    }
     const copy = mode === 'copy';
     const isFull = segments.length === 1 && segments[0].start <= 0.05 && segments[0].end >= duration - 0.05;
     if (isFull) {
@@ -332,6 +390,49 @@ export default function Editor() {
           <span>Drag the handles to trim · Split &amp; delete parts to cut</span>
           <span>Final length: <strong>{fmt(keptDuration)}</strong></span>
         </div>
+      </div>
+
+      {/* Clips bar — trim the base video and add more clips after it */}
+      <div className={s.clipsBar}>
+        <div className={s.clipsHead}>
+          <span className={s.clipsLabel}>Clips in this video</span>
+          <span className={s.clipsHint}>Plays in order, top to bottom. The base video is trimmed above.</span>
+        </div>
+        <div className={s.clipsStrip}>
+          <div className={s.clipCard}>
+            <span className={s.clipNum}>1</span>
+            <span className={s.clipInfo}><strong>This video</strong><em>{fmt(keptDuration)} · trimmed</em></span>
+          </div>
+          {appendClips.map((c, i) => (
+            <div key={c.id} className={s.clipCard}>
+              <span className={s.clipNum}>{i + 2}</span>
+              <span className={s.clipInfo}><strong className={s.clipTitle}>{c.title}</strong><em>added clip</em></span>
+              <button className={s.clipDel} onClick={() => removeAppend(i)} title="Remove clip"><X size={14} /></button>
+            </div>
+          ))}
+          <button className={s.addClip} onClick={openPicker}>
+            <Plus size={18} /> Add clip{rec.canStitch === false && <span className={s.proTag}>Pro</span>}
+          </button>
+        </div>
+        {pickerOpen && (
+          <div className={s.picker}>
+            <label className={s.uploadBtn}>
+              <Upload size={15} /> {loadingClip ? 'Uploading…' : 'Upload from computer'}
+              <input type="file" accept="video/*" hidden disabled={loadingClip}
+                onChange={(e) => uploadClip(e.target.files && e.target.files[0])} />
+            </label>
+            <div className={s.pickerSub}>or pick from your library</div>
+            <div className={s.pickerList}>
+              {myVideos == null ? <p className={s.pickerEmpty}>Loading…</p>
+                : myVideos.length === 0 ? <p className={s.pickerEmpty}>No other videos yet.</p>
+                : myVideos.map((v) => (
+                  <button key={v.id} className={s.pickerItem} onClick={() => addFromLibrary(v)}>
+                    <Film size={14} /> <span>{v.title}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {chooser && (
