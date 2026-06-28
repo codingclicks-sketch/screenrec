@@ -3,6 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
@@ -57,6 +58,11 @@ const resetLimiter  = rateLimit({ name: 'reset',  windowMs: 15 * 60 * 1000, max:
 
 // In-memory uploader for the editor's "replace with trimmed file" flow.
 const memUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+
+// Recordings are streamed to a TEMP FILE on disk before going to Cloudinary —
+// buffering a few-hundred-MB recording in RAM was OOM-killing the container
+// mid-upload (surfaced to users as a 502). Disk + chunked upload keeps memory flat.
+const UPLOAD_TMP_DIR = process.env.UPLOAD_TMP_DIR || os.tmpdir();
 
 // ── Auth Routes (public) ─────────────────────────────────────────────────────
 // Serialize a user for client responses — never includes the password hash.
@@ -316,16 +322,24 @@ if (!USE_CLOUDINARY) {
 
 } else {
   // ── Cloudinary routes ──────────────────────────────────────────────────────
-  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+  // Disk-backed (not memory) so large recordings can't OOM the process → no 502.
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, UPLOAD_TMP_DIR),
+      filename: (req, file, cb) => cb(null, `veorec-${uuidv4()}.upload`),
+    }),
+    limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB safety ceiling
+  });
 
   app.post('/api/upload', requireAuth, upload.single('video'), async (req, res) => {
+    const tmpPath = req.file?.path;
     try {
       const { title, duration } = req.body;
       const id = uuidv4();
       const recTitle = title || 'Untitled Recording';
       const user = users.findById(req.userId);
       const durationSec = parseInt(duration) || 0;
-      const sizeBytes = req.file?.size || req.file?.buffer?.length || 0;
+      const sizeBytes = req.file?.size || 0;
 
       // ── SERVER-SIDE ENFORCEMENT (never trust the client) ───────────────────
       // 1) Recording length limit.
@@ -350,17 +364,19 @@ if (!USE_CLOUDINARY) {
         return res.status(403).json({ error: storeCheck.reason, upgradeRequired: true, code: 'storage_limit', meta: storeCheck.meta });
       }
 
+      // Chunked upload from the temp file — low, flat memory regardless of size.
       const result = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
+        cloudinary.uploader.upload_large(
+          tmpPath,
           {
             resource_type: 'video',
             folder: `screenrec/${req.userId}`,
             public_id: id,
+            chunk_size: 20 * 1024 * 1024,   // 20MB chunks
             context: `title=${recTitle}|duration=${duration || 0}|created_at=${Date.now()}|rec_id=${id}|user_id=${req.userId}`,
           },
           (err, result) => err ? reject(err) : resolve(result)
         );
-        stream.end(req.file.buffer);
       });
 
       // ── Usage accounting (incremental; cron heals any drift) ───────────────
@@ -375,8 +391,20 @@ if (!USE_CLOUDINARY) {
       const clientBase = process.env.CLIENT_URL || base;
       res.json({ id, url: `${clientBase}/watch/${id}` });
     } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
+      console.error('[upload] failed:', (e && e.message) || e);
+      // Cloudinary rejects videos over the account's per-file size limit (100MB
+      // on the free tier). Surface a clear message + a flag the extension uses to
+      // offer its local "save to your device" fallback, so a take is never lost.
+      const msg = String((e && e.message) || e || 'Upload failed');
+      const tooBig = /too large|maximum.*size|file size|413/i.test(msg);
+      res.status(tooBig ? 413 : 500).json({
+        error: tooBig
+          ? 'This recording is too large to upload on your current plan — it’s still on your device. Use “Save recording to your device” below.'
+          : msg,
+        saveLocally: tooBig,
+      });
+    } finally {
+      if (tmpPath) fs.unlink(tmpPath, () => {});
     }
   });
 
@@ -1536,5 +1564,17 @@ if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get('*', (req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
+
+// Upload error handler — multer rejects a file past the size limit BEFORE the
+// route runs, so without this Express would send an opaque HTML 500. Convert it
+// to the same JSON the extension understands, so it offers the local-save
+// fallback and a recording is never silently lost.
+app.use((err, req, res, next) => {
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'This recording is too large to upload — it’s still on your device. Use “Save recording to your device” below.', saveLocally: true });
+  }
+  if (err) { console.error('[unhandled]', err.message || err); return res.status(500).json({ error: 'Server error' }); }
+  next();
+});
 
 app.listen(PORT, () => console.log(`Server :${PORT} | Cloudinary: ${USE_CLOUDINARY}`));
