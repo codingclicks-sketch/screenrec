@@ -230,6 +230,13 @@ mainBtn.addEventListener('click', async () => {
   window.close();
 });
 
+// Screenshot — open a capture window (getDisplayMedia frame-grab → copy/download).
+const screenshotBtn = document.getElementById('screenshotBtn');
+if (screenshotBtn) screenshotBtn.addEventListener('click', () => {
+  chrome.windows.create({ url: chrome.runtime.getURL('screenshot.html'), type: 'popup', width: 960, height: 680 });
+  window.close();
+});
+
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return 'just now';

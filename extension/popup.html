@@ -93,6 +93,13 @@
     .btn-record.stop { background:#10101c; box-shadow:none; }
     .btn-record.disabled { background:#cfd3da; cursor:not-allowed; box-shadow:none; }
 
+    /* ── Screenshot button (secondary) ── */
+    .btn-shot { width:100%; padding:13px; margin-top:10px; border-radius:13px; font-size:14.5px; font-weight:600;
+      cursor:pointer; border:1px solid var(--border2); background:#fff; color:var(--text);
+      display:flex; align-items:center; justify-content:center; gap:9px; }
+    .btn-shot:hover { background:var(--soft); border-color:#d7d7fb; color:var(--accent); }
+    .btn-shot svg { width:17px; height:17px; }
+
     .free-note { text-align:center; font-size:14px; color:var(--text2); margin-top:16px; font-weight:500; }
     .free-note b { color:var(--text); font-weight:700; }
 
@@ -235,6 +242,10 @@
 
       <div class="timer" id="timer">00:00</div>
       <button class="btn-record" id="mainBtn"><span class="rdot"></span> Start Recording</button>
+      <button class="btn-shot" id="screenshotBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Take a screenshot
+      </button>
       <div class="status" id="status"></div>
       <div class="free-note" id="freeNote"><b>✨ Free</b> · Unlimited recordings</div>
 
