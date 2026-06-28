@@ -103,17 +103,20 @@ async function generateChapters(segments) {
 // ── Title (LLM, multilingual) ─────────────────────────────────────────────────
 // A short title in the SAME language/script as the transcript — so Urdu/Hindi
 // videos get a real title instead of the English-only heuristic returning null.
-async function generateTitle(transcriptText) {
+async function generateTitle(transcriptText, precomputedSummary) {
   const text = String(transcriptText || '').trim();
   if (text.length < 12 || !isLLMConfigured()) return null;
+  // Titling a RAW non-English transcript made the small model hallucinate gibberish
+  // ("New Patricianum…"). Title the SUMMARY instead — it's clean plain language the
+  // model handles reliably — so the title comes out clear even for Urdu/Hindi videos.
+  let basis = String(precomputedSummary || '').trim();
+  if (!basis) { try { basis = String(await summarize(text) || '').trim(); } catch {} }
+  if (!basis) basis = text;
   try {
-    // Don't force the transcript's language/script — forcing a low-resource script
-    // (e.g. Urdu) made the model hallucinate gibberish. A clear, accurate title in
-    // plain language is what we want.
     const out = await chat([
-      { role: 'system', content: 'Write one short, specific video title (4–8 words) describing what this screen recording is about. Output ONLY the title text — no quotes, no preamble, no trailing punctuation, no "this video".' },
-      { role: 'user', content: `Transcript:\n\n${text.slice(0, 4000)}` },
-    ], { maxTokens: 24, temperature: 0.2 });
+      { role: 'system', content: 'Output ONLY a clear, specific 4–7 word English video title in Title Case for the content below. No quotes, no preamble, no trailing punctuation, no "this video".' },
+      { role: 'user', content: basis.slice(0, 1500) },
+    ], { maxTokens: 20, temperature: 0.2 });
     const title = String(out || '').split('\n')[0].replace(/\s+/g, ' ').replace(/^["'“”\s]+|["'“”.\s]+$/g, '').slice(0, 80).trim();
     return title || null;
   } catch (e) { return null; }
