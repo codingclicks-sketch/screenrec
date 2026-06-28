@@ -71,6 +71,10 @@ export default function Watch() {
   const [renameVal, setRenameVal] = useState('');
   const [autoTitling, setAutoTitling] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
+  const [chaptering, setChaptering] = useState(false);
+  const [transLang, setTransLang] = useState('Original');   // transcript translation
+  const [translated, setTranslated] = useState(null);       // translated segments
+  const [translating, setTranslating] = useState(false);
   const [commentDockOpen, setCommentDockOpen] = useState(false);
   const [folders, setFolders] = useState([]);          // owner's folders (⋯ → Move)
   const [moveOpen, setMoveOpen] = useState(false);     // ⋯ → Move submenu
@@ -179,6 +183,33 @@ export default function Watch() {
     finally { setSummarizing(false); }
   }
 
+  async function genChapters() {
+    setChaptering(true);
+    try {
+      const res = await fetch(`${API}/api/recordings/${id}/chapters`, { method: 'POST', headers: authHeaders() });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(d.chapters)) setRec(r => ({ ...r, chapters: d.chapters }));
+      else if (d.code === 'feature_locked') { setCanTranscribe(false); selectTab('transcript'); }
+      else alert(d.error || 'Could not generate chapters.');
+    } catch { alert('Network error — please try again.'); }
+    finally { setChaptering(false); }
+  }
+
+  async function translateTo(lang) {
+    setTransLang(lang);
+    if (lang === 'Original') { setTranslated(null); return; }
+    setTranslating(true);
+    try {
+      const res = await fetch(`${API}/api/recordings/${id}/transcript/translate`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ lang }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(d.segments)) setTranslated(d.segments);
+      else { alert(d.error || (d.code === 'no_llm' ? 'Translation needs the AI key (GROQ_API_KEY).' : 'Could not translate.')); setTransLang('Original'); setTranslated(null); }
+    } catch { alert('Network error — please try again.'); setTransLang('Original'); }
+    finally { setTranslating(false); }
+  }
+
   async function saveCta() {
     let url = (ctaUrl || '').trim();
     if (!url) { setCtaOpen(false); return; }
@@ -274,15 +305,16 @@ export default function Watch() {
   }
 
   const segs = transcript?.segments || [];
+  const shownSegs = (translated && translated.length) ? translated : segs;
   const filteredSegs = useMemo(() => {
     const q = tQuery.trim().toLowerCase();
-    if (!q) return segs.map((s, i) => ({ ...s, i }));
-    return segs.map((s, i) => ({ ...s, i })).filter(s => s.text.toLowerCase().includes(q));
-  }, [segs, tQuery]);
+    if (!q) return shownSegs.map((s, i) => ({ ...s, i }));
+    return shownSegs.map((s, i) => ({ ...s, i })).filter(s => s.text.toLowerCase().includes(q));
+  }, [shownSegs, tQuery]);
   const activeSegIdx = useMemo(() => {
-    if (!segs.length) return -1;
-    return segs.findIndex(s => videoTime >= s.start && videoTime < s.end);
-  }, [segs, videoTime]);
+    if (!shownSegs.length) return -1;
+    return shownSegs.findIndex(s => videoTime >= s.start && videoTime < s.end);
+  }, [shownSegs, videoTime]);
   // Auto-scroll the active line into view while playing.
   useEffect(() => {
     if (tab === 'transcript' && activeSegRef.current) {
@@ -563,6 +595,13 @@ export default function Watch() {
           <span>Auto-write a summary from the video — free.</span>
         </span>
       </button>
+      <button className={styles.action} onClick={genChapters} disabled={chaptering}>
+        <span className={styles.actionIcon}>{chaptering ? <Loader2 size={18} className={styles.spin} /> : <PlaySquare size={18} />}</span>
+        <span className={styles.actionText}>
+          <strong>{chaptering ? 'Adding chapters…' : (rec.chapters?.length ? 'Regenerate chapters' : 'Generate chapters')}</strong>
+          <span>Auto-split the video into clickable chapters — free.</span>
+        </span>
+      </button>
       <button className={styles.action} onClick={() => { setCtaOpen(o => !o); if (rec.cta) { setCtaLabel(rec.cta.label || ''); setCtaUrl(rec.cta.url || ''); } }}>
         <span className={styles.actionIcon}><Link2 size={18} /></span>
         <span className={styles.actionText}>
@@ -667,11 +706,20 @@ export default function Watch() {
             <Search size={15} />
             <input className={styles.tSearch} placeholder="Search transcript…" value={tQuery} onChange={e => setTQuery(e.target.value)} />
             {isOwner && (
+              <select className={styles.audSelect} style={{ fontSize: 12, padding: '5px 6px', maxWidth: 118 }}
+                value={transLang} disabled={translating} onChange={e => translateTo(e.target.value)} title="Translate transcript">
+                {['Original', 'Urdu', 'Hindi', 'Arabic', 'Spanish', 'French', 'German', 'Chinese', 'Portuguese', 'Japanese'].map(l => (
+                  <option key={l} value={l}>{l === 'Original' ? '🌐 Original' : l}</option>
+                ))}
+              </select>
+            )}
+            {isOwner && (
               <button className={styles.tRegen} title="Regenerate transcript" disabled={transcribing} onClick={generateTranscript}>
                 {transcribing ? <Loader2 size={15} className={styles.spin} /> : <RefreshCw size={15} />}
               </button>
             )}
           </div>
+          {translating && <p className={styles.noComments} style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Loader2 size={14} className={styles.spin} /> Translating to {transLang}…</p>}
           <div className={styles.tList}>
             {filteredSegs.length === 0 && <p className={styles.noComments}>No lines match “{tQuery}”.</p>}
             {filteredSegs.map(seg => (
@@ -969,6 +1017,24 @@ export default function Watch() {
                 <p className={styles.blockEmpty}>No summary added.</p>
               )}
             </section>
+
+            {/* Chapters (clickable, AI-generated) */}
+            {Array.isArray(rec.chapters) && rec.chapters.length > 0 && (
+              <section className={styles.belowBlock}>
+                <h3 className={styles.blockTitle}>Chapters</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {rec.chapters.map((c, i) => (
+                    <button key={i} onClick={() => seekTo(c.t)}
+                      style={{ display: 'flex', alignItems: 'baseline', gap: 10, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: '7px 8px', borderRadius: 8, color: 'inherit', font: 'inherit', fontSize: 14 }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#f5f6f8')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                      <span style={{ color: '#5b5bf6', fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13, minWidth: 40 }}>{clock(c.t)}</span>
+                      <span style={{ fontWeight: 500 }}>{c.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Tags */}
             <section className={styles.belowBlock}>

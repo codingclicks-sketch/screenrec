@@ -643,7 +643,7 @@ app.get('/api/watch/:id', async (req, res) => {
     if (m.privacy === 'password' && m.passwordHash) {
       return res.json({ id: video.id, title: m.title || video.title, requiresPassword: true });
     }
-    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail, archived: !!m.archived, folder: m.folder });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail, archived: !!m.archived, chapters: m.chapters || [], folder: m.folder });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -659,7 +659,7 @@ app.post('/api/watch/:id/unlock', async (req, res) => {
       const ok = await bcrypt.compare(req.body.password || '', m.passwordHash);
       if (!ok) return res.status(401).json({ error: 'Incorrect password' });
     }
-    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail, archived: !!m.archived, folder: m.folder });
+    res.json({ ...video, title: m.title || video.title, description: m.description, cta: m.cta, privacy: m.privacy, trimStart: m.trimStart, trimEnd: m.trimEnd, segments: m.segments, tags: m.tags, audience: m.audience, recommendedSpeed: m.recommendedSpeed, animatedThumbnail: m.animatedThumbnail, archived: !!m.archived, chapters: m.chapters || [], folder: m.folder });
   } catch {
     res.status(404).json({ error: 'Not found' });
   }
@@ -1195,6 +1195,50 @@ app.post('/api/recordings/:id/summary', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('[summary] failed:', e.message);
     res.status(500).json({ error: e.message || 'Could not generate a summary' });
+  }
+});
+
+// Generate chapters from the transcript (free — LLM via Groq, heuristic fallback).
+app.post('/api/recordings/:id/chapters', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const tCheck = permissions.canUseTranscription(users.findById(req.userId));
+  if (!tCheck.allowed) return res.status(403).json({ error: tCheck.reason, upgradeRequired: true, code: 'feature_locked', feature: 'transcription' });
+  try {
+    const m = meta.get(req.params.id);
+    let segments = m.transcript?.segments;
+    if (!segments || !segments.length) {
+      if (!transcription.isConfigured()) return res.status(501).json({ error: 'Transcription isn’t available on this server yet, so chapters can’t be generated.' });
+      const audioUrl = USE_CLOUDINARY
+        ? cloudinary.url(`screenrec/${req.userId}/${req.params.id}`, { resource_type: 'video', format: 'mp3', secure: true })
+        : `${req.protocol}://${req.get('host')}/uploads/${(db.get(req.params.id) || {}).filename}`;
+      const result = await transcription.transcribeUrl(audioUrl);
+      if (result.segments.length) { meta.set(req.params.id, { transcript: { ...result, status: 'done', created_at: Date.now() } }); segments = result.segments; }
+    }
+    const chapters = await ai.generateChapters(segments || []);
+    if (!chapters.length) return res.status(422).json({ error: 'This video is too short or has too little speech to chapter.' });
+    meta.set(req.params.id, { chapters });
+    res.json({ chapters, ai: ai.isLLMConfigured() });
+  } catch (e) {
+    console.error('[chapters] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Could not generate chapters' });
+  }
+});
+
+// Translate the transcript into another language (needs GROQ_API_KEY).
+app.post('/api/recordings/:id/transcript/translate', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const lang = String(req.body.lang || '').trim().slice(0, 40);
+  if (!lang) return res.status(400).json({ error: 'Target language required' });
+  try {
+    const m = meta.get(req.params.id);
+    const segments = m.transcript?.segments;
+    if (!segments || !segments.length) return res.status(422).json({ error: 'Generate the transcript first, then translate it.' });
+    const translated = await ai.translateSegments(segments, lang);
+    res.json({ lang, segments: translated, text: translated.map(s => s.text).join(' ') });
+  } catch (e) {
+    if (e.code === 'no_llm') return res.status(501).json({ error: e.message, code: 'no_llm' });
+    console.error('[translate] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Could not translate' });
   }
 });
 
