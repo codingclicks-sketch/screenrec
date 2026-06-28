@@ -1362,11 +1362,14 @@ app.post('/api/recordings/:id/transcribe', requireAuth, async (req, res) => {
       audioUrl = `${req.protocol}://${req.get('host')}/uploads/${row.filename}`;
     }
 
-    const result = await transcription.transcribeUrl(audioUrl);
+    // Optional spoken-language override (ISO-639-1, e.g. 'ur') → forces NATIVE
+    // transcription instead of auto-detect mis-firing on a mixed-language video.
+    const language = (typeof req.body?.language === 'string' && req.body.language.trim()) ? req.body.language.trim() : '';
+    const result = await transcription.transcribeUrl(audioUrl, language);
     if (!result.segments.length) return res.status(422).json({ error: 'No speech detected in this recording.' });
 
-    meta.set(req.params.id, { transcript: { ...result, status: 'done', created_at: Date.now() } });
-    res.json({ status: 'done', ...result });
+    meta.set(req.params.id, { transcript: { ...result, status: 'done', created_at: Date.now(), spokenLang: language || '' } });
+    res.json({ status: 'done', ...result, spokenLang: language || '' });
   } catch (e) {
     const code = e.code === 'too_large' ? 413 : 500;
     console.error('[transcribe] failed:', e.message);

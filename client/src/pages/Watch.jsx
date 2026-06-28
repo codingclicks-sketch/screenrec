@@ -13,6 +13,26 @@ import VideoPlayer from '../components/VideoPlayer';
 
 const REACTIONS = ['👍', '❤️', '😂', '🎉', '🔥', '👏'];
 
+// Languages for transcription (force the spoken language, ISO-639-1) AND translation
+// (translate the transcript into any of these via the LLM). Urdu/Hindi first.
+const LANGUAGES = [
+  { name: 'English', code: 'en' }, { name: 'Urdu', code: 'ur' }, { name: 'Hindi', code: 'hi' },
+  { name: 'Arabic', code: 'ar' }, { name: 'Spanish', code: 'es' }, { name: 'French', code: 'fr' },
+  { name: 'German', code: 'de' }, { name: 'Portuguese', code: 'pt' }, { name: 'Italian', code: 'it' },
+  { name: 'Dutch', code: 'nl' }, { name: 'Russian', code: 'ru' }, { name: 'Chinese', code: 'zh' },
+  { name: 'Japanese', code: 'ja' }, { name: 'Korean', code: 'ko' }, { name: 'Turkish', code: 'tr' },
+  { name: 'Persian (Farsi)', code: 'fa' }, { name: 'Bengali', code: 'bn' }, { name: 'Punjabi', code: 'pa' },
+  { name: 'Indonesian', code: 'id' }, { name: 'Malay', code: 'ms' }, { name: 'Vietnamese', code: 'vi' },
+  { name: 'Thai', code: 'th' }, { name: 'Filipino', code: 'tl' }, { name: 'Polish', code: 'pl' },
+  { name: 'Ukrainian', code: 'uk' }, { name: 'Romanian', code: 'ro' }, { name: 'Greek', code: 'el' },
+  { name: 'Czech', code: 'cs' }, { name: 'Hungarian', code: 'hu' }, { name: 'Swedish', code: 'sv' },
+  { name: 'Norwegian', code: 'no' }, { name: 'Danish', code: 'da' }, { name: 'Finnish', code: 'fi' },
+  { name: 'Hebrew', code: 'he' }, { name: 'Tamil', code: 'ta' }, { name: 'Telugu', code: 'te' },
+  { name: 'Marathi', code: 'mr' }, { name: 'Gujarati', code: 'gu' }, { name: 'Kannada', code: 'kn' },
+  { name: 'Malayalam', code: 'ml' }, { name: 'Pashto', code: 'ps' }, { name: 'Nepali', code: 'ne' },
+  { name: 'Sinhala', code: 'si' }, { name: 'Swahili', code: 'sw' },
+];
+
 function fmt(s) {
   s = Math.round(s || 0);
   const m = Math.floor(s / 60);
@@ -83,7 +103,8 @@ export default function Watch() {
   const [myVideos, setMyVideos] = useState(null);
   const [pickedIds, setPickedIds] = useState([]);
   const [combining, setCombining] = useState(false);
-  const [transLang, setTransLang] = useState('Original');   // transcript translation
+  const [transLang, setTransLang] = useState('Original');   // transcript translation (output)
+  const [sttLang, setSttLang] = useState('auto');           // spoken language for transcription (input)
   const [translated, setTranslated] = useState(null);       // translated segments
   const [translating, setTranslating] = useState(false);
   const [commentDockOpen, setCommentDockOpen] = useState(false);
@@ -381,10 +402,15 @@ export default function Watch() {
   // Lazy-load the transcript the first time the tab is opened.
   useEffect(() => { if (tab === 'transcript' && !transcript) loadTranscript(); /* eslint-disable-next-line */ }, [tab]);
 
-  async function generateTranscript() {
+  async function generateTranscript(langOverride) {
+    const language = langOverride != null ? langOverride : sttLang;
     setTranscribing(true); setTranscriptErr('');
+    setTranslated(null); setTransLang('Original');   // a fresh transcript invalidates any translation
     try {
-      const res = await fetch(`${API}/api/recordings/${id}/transcribe`, { method: 'POST', headers: authHeaders() });
+      const res = await fetch(`${API}/api/recordings/${id}/transcribe`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: language === 'auto' ? '' : language }),
+      });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (d.code === 'feature_locked') { setCanTranscribe(false); return; }
@@ -397,6 +423,8 @@ export default function Watch() {
       setTranscriptErr('Network error — please try again.');
     } finally { setTranscribing(false); }
   }
+  // Change the spoken language → re-transcribe natively in that language.
+  function changeSttLang(code) { setSttLang(code); generateTranscript(code); }
 
   const segs = transcript?.segments || [];
   const shownSegs = (translated && translated.length) ? translated : segs;
@@ -860,15 +888,23 @@ export default function Watch() {
             <Search size={15} />
             <input className={styles.tSearch} placeholder="Search transcript…" value={tQuery} onChange={e => setTQuery(e.target.value)} />
             {isOwner && (
-              <select className={styles.audSelect} style={{ fontSize: 12, padding: '5px 6px', maxWidth: 118 }}
-                value={transLang} disabled={translating} onChange={e => translateTo(e.target.value)} title="Translate transcript">
-                {['Original', 'Urdu', 'Hindi', 'Arabic', 'Spanish', 'French', 'German', 'Chinese', 'Portuguese', 'Japanese'].map(l => (
-                  <option key={l} value={l}>{l === 'Original' ? '🌐 Original' : l}</option>
-                ))}
+              <select className={styles.audSelect} style={{ fontSize: 12, padding: '5px 6px', maxWidth: 110 }}
+                value={sttLang} disabled={transcribing} onChange={e => changeSttLang(e.target.value)}
+                title="Spoken language — re-transcribes the audio natively in this language (fixes mixed-language videos)">
+                <option value="auto">🎙 Auto</option>
+                {LANGUAGES.map(l => <option key={l.code} value={l.code}>🎙 {l.name}</option>)}
               </select>
             )}
             {isOwner && (
-              <button className={styles.tRegen} title="Regenerate transcript" disabled={transcribing} onClick={generateTranscript}>
+              <select className={styles.audSelect} style={{ fontSize: 12, padding: '5px 6px', maxWidth: 110 }}
+                value={transLang} disabled={translating} onChange={e => translateTo(e.target.value)}
+                title="Translate the transcript into another language">
+                <option value="Original">🌐 Original</option>
+                {LANGUAGES.map(l => <option key={l.name} value={l.name}>🌐 {l.name}</option>)}
+              </select>
+            )}
+            {isOwner && (
+              <button className={styles.tRegen} title="Regenerate transcript" disabled={transcribing} onClick={() => generateTranscript()}>
                 {transcribing ? <Loader2 size={15} className={styles.spin} /> : <RefreshCw size={15} />}
               </button>
             )}
@@ -912,7 +948,7 @@ export default function Watch() {
             ) : (
               <>
                 <span>Generate a timestamped, searchable transcript with AI.</span>
-                <button className="btn-primary" style={{ marginTop: 12 }} disabled={transcribing} onClick={generateTranscript}>
+                <button className="btn-primary" style={{ marginTop: 12 }} disabled={transcribing} onClick={() => generateTranscript()}>
                   <Sparkles size={15} /> Generate transcript
                 </button>
               </>
