@@ -70,6 +70,7 @@ export default function Watch() {
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState('');
   const [autoTitling, setAutoTitling] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const [commentDockOpen, setCommentDockOpen] = useState(false);
   const [folders, setFolders] = useState([]);          // owner's folders (⋯ → Move)
   const [moveOpen, setMoveOpen] = useState(false);     // ⋯ → Move submenu
@@ -164,6 +165,18 @@ export default function Watch() {
       else alert(d.error || 'Could not generate a title.');
     } catch { alert('Network error — please try again.'); }
     finally { setAutoTitling(false); }
+  }
+
+  async function aiSummary() {
+    setSummarizing(true);
+    try {
+      const res = await fetch(`${API}/api/recordings/${id}/summary`, { method: 'POST', headers: authHeaders() });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.summary) { setRec(r => ({ ...r, description: d.summary })); setSummaryDraft(d.summary); }
+      else if (d.code === 'feature_locked') { setCanTranscribe(false); selectTab('transcript'); }
+      else alert(d.error || 'Could not generate a summary.');
+    } catch { alert('Network error — please try again.'); }
+    finally { setSummarizing(false); }
   }
 
   async function saveCta() {
@@ -543,13 +556,12 @@ export default function Watch() {
           <span>AI-generated, timestamped &amp; searchable.</span>
         </span>
       </button>
-      <button className={styles.action} disabled style={{ opacity: .55, cursor: 'default' }}>
-        <span className={styles.actionIcon}><Sparkles size={18} /></span>
+      <button className={styles.action} onClick={aiSummary} disabled={summarizing}>
+        <span className={styles.actionIcon}>{summarizing ? <Loader2 size={18} className={styles.spin} /> : <Sparkles size={18} />}</span>
         <span className={styles.actionText}>
-          <strong>Generate documents with AI</strong>
-          <span>Turn your video into summaries & docs.</span>
+          <strong>{summarizing ? 'Summarizing…' : 'Generate AI summary'}</strong>
+          <span>Auto-write a summary from the video — free.</span>
         </span>
-        {proBadge}
       </button>
       <button className={styles.action} onClick={() => { setCtaOpen(o => !o); if (rec.cta) { setCtaLabel(rec.cta.label || ''); setCtaUrl(rec.cta.url || ''); } }}>
         <span className={styles.actionIcon}><Link2 size={18} /></span>
