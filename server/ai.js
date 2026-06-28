@@ -100,6 +100,22 @@ async function generateChapters(segments) {
   return heuristicChapters(arr, duration);
 }
 
+// ── Title (LLM, multilingual) ─────────────────────────────────────────────────
+// A short title in the SAME language/script as the transcript — so Urdu/Hindi
+// videos get a real title instead of the English-only heuristic returning null.
+async function generateTitle(transcriptText) {
+  const text = String(transcriptText || '').trim();
+  if (text.length < 12 || !isLLMConfigured()) return null;
+  try {
+    const out = await chat([
+      { role: 'system', content: 'Write a short, specific video title (3–8 words) for this screen-recording transcript. Use the SAME language and script as the transcript. Output ONLY the title — no quotes, no preamble, no trailing punctuation, no "this video".' },
+      { role: 'user', content: `Transcript:\n\n${text.slice(0, 4000)}` },
+    ], { maxTokens: 32, temperature: 0.3 });
+    const title = String(out || '').replace(/\s+/g, ' ').replace(/^["'“”\s]+|["'“”.\s]+$/g, '').slice(0, 80).trim();
+    return title || null;
+  } catch (e) { return null; }
+}
+
 // ── Translation (LLM-only — no meaningful heuristic fallback) ──────────────────
 async function translateSegments(segments, targetLang) {
   const arr = (Array.isArray(segments) ? segments : []).filter(s => s && s.text);
@@ -115,4 +131,4 @@ async function translateSegments(segments, targetLang) {
   return arr.map((s, i) => ({ ...s, text: map[i + 1] || s.text }));
 }
 
-module.exports = { isLLMConfigured, chat, summarize, extractiveSummary, generateChapters, translateSegments, GROQ_MODEL };
+module.exports = { isLLMConfigured, chat, summarize, extractiveSummary, generateChapters, generateTitle, translateSegments, GROQ_MODEL };
