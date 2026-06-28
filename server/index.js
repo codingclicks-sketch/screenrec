@@ -77,6 +77,7 @@ function publicUser(u) {
     plan: ent.planSlug,
     entitlements: ent,           // { plan{features…}, planSlug, isPaid, subscription }
     isAdmin: isAdmin(u),
+    hasSlack: !!u.slackWebhook,   // Slack incoming-webhook configured for sharing
     created_at: u.created_at,
   };
 }
@@ -140,7 +141,7 @@ app.patch('/api/auth/profile', requireAuth, (req, res) => {
   const user = users.findById(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const { name, email } = req.body;
+  const { name, email, slackWebhook } = req.body;
   const fields = {};
   if (typeof name === 'string' && name.trim()) fields.name = name.trim();
   if (typeof email === 'string' && email.trim()) {
@@ -148,6 +149,12 @@ app.patch('/api/auth/profile', requireAuth, (req, res) => {
     const existing = users.findByEmail(lower);
     if (existing && existing.id !== user.id) return res.status(409).json({ error: 'Email already in use' });
     fields.email = lower;
+  }
+  if (typeof slackWebhook === 'string') {
+    const w = slackWebhook.trim();
+    if (w === '') fields.slackWebhook = null;
+    else if (/^https:\/\/hooks\.slack\.com\/services\//.test(w)) fields.slackWebhook = w.slice(0, 300);
+    else return res.status(400).json({ error: 'That doesn’t look like a Slack incoming-webhook URL (https://hooks.slack.com/services/…).' });
   }
   if (!Object.keys(fields).length) return res.status(400).json({ error: 'Nothing to update' });
 
@@ -676,6 +683,32 @@ app.post('/api/watch/:id/view', (req, res) => {
   res.json({ views: updated.views });
 });
 
+// Lead capture — store a viewer's email when the owner gated the video on it.
+app.post('/api/watch/:id/lead', (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Please enter a valid email.' });
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  meta.update(req.params.id, m => {
+    m.leads = Array.isArray(m.leads) ? m.leads : [];
+    if (!m.leads.some(l => l.email === email)) m.leads = [{ email, name, at: Date.now() }, ...m.leads].slice(0, 1000);
+    return m;
+  });
+  res.json({ ok: true });
+});
+
+// View-through progress — sent via sendBeacon when a viewer leaves. pct ∈ [0,1].
+app.post('/api/watch/:id/progress', (req, res) => {
+  let pct = Number(req.body && req.body.pct);
+  if (!Number.isFinite(pct)) return res.status(204).end();
+  pct = Math.max(0, Math.min(1, pct));
+  meta.update(req.params.id, m => {
+    const e = (m.engagement && typeof m.engagement === 'object') ? m.engagement : { sum: 0, n: 0, completed: 0 };
+    m.engagement = { sum: (e.sum || 0) + pct, n: (e.n || 0) + 1, completed: (e.completed || 0) + (pct >= 0.9 ? 1 : 0) };
+    return m;
+  });
+  res.status(204).end();
+});
+
 // Older recordings stored reactions as a tally object { emoji: count }; current
 // ones use an array [{emoji,t,at}]. Always hand the client an array.
 function normalizeReactions(r) {
@@ -744,7 +777,32 @@ app.get('/api/recordings/:id/analytics', requireAuth, async (req, res) => {
     return res.status(403).json({ error: check.reason, upgradeRequired: true, code: 'feature_locked', feature: 'analytics' });
   }
   const m = meta.get(req.params.id);
-  res.json({ views: m.views, viewers: m.viewers, reactions: m.reactions, comments: m.comments });
+  const e = m.engagement || { sum: 0, n: 0, completed: 0 };
+  const engagement = {
+    avgViewThrough: e.n ? Math.round((e.sum / e.n) * 100) : 0,
+    completionRate: e.n ? Math.round((e.completed / e.n) * 100) : 0,
+    samples: e.n || 0,
+  };
+  res.json({ views: m.views, viewers: m.viewers, reactions: m.reactions, comments: m.comments, leads: m.leads || [], engagement });
+});
+
+// Share a video to Slack via the owner's configured incoming webhook.
+app.post('/api/recordings/:id/share/slack', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  const user = users.findById(req.userId);
+  if (!user || !user.slackWebhook) return res.status(400).json({ error: 'Add your Slack webhook in account settings first.', needsWebhook: true });
+  const m = meta.get(req.params.id);
+  const clientBase = process.env.CLIENT_URL || process.env.PUBLIC_URL || 'https://veorec.com';
+  const url = `${clientBase}/watch/${req.params.id}`;
+  const title = m.title || 'a VeoRec recording';
+  try {
+    const r = await fetch(user.slackWebhook, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: `🎥 *${title}*\n${url}` }),
+    });
+    if (!r.ok) return res.status(502).json({ error: 'Slack rejected the message — re-check your webhook URL.' });
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: 'Could not reach Slack.' }); }
 });
 
 // ── Notifications: per-user activity feed ─────────────────────────────────────
@@ -848,7 +906,7 @@ app.patch('/api/recordings/:id/meta', requireAuth, async (req, res) => {
   if (audience && typeof audience === 'object') {
     const cur = meta.get(req.params.id).audience || {};
     const next = { ...cur };
-    for (const k of ['comments', 'reactions', 'download', 'transcript']) {
+    for (const k of ['comments', 'reactions', 'download', 'transcript', 'requireEmail']) {
       if (typeof audience[k] === 'boolean') next[k] = audience[k];
     }
     fields.audience = next;
