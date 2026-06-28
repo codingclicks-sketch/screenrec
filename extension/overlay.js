@@ -108,7 +108,16 @@
   const restartBtn = iconBtn(SVG.restart, 'Restart', ['Alt', 'Shift', 'R'], () => { if (confirm('Discard this take and start over?')) chrome.runtime.sendMessage({ type: 'SR_RESTART' }); });
   const deleteBtn = iconBtn(SVG.trash, 'Delete', ['Alt', 'Shift', 'D'], () => { if (confirm('Discard this recording?')) chrome.runtime.sendMessage({ type: 'SR_CANCEL' }); });
 
-  bar.append(stopBtn, timer, sep, pauseBtn, restartBtn, deleteBtn);
+  // Annotation tools — drawing pen + click highlighter (both are DOM overlays, so
+  // they appear in the recording on the captured tab).
+  const SVG_PEN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
+  const SVG_CLICK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>';
+  const sep2 = document.createElement('div');
+  sep2.style.cssText = 'width:34px;height:1px;background:rgba(255,255,255,.12);margin:2px 0';
+  const drawBtn = iconBtn(SVG_PEN, 'Draw', ['Alt', 'Shift', 'P'], () => toggleDraw());
+  const clickBtn = iconBtn(SVG_CLICK, 'Highlight clicks', ['Alt', 'Shift', 'C'], () => toggleClicks());
+
+  bar.append(stopBtn, timer, sep, pauseBtn, restartBtn, deleteBtn, sep2, drawBtn, clickBtn);
 
   const style = document.createElement('style');
   style.textContent = '@keyframes __srpulse{0%{box-shadow:0 0 0 0 rgba(255,75,75,.6)}70%{box-shadow:0 0 0 7px rgba(255,75,75,0)}100%{box-shadow:0 0 0 0 rgba(255,75,75,0)}}';
@@ -124,7 +133,126 @@
     else if (k === 's') { e.preventDefault(); chrome.runtime.sendMessage({ type: 'SR_PAUSE' }); }
     else if (k === 'r') { e.preventDefault(); chrome.runtime.sendMessage({ type: 'SR_RESTART' }); }
     else if (k === 'd') { e.preventDefault(); chrome.runtime.sendMessage({ type: 'SR_CANCEL' }); }
+    else if (k === 'p') { e.preventDefault(); toggleDraw(); }
+    else if (k === 'c') { e.preventDefault(); toggleClicks(); }
   }, true);
+
+  // ── Drawing / annotation + click highlights ──────────────────────────────────
+  // Both render INTO the page so the screen capture records them. Drawing puts a
+  // full-page canvas on top (you draw, then "Done" to interact again); click
+  // highlight spawns a ripple at each click. They only show on this captured tab.
+  let drawCanvas = null, drawCtx = null, drawing = false, penDown = false, penColor = '#ff3b3b', palette = null;
+  let clicksOn = false, clickHandler = null;
+
+  function ensureClickCSS() {
+    if (document.getElementById('__sr_click_css')) return;
+    const s = document.createElement('style');
+    s.id = '__sr_click_css';
+    s.textContent = '@keyframes __srclick{0%{transform:translate(-50%,-50%) scale(.35);opacity:.85}100%{transform:translate(-50%,-50%) scale(1.1);opacity:0}}';
+    document.documentElement.appendChild(s);
+  }
+
+  function startDraw() {
+    if (drawCanvas) return;
+    drawCanvas = document.createElement('canvas');
+    drawCanvas.id = '__sr_draw';
+    drawCanvas.style.cssText = `position:fixed;inset:0;z-index:${Number(Z) - 1};cursor:crosshair;touch-action:none`;
+    (document.body || document.documentElement).appendChild(drawCanvas);
+    const dpr = window.devicePixelRatio || 1;
+    function size() {
+      // Snapshot existing strokes so a resize doesn't wipe them (reassigning a
+      // canvas's width/height clears its bitmap).
+      let prev = null;
+      const oldW = parseInt(drawCanvas.style.width, 10) || 0, oldH = parseInt(drawCanvas.style.height, 10) || 0;
+      if (drawCtx && drawCanvas.width && oldW && oldH) {
+        try { prev = document.createElement('canvas'); prev.width = drawCanvas.width; prev.height = drawCanvas.height; prev.getContext('2d').drawImage(drawCanvas, 0, 0); }
+        catch (e) { prev = null; }
+      }
+      drawCanvas.width = Math.floor(window.innerWidth * dpr);
+      drawCanvas.height = Math.floor(window.innerHeight * dpr);
+      drawCanvas.style.width = window.innerWidth + 'px';
+      drawCanvas.style.height = window.innerHeight + 'px';
+      drawCtx = drawCanvas.getContext('2d');
+      drawCtx.scale(dpr, dpr);
+      drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
+      if (prev) { try { drawCtx.drawImage(prev, 0, 0, oldW, oldH); } catch (e) {} }
+    }
+    size();
+    drawCanvas.__resize = size;
+    window.addEventListener('resize', size);
+    let lastX = 0, lastY = 0;
+    drawCanvas.addEventListener('pointerdown', (e) => { penDown = true; lastX = e.clientX; lastY = e.clientY; });
+    drawCanvas.addEventListener('pointermove', (e) => {
+      if (!penDown || !drawCtx) return;
+      drawCtx.strokeStyle = penColor; drawCtx.lineWidth = 4;
+      drawCtx.beginPath(); drawCtx.moveTo(lastX, lastY); drawCtx.lineTo(e.clientX, e.clientY); drawCtx.stroke();
+      lastX = e.clientX; lastY = e.clientY;
+    });
+    drawCanvas.__up = () => { penDown = false; };
+    window.addEventListener('pointerup', drawCanvas.__up);
+    makePalette();
+  }
+  function clearDraw() { if (drawCtx) drawCtx.clearRect(0, 0, window.innerWidth, window.innerHeight); }
+  function stopDraw() {
+    drawing = false;
+    if (drawCanvas) {
+      if (drawCanvas.__resize) window.removeEventListener('resize', drawCanvas.__resize);
+      if (drawCanvas.__up) window.removeEventListener('pointerup', drawCanvas.__up);
+      drawCanvas.remove();
+    }
+    if (palette) palette.remove();
+    drawCanvas = drawCtx = palette = null;
+    drawBtn.style.background = 'rgba(255,255,255,.10)';
+  }
+  function toggleDraw() {
+    drawing = !drawing;
+    if (drawing) { startDraw(); drawBtn.style.background = penColor; }
+    else stopDraw();
+  }
+  function makePalette() {
+    palette = document.createElement('div');
+    palette.setAttribute('data-no-drag', '1');
+    palette.style.cssText = `position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:${Z};display:flex;align-items:center;gap:7px;background:#16161f;padding:8px 12px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:Inter,system-ui,sans-serif`;
+    ['#ff3b3b', '#ffd400', '#22c55e', '#3b82f6', '#ffffff', '#10101c'].forEach((c) => {
+      const sw = document.createElement('button');
+      sw.__c = c;
+      sw.style.cssText = `width:22px;height:22px;border-radius:50%;border:2px solid ${c === penColor ? '#fff' : 'transparent'};background:${c};cursor:pointer;padding:0`;
+      sw.addEventListener('click', () => {
+        penColor = c; drawBtn.style.background = c;
+        palette.querySelectorAll('button').forEach((b) => { if (b.__c) b.style.borderColor = (b.__c === penColor ? '#fff' : 'transparent'); });
+      });
+      palette.appendChild(sw);
+    });
+    const clearB = document.createElement('button');
+    clearB.textContent = 'Clear';
+    clearB.style.cssText = 'border:none;background:rgba(255,255,255,.12);color:#fff;font:600 12px Inter,sans-serif;padding:5px 10px;border-radius:8px;cursor:pointer';
+    clearB.addEventListener('click', clearDraw);
+    const doneB = document.createElement('button');
+    doneB.textContent = 'Done';
+    doneB.style.cssText = 'border:none;background:#5b5bf6;color:#fff;font:600 12px Inter,sans-serif;padding:5px 10px;border-radius:8px;cursor:pointer';
+    doneB.addEventListener('click', () => toggleDraw());
+    palette.append(clearB, doneB);
+    (document.body || document.documentElement).appendChild(palette);
+  }
+
+  function toggleClicks() {
+    clicksOn = !clicksOn;
+    clickBtn.style.background = clicksOn ? '#5b5bf6' : 'rgba(255,255,255,.10)';
+    if (clicksOn) {
+      ensureClickCSS();
+      clickHandler = (e) => {
+        if (e.target && e.target.closest && e.target.closest('#__sr_toolbar,#__sr_draw,#__sr_camera_bubble,#__sr_bubble_bar,[data-no-drag]')) return;
+        const ripple = document.createElement('div');
+        ripple.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;width:54px;height:54px;border-radius:50%;background:rgba(91,91,246,.40);border:2px solid #5b5bf6;pointer-events:none;z-index:${Z};animation:__srclick .55s ease-out forwards`;
+        (document.body || document.documentElement).appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+      };
+      window.addEventListener('click', clickHandler, true);
+    } else if (clickHandler) {
+      window.removeEventListener('click', clickHandler, true);
+      clickHandler = null;
+    }
+  }
 
   // ── Camera bubble (only when camera bubble mode is on) ───────────────────────
   let bubble = null, bubbleVideo = null, cameraEnabled = false, bubbleSize = 150;
@@ -240,6 +368,8 @@
   }
   function cleanupAll() {
     hideBubble();
+    try { stopDraw(); } catch (e) {}
+    if (clickHandler) { window.removeEventListener('click', clickHandler, true); clickHandler = null; }
     if (bar && bar.parentNode) bar.remove();
     window.__srOverlayActive = false;
     clearInterval(tickIv);
