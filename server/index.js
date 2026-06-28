@@ -348,14 +348,17 @@ if (!USE_CLOUDINARY) {
       const result = await transcription.transcribeUrl(audioUrl);
       if (!result || !result.segments || !result.segments.length) return;
       meta.set(id, { transcript: { ...result, status: 'done', created_at: Date.now() } });
-      const title = transcription.generateTitle(result.text);
+      // Title — LLM first (works in ANY language, incl. Urdu/Hindi); heuristic fallback.
+      let title = await ai.generateTitle(result.text);
+      if (!title) title = transcription.generateTitle(result.text);
       if (title) {
         meta.set(id, { title });
         try { await cloudinary.uploader.add_context(buildContext({ title }), [`screenrec/${userId}/${id}`], { resource_type: 'video' }); } catch {}
       }
-      // Auto-fill an AI summary for Pro users (advanced AI is a Pro feature).
+      // Auto-fill an AI summary + chapters for Pro users (advanced AI is a Pro feature).
       if (permissions.canUseAiDocs(user).allowed) {
         try { const summary = await ai.summarize(result.text); if (summary) meta.set(id, { description: summary }); } catch {}
+        try { const chapters = await ai.generateChapters(result.segments); if (chapters && chapters.length) meta.set(id, { chapters }); } catch {}
       }
     } catch (e) { console.error('[auto-process] failed:', e.message); }
   }
@@ -1417,7 +1420,9 @@ app.post('/api/recordings/:id/title/auto', requireAuth, async (req, res) => {
       }
     }
 
-    const title = transcription.generateTitle(text);
+    // LLM title first (works in any language); heuristic fallback.
+    let title = await ai.generateTitle(text);
+    if (!title) title = transcription.generateTitle(text);
     if (!title) return res.status(422).json({ error: 'Not enough speech in this video to generate a title — try renaming it manually.' });
 
     meta.set(req.params.id, { title });
