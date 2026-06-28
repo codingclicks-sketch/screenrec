@@ -7,3 +7,9 @@ client/dist/
 .env
 *.env
 .DS_Store
+
+# Extension build artifacts & signing key — never commit
+*.pem
+*.crx
+*.zip
+veorec-extension-*.zip
