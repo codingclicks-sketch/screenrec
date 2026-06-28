@@ -1131,6 +1131,92 @@ app.post('/api/recordings/:id/trim', requireAuth, async (req, res) => {
   }
 });
 
+// Compute keep-ranges that drop long silent gaps between speech (from the
+// transcript). Pads speech slightly and only cuts gaps longer than minGap.
+function keepRangesFromTranscript(segments, duration, { pad = 0.2, minGap = 0.8 } = {}) {
+  const segs = (segments || [])
+    .filter(s => s && Number.isFinite(s.start) && Number.isFinite(s.end) && s.end > s.start)
+    .sort((a, b) => a.start - b.start);
+  if (!segs.length) return null;
+  const ranges = segs.map(s => ({ start: Math.max(0, s.start - pad), end: s.end + pad }));
+  const merged = [ranges[0]];
+  for (let i = 1; i < ranges.length; i++) {
+    const last = merged[merged.length - 1];
+    if (ranges[i].start - last.end < minGap) last.end = Math.max(last.end, ranges[i].end);
+    else merged.push(ranges[i]);
+  }
+  const dur = duration || merged[merged.length - 1].end;
+  return merged.map(r => ({ start: Math.round(Math.max(0, r.start) * 100) / 100, end: Math.round(Math.min(dur, r.end) * 100) / 100 }))
+    .filter(r => r.end > r.start);
+}
+
+// Remove silences — detect silent gaps from the transcript and set them as a
+// VIRTUAL cut (player skips the gaps instantly; no re-encode). The owner can
+// then bake it permanently via the existing Cloudinary trim. Efficient by design.
+app.post('/api/recordings/:id/remove-silences', requireAuth, async (req, res) => {
+  if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });
+  try {
+    const m = meta.get(req.params.id);
+    let segs = m.transcript?.segments;
+    if (!segs || !segs.length) {
+      if (!transcription.isConfigured()) return res.status(501).json({ error: 'Transcription isn’t available on this server yet, so silences can’t be detected.' });
+      const audioUrl = USE_CLOUDINARY
+        ? cloudinary.url(`screenrec/${req.userId}/${req.params.id}`, { resource_type: 'video', format: 'mp3', secure: true })
+        : `${req.protocol}://${req.get('host')}/uploads/${(db.get(req.params.id) || {}).filename}`;
+      const result = await transcription.transcribeUrl(audioUrl);
+      if (result.segments.length) { meta.set(req.params.id, { transcript: { ...result, status: 'done', created_at: Date.now() } }); segs = result.segments; }
+    }
+    if (!segs || !segs.length) return res.status(422).json({ error: 'No speech detected to trim silence around.' });
+    const video = await findVideo(req.params.id);
+    const duration = (video && video.duration) || segs[segs.length - 1].end;
+    const ranges = keepRangesFromTranscript(segs, duration);
+    if (!ranges || !ranges.length) return res.status(422).json({ error: 'Could not compute the trimmed segments.' });
+    const kept = ranges.reduce((a, r) => a + (r.end - r.start), 0);
+    const removed = Math.max(0, duration - kept);
+    if (removed < 1) return res.status(422).json({ error: 'No significant silences found — nothing to trim.' });
+    meta.set(req.params.id, { segments: ranges });
+    res.json({ segments: ranges, keptSeconds: Math.round(kept), removedSeconds: Math.round(removed), duration: Math.round(duration) });
+  } catch (e) {
+    console.error('[remove-silences] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Could not remove silences' });
+  }
+});
+
+// Stitch multiple recordings into one — Cloudinary video "splice" concatenation
+// (server-side render, no client re-encode), saved as a new library entry.
+app.post('/api/recordings/stitch', requireAuth, async (req, res) => {
+  if (!USE_CLOUDINARY) return res.status(501).json({ error: 'Combining clips needs Cloudinary.' });
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.filter(v => typeof v === 'string').slice(0, 10) : [];
+  if (ids.length < 2) return res.status(400).json({ error: 'Pick at least two videos to combine.' });
+  for (const vid of ids) {
+    if (!(await userOwns(req.userId, vid))) return res.status(404).json({ error: 'One of the selected videos was not found.' });
+  }
+  // count-limit guard (free plan video count)
+  const countCheck = permissions.canCreateVideo(users.findById(req.userId));
+  if (!countCheck.allowed) return res.status(403).json({ error: countCheck.reason, upgradeRequired: true, code: 'video_limit', meta: countCheck.meta });
+  try {
+    const basePublic = `screenrec/${req.userId}/${ids[0]}`;
+    const transformation = [];
+    for (let i = 1; i < ids.length; i++) {
+      transformation.push({ overlay: `video:screenrec:${req.userId}:${ids[i]}`, flags: 'splice' });
+      transformation.push({ flags: 'layer_apply' });
+    }
+    const derivedUrl = cloudinary.url(basePublic, { resource_type: 'video', transformation, secure: true, format: 'mp4' });
+    const newId = uuidv4();
+    const title = cleanTitle(req.body.title) || 'Combined recording';
+    const uploaded = await cloudinary.uploader.upload(derivedUrl, {
+      resource_type: 'video', public_id: `screenrec/${req.userId}/${newId}`,
+      context: buildContext({ title, created_at: Date.now(), rec_id: newId, user_id: req.userId, edited: 1 }),
+    });
+    usageService.updateUsage(req.userId, { bytes: uploaded.bytes || 0, videos: 1, seconds: Math.round(uploaded.duration || 0) });
+    meta.set(newId, { title });
+    res.json({ ok: true, id: newId, duration: Math.round(uploaded.duration || 0) });
+  } catch (e) {
+    console.error('[stitch] failed:', e.message);
+    res.status(500).json({ error: e.message || 'Could not combine the videos.' });
+  }
+});
+
 // ── Transcription (owner generates; Whisper via Groq free tier) ───────────────
 app.post('/api/recordings/:id/transcribe', requireAuth, async (req, res) => {
   if (!(await userOwns(req.userId, req.params.id))) return res.status(404).json({ error: 'Not found' });

@@ -78,6 +78,11 @@ export default function Watch() {
   const [autoTitling, setAutoTitling] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [chaptering, setChaptering] = useState(false);
+  const [desilencing, setDesilencing] = useState(false);
+  const [combineOpen, setCombineOpen] = useState(false);
+  const [myVideos, setMyVideos] = useState(null);
+  const [pickedIds, setPickedIds] = useState([]);
+  const [combining, setCombining] = useState(false);
   const [transLang, setTransLang] = useState('Original');   // transcript translation
   const [translated, setTranslated] = useState(null);       // translated segments
   const [translating, setTranslating] = useState(false);
@@ -230,6 +235,46 @@ export default function Watch() {
       else alert(d.error || 'Could not generate a summary.');
     } catch { alert('Network error — please try again.'); }
     finally { setSummarizing(false); }
+  }
+
+  async function removeSilences() {
+    setDesilencing(true);
+    try {
+      const res = await fetch(`${API}/api/recordings/${id}/remove-silences`, { method: 'POST', headers: authHeaders() });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.segments) {
+        setRec(r => ({ ...r, segments: d.segments }));
+        alert(`Removed ~${d.removedSeconds}s of silence (kept ${d.keptSeconds}s). The player now skips the quiet gaps — open “Edit & trim video” to save it permanently.`);
+      } else alert(d.error || 'Could not remove silences.');
+    } catch { alert('Network error — please try again.'); }
+    finally { setDesilencing(false); }
+  }
+
+  function openCombine() {
+    setCombineOpen(o => !o);
+    if (myVideos == null) {
+      fetch(`${API}/api/recordings`, { headers: authHeaders() })
+        .then(r => (r.ok ? r.json() : []))
+        .then(d => setMyVideos(Array.isArray(d) ? d.filter(v => v.id !== id) : []))
+        .catch(() => setMyVideos([]));
+    }
+  }
+  function togglePick(vid) {
+    setPickedIds(p => (p.includes(vid) ? p.filter(x => x !== vid) : [...p, vid]));
+  }
+  async function doCombine() {
+    if (!pickedIds.length) return;
+    setCombining(true);
+    try {
+      const res = await fetch(`${API}/api/recordings/stitch`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ ids: [id, ...pickedIds] }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.id) navigate(`/watch/${d.id}`);
+      else alert(d.error || 'Could not combine the videos.');
+    } catch { alert('Network error — please try again.'); }
+    finally { setCombining(false); }
   }
 
   async function genChapters() {
@@ -637,13 +682,45 @@ export default function Watch() {
           <span>Trim, split and cut parts of your recording.</span>
         </span>
       </button>
-      <button className={styles.action} disabled style={{ opacity: .55, cursor: 'default' }}>
-        <span className={styles.actionIcon}><Sparkles size={18} /></span>
+      <button className={styles.action} onClick={openCombine}>
+        <span className={styles.actionIcon}><CopyPlus size={18} /></span>
         <span className={styles.actionText}>
-          <strong>Remove silences &amp; filler words</strong>
-          <span>Auto-clean your recording in one click.</span>
+          <strong>Combine clips</strong>
+          <span>Stitch this with your other recordings into one video.</span>
         </span>
-        {proBadge}
+      </button>
+      {combineOpen && (
+        <div className={styles.ctaForm}>
+          {myVideos == null ? (
+            <p className={styles.blockEmpty}>Loading your videos…</p>
+          ) : myVideos.length === 0 ? (
+            <p className={styles.blockEmpty}>No other videos to combine yet.</p>
+          ) : (
+            <>
+              <div style={{ maxHeight: 210, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 8 }}>
+                {myVideos.map(v => (
+                  <label key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 13.5 }}>
+                    <input type="checkbox" checked={pickedIds.includes(v.id)} onChange={() => togglePick(v.id)} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.title}</span>
+                  </label>
+                ))}
+              </div>
+              <div className={styles.ctaFormActions}>
+                <button className="btn-primary" style={{ fontSize: 13 }} disabled={!pickedIds.length || combining} onClick={doCombine}>
+                  {combining ? 'Combining…' : `Combine this + ${pickedIds.length} selected →`}
+                </button>
+              </div>
+              <p className={styles.blockEmpty} style={{ marginTop: 6 }}>This video plays first, then the selected ones in order. Creates a new video.</p>
+            </>
+          )}
+        </div>
+      )}
+      <button className={styles.action} onClick={removeSilences} disabled={desilencing}>
+        <span className={styles.actionIcon}>{desilencing ? <Loader2 size={18} className={styles.spin} /> : <Scissors size={18} />}</span>
+        <span className={styles.actionText}>
+          <strong>{desilencing ? 'Removing silences…' : 'Remove silences'}</strong>
+          <span>Auto-skip the quiet gaps from the transcript — free.</span>
+        </span>
       </button>
 
       <div className={styles.panelLabel} style={{ marginTop: 20 }}>Take action</div>
