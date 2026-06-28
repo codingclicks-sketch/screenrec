@@ -38,7 +38,10 @@ function defaults() {
       reactions: true,    // viewers can react
       download: true,     // show the download option to viewers
       transcript: true,   // viewers can open the transcript
+      requireEmail: false,// gate the video behind a viewer email (lead capture)
     },
+    leads: [],            // captured viewer emails [{ email, name, at }]
+    engagement: { sum: 0, n: 0, completed: 0 }, // view-through: avg = sum/n, completion = completed/n
     recommendedSpeed: null, // suggested playback speed (e.g. 1.5); null = normal
     animatedThumbnail: true, // show the animated preview thumbnail when shared
     archived: false,         // hidden from the main library (kept, not deleted)

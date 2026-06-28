@@ -54,6 +54,12 @@ export default function Watch() {
   const [avatarOpen, setAvatarOpen] = useState(false); // account dropdown
   const [viewsOpen, setViewsOpen] = useState(false);   // views/insights popup
   const [viewers, setViewers] = useState(null);        // analytics viewers list
+  const [engagement, setEngagement] = useState(null);  // {avgViewThrough, completionRate, samples}
+  const [leads, setLeads] = useState(null);            // captured viewer emails (owner)
+  const [leadGiven, setLeadGiven] = useState(false);   // this viewer cleared the email gate
+  const [leadEmail, setLeadEmail] = useState('');
+  const [leadName, setLeadName] = useState('');
+  const [leadBusy, setLeadBusy] = useState(false);
   const [settingsSub, setSettingsSub] = useState('audience'); // Settings: 'audience' | 'enhancements'
   const [summaryDraft, setSummaryDraft] = useState(null);     // editable Summary (owner)
   const [tagInput, setTagInput] = useState('');
@@ -155,8 +161,51 @@ export default function Watch() {
   function loadViewers() {
     fetch(`${API}/api/recordings/${id}/analytics`, { headers: authHeaders() })
       .then(r => (r.ok ? r.json() : null))
-      .then(d => setViewers(Array.isArray(d?.viewers) ? d.viewers : []))
+      .then(d => { setViewers(Array.isArray(d?.viewers) ? d.viewers : []); setEngagement(d?.engagement || null); setLeads(Array.isArray(d?.leads) ? d.leads : []); })
       .catch(() => setViewers([]));
+  }
+
+  async function submitLead(e) {
+    e.preventDefault();
+    const email = leadEmail.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
+    setLeadBusy(true);
+    try {
+      await fetch(`${API}/api/watch/${id}/lead`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ email, name: leadName }),
+      });
+      try { sessionStorage.setItem('veorec_lead_' + id, '1'); } catch {}
+      setLeadGiven(true);
+    } catch {}
+    finally { setLeadBusy(false); }
+  }
+
+  function shareGmail() {
+    setMenuOpen(false);
+    const subject = encodeURIComponent(`${rec.title || 'A video for you'} — VeoRec`);
+    const body = encodeURIComponent(`I recorded this for you:\n\n${rec.title || 'Watch the video'}\n${shareUrl}\n`);
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`, '_blank', 'noopener');
+  }
+
+  async function shareSlack() {
+    setMenuOpen(false);
+    const post = () => fetch(`${API}/api/recordings/${id}/share/slack`, { method: 'POST', headers: authHeaders() });
+    let res = await post();
+    let d = await res.json().catch(() => ({}));
+    if (res.ok) { setCopied('slack'); setTimeout(() => setCopied(''), 2500); return; }
+    if (d.needsWebhook) {
+      const url = window.prompt('Paste your Slack Incoming Webhook URL\n(Slack → Apps → Incoming Webhooks → Add to a channel):\n\nhttps://hooks.slack.com/services/…');
+      if (!url) return;
+      const save = await fetch(`${API}/api/auth/profile`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ slackWebhook: url.trim() }),
+      });
+      if (!save.ok) { const e = await save.json().catch(() => ({})); alert(e.error || 'Could not save the webhook.'); return; }
+      res = await post();
+      if (res.ok) { setCopied('slack'); setTimeout(() => setCopied(''), 2500); return; }
+      d = await res.json().catch(() => ({}));
+    }
+    alert(d.error || 'Could not send to Slack.');
   }
 
   async function autoTitle() {
@@ -387,6 +436,30 @@ export default function Watch() {
     return () => { if (v) { v.removeEventListener('loadeddata', ready); v.removeEventListener('canplay', ready); v.removeEventListener('error', ready); } clearTimeout(t); };
     /* eslint-disable-next-line */
   }, [state, id]);
+
+  // Email gate: remember if this viewer already gave their email this session.
+  useEffect(() => {
+    try { if (sessionStorage.getItem('veorec_lead_' + id)) setLeadGiven(true); } catch {}
+  }, [id]);
+
+  // View-through tracking — record how far a (non-owner) viewer watches and report
+  // it on leave via sendBeacon. The >2% guard avoids logging the owner's own load.
+  useEffect(() => {
+    if (state !== 'ok' || isOwner) return;
+    const v = videoRef.current; if (!v) return;
+    let maxFrac = 0, sent = false;
+    const onTime = () => { if (v.duration > 0) maxFrac = Math.max(maxFrac, v.currentTime / v.duration); };
+    const report = () => {
+      if (sent || maxFrac < 0.02) return; sent = true;
+      try { navigator.sendBeacon(`${API}/api/watch/${id}/progress`, new Blob([JSON.stringify({ pct: maxFrac })], { type: 'application/json' })); } catch {}
+    };
+    const onHide = () => { if (document.visibilityState === 'hidden') report(); };
+    v.addEventListener('timeupdate', onTime);
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', report);
+    return () => { v.removeEventListener('timeupdate', onTime); document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', report); report(); };
+    /* eslint-disable-next-line */
+  }, [state, id, isOwner]);
 
   async function unlock(e) {
     e.preventDefault();
@@ -677,6 +750,10 @@ export default function Watch() {
             <div className={styles.audText}><strong>Transcript</strong><span>Allow viewers to open the transcript</span></div>
             <Toggle on={aud.transcript !== false} onClick={() => saveAudience({ transcript: aud.transcript === false })} />
           </div>
+          <div className={styles.audRow}>
+            <div className={styles.audText}><strong>Require viewer email</strong><span>Ask viewers for their email before watching (lead capture)</span></div>
+            <Toggle on={aud.requireEmail === true} onClick={() => saveAudience({ requireEmail: !(aud.requireEmail === true) })} />
+          </div>
           <div className={styles.audDivider} />
           <div className={styles.panelLabel}>Embed</div>
           <code className={styles.embedCode}>{embedCode}</code>
@@ -780,7 +857,7 @@ export default function Watch() {
           {/* Segmented Share button (label + attached copy-link icon) */}
           <div className={styles.shareGroup}>
             <button className={styles.shareBtn} onClick={() => copy('link', shareUrl)}>
-              {copied === 'link' ? <><Check size={15} /> Copied!</> : <><Share2 size={15} /> Share</>}
+              {copied === 'link' ? <><Check size={15} /> Copied!</> : copied === 'slack' ? <><Check size={15} /> Sent to Slack!</> : <><Share2 size={15} /> Share</>}
             </button>
             <button className={styles.shareIcon} title="Copy link" onClick={() => copy('link', shareUrl)}>
               <Link2 size={15} />
@@ -809,6 +886,14 @@ export default function Watch() {
                   <button className={styles.menuItem} onClick={() => { setMenuOpen(false); copy('embed', embedCode); }}>
                     <Code2 size={15} /> Copy embed code
                   </button>
+                  <button className={styles.menuItem} onClick={shareGmail}>
+                    <Share2 size={15} /> Share via Gmail
+                  </button>
+                  {isOwner && (
+                    <button className={styles.menuItem} onClick={shareSlack}>
+                      <Share2 size={15} /> Send to Slack
+                    </button>
+                  )}
                   {isOwner && (
                     <>
                       <div className={styles.menuSub}>
@@ -904,6 +989,26 @@ export default function Watch() {
                       {views} total view{views === 1 ? '' : 's'}
                       {viewers ? `, ${new Set(viewers.map(v => v.email || v.name || Math.random())).size} signed-in viewer${new Set(viewers.map(v => v.email || v.name)).size === 1 ? '' : 's'}` : ''}
                     </div>
+                    {isOwner && engagement && engagement.samples > 0 && (
+                      <div className={styles.viewsStat} style={{ display: 'flex', gap: 16 }}>
+                        <span><strong>{engagement.avgViewThrough}%</strong> avg watched</span>
+                        <span><strong>{engagement.completionRate}%</strong> finished</span>
+                      </div>
+                    )}
+                    {isOwner && Array.isArray(leads) && leads.length > 0 && (
+                      <div style={{ marginTop: 6 }}>
+                        <div className={styles.viewsHead}>Leads ({leads.length})</div>
+                        <div className={styles.viewerList}>
+                          {leads.map((l, i) => (
+                            <div key={i} className={styles.viewerRow}>
+                              <span className={styles.viewerAvatar}>@</span>
+                              <span className={styles.viewerName}>{l.email}{l.name ? ` · ${l.name}` : ''}</span>
+                              <span className={styles.viewerTime}>{timeAgo(l.at)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {isOwner ? (
                       viewers ? (
                         <div className={styles.viewerList}>
@@ -954,6 +1059,19 @@ export default function Watch() {
                 <span style={{ color: '#c7c7d6', fontSize: 13, textAlign: 'center', maxWidth: 320 }}>
                   This usually takes a few seconds — it’ll start playing automatically.
                 </span>
+              </div>
+            )}
+            {rec.audience?.requireEmail && !isOwner && !leadGiven && (
+              <div style={{ position: 'absolute', inset: 0, zIndex: 8, borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'rgba(15,15,25,0.95)', padding: 24 }}>
+                <strong style={{ color: '#fff', fontSize: 17 }}>Enter your email to watch</strong>
+                <span style={{ color: '#c7c7d6', fontSize: 13, textAlign: 'center', maxWidth: 340 }}>{rec.author ? `${rec.author} ` : 'The owner '}asks for your email before viewing.</span>
+                <form onSubmit={submitLead} style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 300 }}>
+                  <input type="text" value={leadName} onChange={e => setLeadName(e.target.value)} placeholder="Your name (optional)"
+                    style={{ padding: '10px 12px', borderRadius: 9, border: '1px solid #3a3a4c', background: '#1a1a28', color: '#fff', fontSize: 14 }} />
+                  <input type="email" required value={leadEmail} onChange={e => setLeadEmail(e.target.value)} placeholder="you@email.com" autoFocus
+                    style={{ padding: '10px 12px', borderRadius: 9, border: '1px solid #3a3a4c', background: '#1a1a28', color: '#fff', fontSize: 14 }} />
+                  <button className="btn-primary" type="submit" disabled={leadBusy} style={{ padding: 11 }}>{leadBusy ? 'Unlocking…' : 'Watch video'}</button>
+                </form>
               </div>
             )}
           </div>
