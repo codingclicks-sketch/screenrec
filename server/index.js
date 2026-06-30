@@ -348,16 +348,22 @@ if (!USE_CLOUDINARY) {
       const result = await transcription.transcribeUrl(audioUrl);
       if (!result || !result.segments || !result.segments.length) return;
       meta.set(id, { transcript: { ...result, status: 'done', created_at: Date.now() } });
-      // Title — LLM first (works in ANY language, incl. Urdu/Hindi); heuristic fallback.
-      let title = await ai.generateTitle(result.text);
+      const isPro = permissions.canUseAiDocs(user).allowed;
+      // Summary first (Pro) so the title can reuse it — titling the clean summary
+      // yields a good title even for non-English videos.
+      let summary = null;
+      if (isPro) {
+        try { summary = await ai.summarize(result.text); if (summary) meta.set(id, { description: summary }); } catch {}
+      }
+      // Title (free for everyone) — LLM via the summary, heuristic fallback.
+      let title = await ai.generateTitle(result.text, summary);
       if (!title) title = transcription.generateTitle(result.text);
       if (title) {
         meta.set(id, { title });
         try { await cloudinary.uploader.add_context(buildContext({ title }), [`screenrec/${userId}/${id}`], { resource_type: 'video' }); } catch {}
       }
-      // Auto-fill an AI summary + chapters for Pro users (advanced AI is a Pro feature).
-      if (permissions.canUseAiDocs(user).allowed) {
-        try { const summary = await ai.summarize(result.text); if (summary) meta.set(id, { description: summary }); } catch {}
+      // Chapters (Pro).
+      if (isPro) {
         try { const chapters = await ai.generateChapters(result.segments); if (chapters && chapters.length) meta.set(id, { chapters }); } catch {}
       }
     } catch (e) { console.error('[auto-process] failed:', e.message); }
