@@ -75,3 +75,20 @@ chrome.runtime.onMessage.addListener((msg) => {
     });
   }
 });
+
+// ── Gmail content-script proxy ───────────────────────────────────────────────
+// A content script's fetch is CORS-bound to mail.google.com, so the Gmail button
+// can't call the API directly — it asks the service worker to fetch the user's
+// recordings (the SW is not CORS-bound, given the API origin in host_permissions).
+const SRV_API = 'https://screenrec-api-production.up.railway.app';
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || msg.type !== 'VEOREC_LIST_RECORDINGS') return;
+  chrome.storage.local.get('sr_token').then(({ sr_token }) => {
+    if (!sr_token) { sendResponse({ error: 'not_signed_in' }); return; }
+    fetch(`${SRV_API}/api/recordings`, { headers: { Authorization: `Bearer ${sr_token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then((list) => sendResponse({ recordings: Array.isArray(list) ? list : [] }))
+      .catch((e) => sendResponse({ error: String((e && e.message) || e) }));
+  });
+  return true;   // keep the channel open for the async sendResponse
+});
